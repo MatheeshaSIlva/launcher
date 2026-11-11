@@ -6,7 +6,7 @@ import dev.launcher.engine.kdl.Span
 
 /** Fixed, data-only motion declarations. No token lookup, expression evaluation or reflection. */
 object MotionGrammar {
-    val ATTRS = setOf("transition", "spring", "enter", "exit")
+    val ATTRS = setOf("transition", "spring", "enter", "exit", "roll")
     data class Result(val spec: NodeMotionSpec?, val diagnostics: List<Diagnostic>)
     private val channels = MotionChannel.entries.associateBy { it.name.lowercase() }
     private val effects = PresenceEffect.entries.associateBy { it.name.lowercase() }
@@ -22,17 +22,24 @@ object MotionGrammar {
         val d = ArrayList<Diagnostic>()
         val transitions = ArrayList<Transition>()
         var spring: CurveSpec? = null
+        var roll: CurveSpec? = null
         val presence = HashMap<String, Presence>()
         val seen = HashSet<MotionChannel>()
         for (key in ATTRS) attrs[key]?.let { value ->
+            val literal = (value as? AttrValue.Literal)?.value
+            if (key == "roll" && literal is KdlValue.Bool && literal.type == null) {
+                roll = if (literal.value) CurveSpec.Role(ROLL_DEFAULT_MARKER) else null
+                return@let
+            }
             val raw = ((value as? AttrValue.Literal)?.value as? KdlValue.Str)
             if (raw == null || raw.type != null) {
-                d += Diagnostic(value.span, "motion-literal", "'$key' needs a literal motion string, never a binding or expression")
+                d += Diagnostic(value.span, "motion-literal", "'$key' needs a literal motion string${if (key == "roll") " or #true/#false" else ""}, never a binding or expression")
                 return@let
             }
             val run = Parse(raw, d)
-            if (!run.allowed(defaultSpring = key == "spring", presence = key == "enter" || key == "exit")) return@let
+            if (!run.allowed(defaultSpring = key == "spring", presence = key == "enter" || key == "exit", roll = key == "roll")) return@let
             if (key == "spring") spring = run.curve(raw.value, 0, defaultSpring = true)
+            else if (key == "roll") roll = run.curve(raw.value, 0)
             else if (key == "enter" || key == "exit") run.presence()?.let { presence[key] = it }
             else for ((text, offset) in run.clauses()) {
                 val words = Regex("\\S+").findAll(text).toList()
@@ -62,7 +69,7 @@ object MotionGrammar {
                 }
             }
         }
-        return Result(if (d.isEmpty()) NodeMotionSpec(transitions, spring, presence["enter"], presence["exit"]) else null, d)
+        return Result(if (d.isEmpty()) NodeMotionSpec(transitions, spring, presence["enter"], presence["exit"], roll) else null, d)
     }
 
     private class Parse(val raw: KdlValue.Str, val d: MutableList<Diagnostic>) {
@@ -73,7 +80,7 @@ object MotionGrammar {
             else Span(it.start + 1 + offset, it.start + 1 + offset + length, it.line, it.col + 1 + offset)
         }
         fun error(code: String, reason: String, offset: Int, length: Int) { d += Diagnostic(at(offset, length), code, reason) }
-        fun allowed(defaultSpring: Boolean, presence: Boolean): Boolean {
+        fun allowed(defaultSpring: Boolean, presence: Boolean, roll: Boolean): Boolean {
             if (text.length > 4096) {
                 d += Diagnostic(raw.span, "motion-limit", "Motion declarations are limited to 4096 characters")
                 return false
@@ -86,6 +93,13 @@ object MotionGrammar {
             }
             if (defaultSpring && name.matches(text.trim())) return true
             val inspected = Regex("spring\\(\\s*[A-Za-z_][A-Za-z0-9_-]*\\s*\\)").replace(text) { " ".repeat(it.value.length) }
+            if (roll) {
+                val later = Regex("(?<![A-Za-z0-9_.-])(?:stagger|up|down)(?![A-Za-z0-9_.-])").find(inspected)
+                if (later != null) {
+                    error("motion-not-supported", "'${later.value}' is not yet supported in E2 roll", later.range.first, later.value.length)
+                    return false
+                }
+            }
             if (presence) {
                 val later = Regex("(?<![A-Za-z0-9_.-])(?:slide|blur|delay)(?![A-Za-z0-9_.-])").find(inspected)
                 if (later != null) {

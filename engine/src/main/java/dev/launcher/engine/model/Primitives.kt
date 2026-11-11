@@ -64,9 +64,9 @@ object Primitives {
             "bottom-start", "bottom", "bottom-end", "centre-line"), "center")), container = true),
         PrimitiveDef("box", lengths("stroke") + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("stroke-align", AttrType.oneOf("inside", "center"), "inside") + AttrDef("align", AttrType.oneOf("top-start", "centre-line"), "top-start") + AttrDef("fill", AttrType.COLOR) +
             AttrDef("reveal", AttrType.NUMBER, 1.0) + AttrDef("clip", AttrType.BOOL, false), container = true),
-        PrimitiveDef("text", lengths("size") + listOf(AttrDef("font", AttrType.STRING), AttrDef("weight", AttrType.INT, 400),
+        PrimitiveDef("text", lengths("size") + fixed("roll") + listOf(AttrDef("font", AttrType.STRING), AttrDef("weight", AttrType.INT, 400),
             AttrDef("blend", AttrType.oneOf("normal", "knockout"), "normal", bindable = false),
-            AttrDef("color", AttrType.COLOR), AttrDef("tnum", AttrType.BOOL, false), AttrDef("roll", AttrType.BOOL, false),
+            AttrDef("color", AttrType.COLOR), AttrDef("tnum", AttrType.BOOL, false),
             AttrDef("align", AttrType.oneOf("start", "center", "end"), "start"), AttrDef("max-lines", AttrType.INT, 1)),
             arg = AttrDef("content", AttrType.STRING)),
         PrimitiveDef("icon", lengths("size") + AttrDef("color", AttrType.COLOR) + AttrDef("set", AttrType.STRING) +

@@ -9,6 +9,8 @@ runtime resolver, not the grammar.
 box transition="place size @motion.move, opacity 120ms" spring="stiff"
 box transition="value 200ms ease-out"
 box enter="fade-up 240ms" exit="fade 120ms"
+text "12:34" roll=#true
+text "42%" roll="@motion.text.roll" spring="stiff"
 ```
 
 `transition` takes comma-separated clauses: one or more channels followed by an optional
@@ -32,6 +34,15 @@ For presence, precedence is its own curve, then the node's `spring`, then
 no presence animation. Presence accepts every curve form below, including a duration
 alone (ease-out). Presence declarations are literal only, like `transition`.
 
+`roll` is accepted only on `text`: `#true` rolls with the node's `spring`, or
+`@motion.text.roll` when there is no node default. A literal curve string uses its own
+curve even when the node has `spring`. An explicit `roll="@motion.text.roll"` also
+keeps that role. Absent `roll` or `roll=#false` means no rolling, even with `spring`.
+Roll accepts every curve form below and is data only: bindings and expressions are
+refused, with the same 4096-character bound. Direction words (`up`, `down`) and
+per-character `stagger` inside a roll value are not yet supported. Curve role names
+such as `@motion.up` and `spring(down)` remain valid names.
+
 Curves:
 
 - `@motion.<role>`: full preset role name.
@@ -49,12 +60,13 @@ Bindings retain the existing `not-bindable` code. Other errors have source spans
 `motion-empty-clause`, `motion-unknown-channel`, `motion-unknown-easing`,
 `motion-duplicate-channel`, `motion-bad-duration`, `motion-bad-spring`, `motion-bad-bezier`,
 `motion-bad-curve`, `motion-no-effect`, `motion-unknown-effect`,
-`motion-duplicate-effect`, `motion-presence-channel`, `motion-presence-comma`.
+`motion-duplicate-effect`, `motion-presence-channel`, `motion-presence-comma`,
+`motion-roll-not-text`.
 Unknown channels, effects and easings suggest a nearby spelling.
 Declarations are bounded to 4096 characters. Plain single-line quoted values have exact
 inside-value spans; raw, escaped or multiline values conservatively use the value span.
 
-Rolling text follows in 13a-3; its existing schema is unchanged here. Presence slide,
+Presence slide,
 blur and delay, keyframes, stagger, progress=, rotation, per-property durations outside
 clauses, stiffness/damping/mass and duration/bounce spring forms are not yet supported:
 `motion-not-supported`. This subset does not replace the spec's later surface tracks.

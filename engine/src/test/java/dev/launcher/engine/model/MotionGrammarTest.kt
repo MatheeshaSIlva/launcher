@@ -17,6 +17,95 @@ class MotionGrammarTest {
     }
     private fun ease(a: Float, b: Float, c: Float, d: Float, ms: Float = 200f) = CurveSpec.Literal(Curve.Ease(a,b,c,d,ms))
 
+    @Test fun rollBooleansAndCurvePrecedence() {
+        fun bool(enabled: Boolean) = MotionGrammar.read(mapOf("roll" to
+            AttrValue.Literal(KdlValue.Bool(enabled, Span(0, 5, 1, 1))))).let {
+            assertTrue(it.diagnostics.isEmpty()); it.spec!!
+        }
+        val node = CurveSpec.Role("motion.node")
+        assertEquals(CurveSpec.Role("motion.text.roll"), bool(true).rollCurve())
+        assertEquals(node, bool(true).copy(spring=node).rollCurve())
+        assertNull(bool(false).rollCurve())
+        assertNull(bool(false).copy(spring=node).rollCurve())
+        assertNull(NodeMotionSpec(emptyList(), node).rollCurve())
+        for (curve in listOf("@motion.text.roll", "200ms", "200ms ease-out", "200ms ease-in",
+            "200ms ease-in-out", "200ms linear", "cubic-bezier(0.1,-2,0.9,3) 220ms",
+            "spring(stiff)", "spring(0.4,0.8)")) {
+            val s = spec(curve, "roll")
+            val expected = spec("place $curve").curveFor(MotionChannel.PLACE)
+            assertEquals(curve, expected, s.rollCurve())
+            assertEquals(curve, expected, s.copy(spring=node).rollCurve())
+            assertTrue(s.transitions.isEmpty())
+        }
+    }
+    @Test fun rollRefusalsHaveReasonsAndSpans() {
+        for ((text, code, token) in listOf(
+            Triple("200ms stagger 24ms", "motion-not-supported", "stagger"),
+            Triple("up 200ms", "motion-not-supported", "up"),
+            Triple("200ms down", "motion-not-supported", "down"),
+            Triple("true", "motion-bad-curve", "true"),
+            Triple("", "motion-bad-curve", ""),
+            Triple("0ms", "motion-bad-duration", "0ms"),
+            Triple("5001ms", "motion-bad-duration", "5001ms"),
+            Triple("200ms ease-ot", "motion-unknown-easing", "ease-ot"),
+            Triple("spring(0,1)", "motion-bad-spring", "spring(0,1)"),
+            Triple("cubic-bezier(2,0,1,1) 200ms", "motion-bad-bezier", "cubic-bezier(2,0,1,1) 200ms"),
+            Triple("\$state", "not-bindable", "\$state"),
+            Triple("{1+2}", "not-bindable", "{1+2}"),
+            Triple("@ink", "not-bindable", "@ink")
+        )) {
+            val r = parse(text, "roll")
+            assertNull(text, r.spec)
+            val d = r.diagnostics.single()
+            assertEquals(text, code, d.code)
+            assertTrue(d.message.isNotBlank())
+            val at = text.indexOf(token)
+            assertEquals(text, if (code == "not-bindable") Span(10, 12 + text.length, 2, 3)
+                else Span(11 + at, 11 + at + token.length, 2, 4 + at), d.span)
+            if (code == "motion-not-supported") assertTrue(d.message.contains("not yet supported"))
+        }
+        val bounded = "200ms" + " ".repeat(4091)
+        assertNotNull(spec(bounded, "roll"))
+        val d = parse(bounded + " ", "roll").diagnostics.single()
+        assertEquals("motion-limit", d.code)
+        assertEquals(Span(10, 4109, 2, 3), d.span)
+        // Direction-like role/spring names are still valid curve names.
+        assertEquals(CurveSpec.Role("motion.up"), spec("@motion.up", "roll").rollCurve())
+        assertEquals(CurveSpec.Role("motion.spring.down"), spec("spring(down)", "roll").rollCurve())
+    }
+    @Test fun readerAndValidatorUseRollMotionPathAndRefuseOtherPrimitives() {
+        fun source(primitive: String, value: String, extra: String = "") =
+            """component "c" { view { $primitive roll=$value $extra; }; }"""
+        fun load(s: String) = Validator(TokenCheck { false }).load(KdlParser.parse(s))
+        for ((value, expected) in listOf("#true" to CurveSpec.Role("motion.text.roll"), "#false" to null,
+            "\"@motion.own\"" to CurveSpec.Role("motion.own"))) {
+            val c = (load(source("text", value)) as ReadResult.Ok).component
+            assertEquals(expected, c.view.motion!!.rollCurve())
+        }
+        assertEquals(CurveSpec.Role("motion.spring.stiff"),
+            (load(source("text", "#true", "spring=\"stiff\"")) as ReadResult.Ok).component.view.motion!!.rollCurve())
+        for (primitive in Primitives.ALL.keys - "text") for (value in listOf("#true", "#false", "\"200ms\"")) {
+            // spacer needs a row parent for its ordinary placement rule.
+            val s = if (primitive == "spacer") """component "c" { view { row { spacer roll=$value; }; }; }"""
+                else source(primitive, value)
+            val d = (load(s) as ReadResult.Invalid).diagnostics.single()
+            assertEquals("motion-roll-not-text", d.code)
+            assertTrue(d.message.contains("only on text"))
+            val at = s.indexOf(value)
+            assertEquals(Span(at, at + value.length, 1, at + 1), d.span)
+        }
+        for ((value, code) in listOf("\"\$state\"" to "not-bindable", "\"{1+2}\"" to "not-bindable",
+            "\"@ink\"" to "not-bindable", "1" to "motion-literal", "#null" to "motion-literal",
+            "(bool)#true" to "motion-literal", "(string)\"200ms\"" to "motion-literal")) {
+            val s = source("text", value)
+            val d = (load(s) as ReadResult.Invalid).diagnostics.single()
+            assertEquals(value, code, d.code)
+            val token = value.substringAfter(')', value)
+            val at = s.indexOf(value) + value.length - token.length
+            assertEquals(value, Span(at, at + token.length, 1, at + 1), d.span)
+        }
+    }
+
     @Test fun acceptsAllCurveFormsAndCssNumbers() {
         for ((text, expected) in listOf(
             "200ms" to ease(0f,0f,.58f,1f), "200ms ease-out" to ease(0f,0f,.58f,1f),

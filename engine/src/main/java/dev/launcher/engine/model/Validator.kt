@@ -72,6 +72,9 @@ class Validator(private val tokens: TokenCheck) {
                     else "'${def.name}' takes one argument, its ${arg.name}")
             }
             d += MotionGrammar.read(n.attrs.filterKeys { it in MotionGrammar.ATTRS }.mapValues { it.value.value }).diagnostics
+            if (n.primitive != "text") n.attrs["roll"]?.let {
+                d += Diagnostic(it.value.span, "motion-roll-not-text", "'roll' is supported only on text, not '${n.primitive}'")
+            }
             for (a in n.attrs.values) {
                 if (a.name in MotionGrammar.ATTRS) continue
                 val ad = def.attrs[a.name]
