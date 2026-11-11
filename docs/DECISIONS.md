@@ -1121,3 +1121,12 @@ The owner reviewed draft 3 and asked for draft 4's changes, then: "Approved" (ht
 - **Kept:** the launcher rising from the dock (owner's choice), its A to Z and `>` commands; simpler panels with no cards, borders or capital labels.
 
 Still open, asked in the draft's notes: a long press on the pill opening Power directly; what recents shows behind it when opened from home (lead's proposal: the most recent app); whether a swipe up from the pill on home opens the launcher. The build plan is updated for draft 4 (T-008).
+
+## D-099: E2.13a-1's runtime choices (2026-11-11, lead and Codex) [team]
+
+Made without the owner while building node motion (T-009, 13a-1); none changes anything a user sees today (no KDL in use declares a transition).
+- **A motion declaration is at most 4096 characters** (Codex's bound in the grammar, refused with `motion-limit`).
+- **Roles the preset lacks make the channel jump.** `motion.move` and `motion.state`, the defaults when a transition names no curve, are in none of the launcher's presets yet; the default preset's roles come with E2.14a.
+- **A box's centred stroke is inside its drawing bounds** at rest and in motion alike (its outer half was cut by a layer before); no layered centred stroke exists in the status bar, so nothing on screen changes.
+- **Each moving node asks for its own draw at every step**, and a placement that changes what a node shows asks too (measured on the emulator: the window's invalidation drew nothing again on the GPU path). A node without a Compose layer of its own redraws its window's whole tree (frames re-recorded for every node at each step; painters' recordings only while a size moves). Its cost on the S24 is E2.17's measure (D-067's bound); giving moving nodes a layer of their own is the lever if it is too high.
+- **13a-1 went over the slice size** (about 400 production lines with the grammar's 166 apart): the drawing contract did not split without leaving one drawing path wrong in between.

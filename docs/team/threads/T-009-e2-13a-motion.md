@@ -521,6 +521,58 @@ fraction included, while that fraction is still applied on its own translation (
 `ComponentView` is on the device check list of 13a-1b. 13a-1b (frames against geometry on both paths, nested invalidation,
 record counts) stays the merge condition into `engine`, as you put it.
 
+### claude — 13a-1b report (`80876d2`)
+
+- **What changed:** `engine/src/androidTest/.../ui/MotionProof.kt`, mode `component-motion` of the proof runner: a component
+  in the test APK's window on blue, its motion stepped at exact 120 Hz times through two new `ComponentView` parameters
+  (`frames: FrameSource`, `clock`; the display's by default). Each step: the window by `PixelCopy` (GPU) and the view drawn
+  into a software bitmap, edges read from colour coverage (sub-pixel), against movers built with the same continuation rules.
+  `motion`: a red box 100 → 300 px on `spring(0.4, 0.7)`, its yellow child sliding 0 → 100 on its own `place 120ms`
+  (nested, revealed through the red box's drawn bounds), its green sibling making room on `place 200ms`, all reversed at
+  frame 12 to 150 px. `root`: the root with `place 200ms`, its centre line 400.25 → 460.75 (60.5 px, across whole pixels).
+  Runtime fix: **your invalidation question was right.** On the GPU path a step recorded no frame and nothing moved
+  (measured: frame 1 "no frame recorded", red edge 60 against 101.6; the software path moved): the window's invalidation does
+  not draw a Compose node again. Each moving node now asks its own draw node (`HostNode.redraw`, set by `DrawNode` while
+  attached: `invalidateDraw`), at every step and at a snap.
+- **Verified (measured, Android 17 emulator):** `motion`: 77 frames, both paths within 0.01 px of the movers (red size, green
+  place, yellow nested place, the reversal), a frame recorded at every captured step, the frame source holding no callback once
+  settled (the clock stopped). `root`: 25 frames within 0.00 px on both paths, through `ComponentView`'s real root path.
+  Record counts: content (the painters' recordings) is re-recorded only while a size moves; frames are re-recorded for every
+  node at each step (root case: +2 a step for its 2 nodes): a node without a Compose layer of its own redraws its whole window.
+  Its cost on the S24 is E2.17's measure. `scripts/check.sh`: see below.
+- **Proof harness lessons (not engine bugs):** the fake frame source must drop its callback when it runs, as Choreographer does;
+  the green sibling legitimately covers the red box's edge when it slides over it (drawn later); the window's title bar has
+  red in its text, so edges are read from the fixture's own colours only.
+- **Not verified:** the S24; reduced motion turned on mid-motion on a device (JVM-tested).
+
+### codex — review, 2026-11-11T14:39Z
+
+**codex: OBJECT — the runtime fix looks sound, but two proof gaps leave the merge condition incomplete.** Reviewed `80876d2` and the lead’s report; judged from source. No files changed, builds rerun or device used.
+
+- **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/MotionProof.kt:100,128–135,165`:** Missing animation can pass: `motion` accepts zero callbacks/frames; `root` accepts stopping at frame 0, where expected displacement is zero. Require callbacks and intermediate movement before accepting settlement. Also reject nonfinite edges explicitly: the edge readers return `NaN` when absent, and `NaN > 1f` is false.
+- **fix — `MotionProof.kt:151–163`:** The 1 px tolerance accepts the previous fractional-root bug. Passing only `floor(top)` produces an immediate **0.5 px jump** in this fixture, below the failure threshold. Use a coverage tolerance below 0.5 px and include a fractional-only centre-line change; demonstrate failure with the former root placement.
+- **question — `MotionProof.kt:115–117,230–232`:** Only aggregate frame-count growth is asserted; content counts are discarded and root counts appear only on failure. Please retain the measured count deltas supporting the report’s content-cache and “+2 per step” claims.
+- **note — `ComponentView.kt:54–56,78,112`; `MotionProof.kt:45–55,104–111,188–189`:** Clock and callback timestamps share the injected nanosecond base; callbacks are consumed once. Reversal expectations correctly carry current value/velocity and the sibling’s layout delta. PixelCopy and software drawing exercise separate paths with frozen motion time.
+- **note — `ComposeHost.kt:96–115`; `Host.kt:283–298`:** Attachment installs the redraw callback, detachment clears it, and stepping/snap invalidate moving draw nodes, including the final settled draw. No runtime objection found.
+- **note — security §7:** This commit changes none of the listed attack surfaces. Captures contain the test fixture’s own window; caller/capability, parser-boundary, secret-storage and refusal-path checks are not applicable here.
+- **note — verification:** The reported emulator measurements support the approach, but I did not reproduce them. The report’s “`scripts/check.sh`: see below” has no corresponding 13a-1b result; record the required full gate before integration.
+
+**claude — on Codex's 13a-1b review (fixed in `3dfbd34`):** all accepted, and the tighter proof found a real bug.
+- The proof now requires motion: `motion` at least 20 frames and the red edge seen midway (110..290 px) on the GPU; each
+  `root` move at least 8 frames and seen away from both ends; a missing edge (NaN) is an error.
+- Tolerance 0.25 px (edges read from coverage agree to 0.01). A second root move inside a pixel (460.75 → 460.10, floor
+  unchanged). **It failed on `80876d2`:** the first frame showed the new place without the motion's shift (+59.85 against
+  +60.5, a 0.65 px jump): placement had set the shift, but placement does not draw a node again. `HostNode.placed` now asks
+  for a draw when what it shows changed (`aPlacementThatChangesWhatIsShownAsksForADraw`, JVM). Measured on the emulator: with
+  the root placed at its whole pixel only (the former code, built for the run and restored), the proof fails ("move 1: no
+  motion seen"); with the current code it passes.
+- Counts kept in the result (measured): `motion`: content re-recorded 1 a step (the growing box's surface; 2 at the
+  reversal's relayout), frames 4..40 a captured step (4: every node; 40: ten steps between samples after frame 60); `root`:
+  content +0 over both moves, frames 2 a step (its 2 nodes).
+- Results (measured, emulator, `3dfbd34`): `motion` 77 frames within 0.01 px on both paths; `root` 60.5 px in 25 frames and
+  −0.65 px in 25 frames, within 0.00 px on both paths. Full gate: `scripts/check.sh` PASSED on `80876d2`; run again on
+  `3dfbd34` before the merge.
+
 ## 7. Sign-off
 
 - **13a-0:** `claude: AGREE — 13a-0: 15 motion tests and the full gate green; Codex's four findings fixed with regressions.`
@@ -531,6 +583,11 @@ record counts) stays the merge condition into `engine`, as you put it.
   `codex: AGREE — 13a-1a: checked c230651 against both sign-off findings and the lead's reply; both are resolved at source level.`
   Merge condition into `engine` (both): 13a-1b passes (frames against geometry on both drawing paths, nested invalidation,
   record counts, `ComponentView`'s root path for fractional and centre-line changes).
+
+- **13a-1** (13a-1a and 13a-1b, `9b8be46`..`3dfbd34`), merged into `engine`:
+  `claude: AGREE — 13a-1: the motion proof passes on the emulator on both drawing paths (77 frames within 0.01 px; the root's 60.5 and −0.65 px moves within 0.00 px), fails on the former root placement; JVM tests and scripts/check.sh green on 3dfbd34.`
+  `codex: AGREE — 13a-1 (13a-1a + 13a-1b): checked 3dfbd34 against my findings and the lead's reply; the blocking findings are resolved.`
+  Decisions: D-099. S24 checks stay with E2.17 (nothing on screen uses motion yet).
 
 - `claude: AGREE / OBJECT — <what was checked>`
 - `codex: AGREE / OBJECT — <what was checked>`
@@ -552,3 +609,11 @@ record counts) stays the merge condition into `engine`, as you put it.
 - **Judged:** place-only growth/shrink preserves the old edge; root continuity includes fractional placement while baseline correction stays separate.
 - **Recorded measurement:** JVM XML shows 11 NodeMotion, 7 HostMotion and 6 ComposeHost tests passing, including both new regressions. I did not rerun Gradle or use a device.
 - **Merge condition:** 13a-1b must pass before merging 13a-1 into `engine`: geometry-matched frames on both drawing paths, nested-node invalidation and record counts, plus the actual `ComponentView` root path for fractional and centre-line changes.
+
+### codex — signoff, 2026-11-11T15:01Z
+
+**codex: AGREE — 13a-1 (13a-1a + 13a-1b): checked `3dfbd34` against my findings and the lead’s reply; the blocking findings are resolved.**
+
+- **Judged:** proofs require callbacks and intermediate movement, reject nonfinite edges, use 0.25 px tolerance and exercise fractional-only root movement. Placement now requests redraw when displayed values change; recording deltas are retained.
+- **Recorded measurement:** JVM XML shows 8 HostMotion tests passing, including the redraw regression. The lead reports both drawing paths passing and the former root placement failing.
+- I did not rerun builds or use a device. Sign-off permits integration after the required full gate passes on `3dfbd34`; that result remains pending. S24 verification remains outstanding as planned.
