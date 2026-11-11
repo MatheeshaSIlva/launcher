@@ -5,6 +5,8 @@ import dev.launcher.app.motion.Mover
 import dev.launcher.engine.model.CurveSpec
 import dev.launcher.engine.model.MotionChannel
 import dev.launcher.engine.model.NodeMotionSpec
+import dev.launcher.engine.model.Presence
+import dev.launcher.engine.model.PresenceEffect
 import kotlin.math.max
 import kotlin.math.min
 
@@ -32,6 +34,8 @@ class Track {
 
     /** Goes to [to] on [curve], or jumps there when [curve] is null. The first value it is given, it shows at once. */
     fun to(to: Float, curve: Curve?, now: Long) {
+        // An arrival or a revival still on its way to this same target keeps going (its channel need not be animated).
+        if (curve == null && to == target && moving) return
         if (value.isNaN() || curve == null) return snap(to)
         if (to != target) go(to, curve, now, 0f)
     }
@@ -39,6 +43,13 @@ class Track {
     /** Shown [delta] further off than before, then on to its target: a layout move kept continuous. */
     fun shift(delta: Float, curve: Curve?, now: Long) {
         if (delta != 0f && curve != null && !value.isNaN()) go(target, curve, now, delta)
+    }
+
+    /** Shown at [from] now, then on to its target on [curve] (an arrival's start: `enter`). */
+    fun launch(from: Float, curve: Curve, now: Long) {
+        if (value.isNaN()) return
+        mover = null; value = from
+        go(target, curve, now, 0f)
     }
 
     private fun go(to: Float, curve: Curve, now: Long, delta: Float) {
@@ -80,8 +91,14 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     private var layoutY = Float.NaN
     private var layoutW = 0f
     private var layoutH = 0f
+    /** What its bindings asked at its last placement: where a revival turns back to. */
+    private val targets = FloatArray(6)
+    /** On its way out (`exit`): no longer laid out, shown at its last place until it settles. */
+    var leaving = false; private set
 
     val moving get() = tracks.any { it.moving }
+    /** Placed at least once (its first placement shows it where layout put it). */
+    val placedOnce get() = !layoutX.isNaN()
 
     /** The curve [channel] moves on now; null: it jumps (not named, reduced motion, or a role the preset lacks). */
     fun curve(channel: MotionChannel): Curve? = if (context.reduced()) null else when (val s = spec.curveFor(channel)) {
@@ -108,6 +125,7 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
             y.shift(layoutY + layoutH * ay - (placeY + h * ay), place, now)
         }
         layoutX = placeX; layoutY = placeY; layoutW = w; layoutH = h
+        floatArrayOf(translateX, translateY, w, h, opacity, scale).copyInto(targets)
         x.to(translateX, place, now); y.to(translateY, place, now)
         val size = curve(MotionChannel.SIZE)
         width.to(w, size, now); height.to(h, size, now)
@@ -125,8 +143,56 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         return busy
     }
 
+    /** Its presence curves (`enter`, `exit`), resolved now; null: it arrives or leaves at once. */
+    fun enterCurve(): Curve? = resolve(spec.enterCurve())
+    fun exitCurve(): Curve? = resolve(spec.exitCurve())
+    private fun resolve(s: CurveSpec?): Curve? = if (context.reduced()) null else when (s) {
+        null -> null
+        is CurveSpec.Role -> context.resolver.curve(s.role)
+        is CurveSpec.Literal -> s.curve
+    }
+
+    /**
+     * Arrives (after its first placement): each effect starts from its `enter` value. [rise] is how far below its place a
+     * rising node starts, [alongX] whether its parent lays it out along x (a row: `grow` is its width), else its height.
+     */
+    fun enter(rise: Float, alongX: Boolean, now: Long = context.now()): Boolean {
+        val p = spec.enter ?: return false
+        val c = enterCurve() ?: return false
+        for (e in p.effects) presence(e, rise, alongX).let { (track, out) -> track.launch(out, c, now) }
+        return moving
+    }
+
+    /** Leaves: each effect goes to its `exit` value from where it is, at the speed it has; true if it animates. */
+    fun exit(rise: Float, alongX: Boolean, now: Long = context.now()): Boolean {
+        val p = spec.exit ?: return false
+        val c = exitCurve() ?: return false
+        leaving = true
+        for (e in p.effects) presence(e, rise, alongX).let { (track, out) -> track.to(out, c, now) }
+        return true
+    }
+
+    /** Comes back before its exit ended: every track turns back to what its bindings asked, from where it is. */
+    fun revive(now: Long = context.now()) {
+        if (!leaving) return
+        leaving = false
+        val c = enterCurve() ?: exitCurve()
+        for ((i, t) in tracks.withIndex()) if (c == null) t.snap(targets[i]) else t.to(targets[i], c, now)
+    }
+
+    private fun presence(e: PresenceEffect, rise: Float, alongX: Boolean): Pair<Track, Float> = when (e) {
+        PresenceEffect.FADE -> alpha to 0f
+        PresenceEffect.SCALE -> scale to SCALE_FROM
+        PresenceEffect.RISE -> y to targets[1] + rise
+        PresenceEffect.GROW -> if (alongX) width to 0f else height to 0f
+    }
+
     /** Every track on its target at once (reduced motion turned on mid-motion). */
     fun snap() = tracks.forEach { it.snap() }
 
-    companion object { const val PIXEL = 0.5f }
+    companion object {
+        const val PIXEL = 0.5f
+        /** Where `scale` arrives from and leaves to (judged: a small step, as the design language's sheets arrive). */
+        const val SCALE_FROM = 0.85f
+    }
 }

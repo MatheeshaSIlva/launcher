@@ -44,7 +44,7 @@ fun ComponentHost.Content(modifier: Modifier = Modifier) {
 
 @Composable
 private fun Primitive(n: HostNode, modifier: Modifier = Modifier) {
-    Layout(content = { n.children.forEach { key(it) { Primitive(it) } } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n))
+    Layout(content = { n.drawn.forEach { key(it) { Primitive(it) } } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n))
 }
 
 /** Measures through 5a's maths; the bound values it reads make Compose measure again, never compose. */
@@ -52,14 +52,22 @@ private class Policy(val n: HostNode) : MeasurePolicy {
     override fun MeasureScope.measure(measurables: List<Measurable>, constraints: ComposeConstraints): MeasureResult {
         n.epoch.intValue
         val placeables = arrayOfNulls<Placeable>(measurables.size)
-        val kids = measurables.mapIndexed { k, m ->
+        // Measurables follow the drawn children; layout sees only those not leaving (13a-2).
+        val drawn = n.drawn
+        val active = drawn.indices.filter { !drawn[it].isLeaving }
+        val kids = active.map { k ->
+            val m = measurables[k]
             object : Child {
-                override val flex = n.children[k].flex
+                override val flex = drawn[k].flex
                 override fun measure(c: EngineConstraints): Measured {
                     val p = m.measure(ComposeConstraints(c.minWidth, c.maxWidth, c.minHeight, c.maxHeight)).also { placeables[k] = it }
-                    return n.children[k].measured.copy(size = Size(p.width, p.height))
+                    return drawn[k].measured.copy(size = Size(p.width, p.height))
                 }
             }
+        }
+        // A leaving child keeps the size it had (its frozen geometry): measured at exactly that.
+        for (k in drawn.indices) if (drawn[k].isLeaving) drawn[k].measured.size.let { sz ->
+            placeables[k] = measurables[k].measure(ComposeConstraints.fixed(sz.width.coerceAtLeast(0), sz.height.coerceAtLeast(0)))
         }
         val c = constraints
         val a = n.arrange(EngineConstraints(c.minWidth, c.maxWidth, c.minHeight, c.maxHeight), kids)
@@ -71,8 +79,10 @@ private class Policy(val n: HostNode) : MeasurePolicy {
             val fx = n.parentFractionX + n.motion.restDrawX
             val fy = n.parentFractionY + n.motion.restDrawY
             val (ax, ay) = n.childAnchor()
-            a.placements.forEachIndexed { k, p ->
-                val child = n.children[k]
+            a.placements.forEachIndexed { j, p ->
+                val k = active[j]
+                val child = drawn[k]
+                child.placedX = p.x; child.placedY = p.y
                 child.placed(p.x + p.residualX, p.y + p.residualY, ax, ay)
                 child.parentFractionX = fx
                 child.parentFractionY = fy
@@ -87,6 +97,8 @@ private class Policy(val n: HostNode) : MeasurePolicy {
                 } else child.motion.place(p.residualX, p.residualY)
                 placeables[k]?.place(p.x, p.y)
             }
+            // Leaving children stay where they were last placed, their motion and fractions as they were.
+            for (k in drawn.indices) if (drawn[k].isLeaving) placeables[k]?.place(drawn[k].placedX, drawn[k].placedY)
         }
     }
 }
