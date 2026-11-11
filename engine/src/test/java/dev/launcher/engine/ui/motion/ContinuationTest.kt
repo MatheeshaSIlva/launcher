@@ -114,6 +114,13 @@ class ContinuationTest {
         assertTrue("steepest at its middle", m.velocity(0.11) > 10_000f)
     }
 
+    /** Codex, 13a-0 sign-off: x and y both flat for an instant is the limit of their ratio (here a straight line). */
+    @Test fun aPauseInBothCoordinatesKeepsTheLimit() {
+        val c = Curve.Ease(1f, 1f, 0f, 0f, 220f)
+        val m = Continuation.fresh(c, 0f, 120f)
+        assertEquals(120f / 0.22f, m.velocity(0.11), 1f)
+    }
+
     /** Codex, 13a-0 review: no early snap for a curve that ends vertically. */
     @Test fun aVerticalEndLandsWithoutAJump() {
         for (c in listOf(Curve.Ease(0f, 0f, 1f, 0f, 220f), Curve.Ease(0.5f, 0f, 1f, 1f, 220f))) {

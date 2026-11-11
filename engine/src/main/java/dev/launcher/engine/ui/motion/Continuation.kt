@@ -104,12 +104,26 @@ class EngineEase(curve: Curve.Ease) : Mover {
         val dx = BezierMath.dx(s, x1, x2)
         val dy = BezierMath.dy(s, y1, y2)
         if (abs(dx) > 1e-9) return dy / dx
-        val limit = when {
-            s < 1e-6 -> start0
-            s > 1 - 1e-6 -> end0
-            else -> null
+        return when {
+            s < 1e-6 -> start0 ?: VERTICAL * Math.signum(dy)
+            s > 1 - 1e-6 -> end0 ?: VERTICAL * Math.signum(dy)
+            abs(dy) > 1e-9 -> VERTICAL * Math.signum(dy)
+            else -> interiorLimit(s)
         }
-        return limit ?: (VERTICAL * Math.signum(dy))
+    }
+
+    /**
+     * Both dx and dy vanish inside the curve (`cubic-bezier(1, 1, 0, 0)` at its middle): the ratio's limit is the ratio of
+     * the first derivatives that do not (L'Hôpital), second then third.
+     */
+    private fun interiorLimit(s: Double): Double {
+        fun d2(a: Double, b: Double) = 6 * (1 - 3 * b + 3 * a) * s + 2 * (3 * b - 6 * a)
+        fun d3(a: Double, b: Double) = 6 * (1 - 3 * b + 3 * a)
+        for ((dx, dy) in listOf(d2(x1, x2) to d2(y1, y2), d3(x1, x2) to d3(y1, y2))) {
+            if (abs(dx) > 1e-9) return dy / dx
+            if (abs(dy) > 1e-9) return VERTICAL * Math.signum(dy)
+        }
+        return 1.0
     }
 
     companion object {
