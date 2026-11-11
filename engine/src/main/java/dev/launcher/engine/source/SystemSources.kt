@@ -61,13 +61,14 @@ object SystemSources {
         })
     }
 
-    fun all(context: Context, handler: Handler): Sources {
+    fun all(context: Context, handler: Handler, display: DisplayInfo? = null): Sources {
         val r = AndroidReceivers(context, handler)
         val power = context.getSystemService(PowerManager::class.java)
         val nm = context.getSystemService(android.app.NotificationManager::class.java)
         return Sources(listOf(time(r), battery(r) { try { power.isPowerSaveMode } catch (_: Throwable) { false } },
             NetworkSources.network(r, AndroidNetwork(context, handler)),
-            NetworkSources.dnd(r) { try { nm.currentInterruptionFilter } catch (_: Throwable) { android.app.NotificationManager.INTERRUPTION_FILTER_ALL } }))
+            NetworkSources.dnd(r) { try { nm.currentInterruptionFilter } catch (_: Throwable) { android.app.NotificationManager.INTERRUPTION_FILTER_ALL } }) +
+            listOfNotNull(display?.let(DeviceSource::of)))
     }
 }
 

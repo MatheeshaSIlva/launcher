@@ -53,6 +53,7 @@ object Primitives {
     val COMMON: List<AttrDef> = lengths("width", "height", "min-width", "min-height", "max-width", "max-height", "padding",
         "padding-start", "padding-end", "padding-top", "padding-bottom", "radius", "translate-x", "translate-y") +
         fixed("transition", "enter", "exit", "spring", "as") + listOf(
+        AttrDef("place", AttrType.oneOf("window", "cutout"), "window", bindable = false),
         AttrDef("layer", AttrType.BOOL, false, bindable = false), AttrDef("background", AttrType.COLOR), AttrDef("opacity", AttrType.NUMBER, 1.0),
         AttrDef("scale", AttrType.NUMBER, 1.0), AttrDef("rotate", AttrType.NUMBER, 0.0),
         AttrDef("visible", AttrType.BOOL, true), AttrDef("each", AttrType.LIST), AttrDef("label", AttrType.STRING))

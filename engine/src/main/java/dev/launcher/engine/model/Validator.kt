@@ -33,7 +33,7 @@ class Validator(private val tokens: TokenCheck) {
             d += Diagnostic(p.span, "prop-shadows-token", "Prop '${p.name}' has a token's name: @${p.name} would mean both", "rename the prop")
         for (t in c.uses.tokens) if (!tokens.exists(t.name)) d += Diagnostic(t.span, "unknown-token", "No token '${t.name}'")
         node(c.view, null, emptySet(), place = true)
-        c.variants.forEach { v -> v.nodes.forEach { node(it, null, emptySet(), place = false) } }
+        c.variants.forEach { v -> v.nodes.forEach { node(it, null, emptySet(), place = false, root = false) } }
         c.fallback?.let { node(it, null, emptySet(), place = true) }
     }.d
 
@@ -43,11 +43,19 @@ class Validator(private val tokens: TokenCheck) {
         val states = c.state.map { it.name }
         val sources = c.uses.sources.map { it.name }
 
-        fun node(n: ViewNode, parent: PrimitiveDef?, scope: Set<String>, place: Boolean, layered: Boolean = false) {
+        fun node(n: ViewNode, parent: PrimitiveDef?, scope: Set<String>, place: Boolean, layered: Boolean = false,
+                 root: Boolean = true) {
+            n.attrs["place"]?.let { a ->
+                if (!root) d += Diagnostic(a.value.span, "place-root-only", "'place' is allowed only on a view or fallback root, not a child or variant override")
+                val anchor = ((a.value as? AttrValue.Literal)?.value as? KdlValue.Str)?.value
+                if (anchor == "cutout" && "device" !in sources)
+                    d += Diagnostic(a.value.span, "place-needs-device", "'place=\"cutout\"' reads display geometry from device, which uses does not declare",
+                        "uses { source device }")
+            }
             val def = Primitives.ALL[n.primitive]
             if (def == null) {   // its children are still checked, for every finding at once
                 d += unknown(n.nameSpan, "unknown-primitive", "primitive", n.primitive, Primitives.ALL.keys)
-                return n.children.forEach { node(it, null, scope, place = false, layered = layered) }
+                return n.children.forEach { node(it, null, scope, place = false, layered = layered, root = false) }
             }
             if (place && parent != null && !parent.container)
                 d += Diagnostic(n.nameSpan, "misplaced", "'${parent.name}' cannot hold children: put '${n.primitive}' beside it in a row or a stack")
@@ -86,7 +94,7 @@ class Validator(private val tokens: TokenCheck) {
                 d += Diagnostic(n.attrs.getValue("blend").value.span, "knockout-needs-layer",
                     "Knockout text needs an ancestor with layer=#true")
             val enabled = ((n.attrs["layer"]?.value as? AttrValue.Literal)?.value as? KdlValue.Bool)?.value == true
-            n.children.forEach { node(it, def, inner, place = true, layered = layered || enabled) }
+            n.children.forEach { node(it, def, inner, place = true, layered = layered || enabled, root = false) }
         }
 
         fun value(ad: AttrDef, v: AttrValue, scope: Set<String>) {
