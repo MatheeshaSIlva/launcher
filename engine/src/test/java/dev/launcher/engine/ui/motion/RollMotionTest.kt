@@ -120,16 +120,26 @@ class RollMotionTest {
         assertEquals(listOf("2"), r.glyphs.map { it.text }); assertFalse(r.moving)
     }
 
-    @Test fun anotherFontLaysTheTextOutAgainAtRestEvenMidRoll() {
+    @Test fun anotherFontLaysTheGlyphsOutAgainAndTheRollGoesOn() {
         val r = RollMotion()
+        r.layout = { t -> FloatArray(t.length + 1) { it * 10f } }
         r.to("10", at("10"), true, ease, 0, 0, "a")
-        r.to("10", FloatArray(3) { it * 12f }, true, ease, 0, 0, "b")      // same text, new font: new places
+        r.layout = { t -> FloatArray(t.length + 1) { it * 12f } }
+        r.to("10", FloatArray(3) { it * 12f }, true, ease, 0, 0, "b")      // same text, new font: new places, at rest
         assertEquals(listOf(0f, 12f), r.glyphs.map { it.offset }); assertFalse(r.moving)
         r.to("11", FloatArray(3) { it * 12f }, true, ease, 0, 0, "b")
         r.step(frame * 3, eps)
-        assertTrue(r.moving)
-        r.to("12", FloatArray(3) { it * 14f }, true, ease, 0, frame * 3, "c")  // text and font together: at once
-        assertFalse(r.moving)
+        val arriving = r.glyphs.single { !it.leaving && it.slot == 1 }
+        val y = arriving.y
+        r.layout = { t -> FloatArray(t.length + 1) { it * 14f } }
+        r.to("11", FloatArray(3) { it * 14f }, true, ease, 0, frame * 3, "c") // a font change mid-roll
+        assertTrue("the roll goes on", r.moving)
+        assertEquals("from where it was", y, arriving.y, 0f)
+        assertEquals(listOf(0f, 14f), r.glyphs.filter { !it.leaving }.map { it.offset })
+        r.to("12", FloatArray(3) { it * 14f }, true, ease, 0, frame * 3, "c")  // then a text change rolls on from there
+        r.step(frame * 4, eps)
+        assertTrue(arriving.leaving); assertTrue(r.moving)
+        r.settle(frame * 4)
         assertEquals(listOf("1", "2"), r.glyphs.map { it.text }); assertEquals(listOf(0f, 14f), r.glyphs.map { it.offset })
         assertTrue(r.glyphs.all { it.width == 28f && it.y == 0f })
     }

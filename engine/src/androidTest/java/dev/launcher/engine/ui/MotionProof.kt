@@ -443,41 +443,50 @@ class MotionProof(private val instrumentation: Instrumentation) {
     }
 
     /**
-     * Rolling ink outside the text's box is not cut: a translucent text (a layer) growing on a size transition, `9` to `10`
-     * (whole), its outgoing glyph risen above the box, on both paths.
+     * Rolling ink outside the text's box is not cut by a layer, its own or an ancestor's, on both paths, `9` to `10`
+     * (whole), the outgoing glyph risen above the box: a translucent text growing on a size transition; a text in a row
+     * with a layer of its own; a text in a translucent row (Codex: the parent's layer cut it).
      */
     private fun rollReach(): String {
-        val d = def("""
-            component "reach" {
-              props { t type=string default="9" }
-              view { row align="top" { text "{@t}" size=(px)40 tnum=#true color="#FFFFFF" opacity=0.9 roll="160ms" transition="size 160ms" } }
-            }""")
-        var above = 0
+        val text = "text \"{@t}\" size=(px)40 tnum=#true color=\"#FFFFFF\" roll=\"160ms\""
+        val cases = listOf(
+            "translucent text, size transition" to "row align=\"top\" { $text opacity=0.9 transition=\"size 160ms\" }",
+            "row with a layer" to "row align=\"top\" layer=#true { $text }",
+            "translucent row" to "row align=\"top\" opacity=0.9 { $text }")
         // The text's box: its top is the baseline (300 + CAP × size / 2) less the font's ascent; ink above it is outside.
         val fm = android.graphics.Paint().apply { textSize = 40f }.fontMetrics
         val top = kotlin.math.floor(300f + TextPainter.CAP * 40f / 2f + fm.ascent).toInt()
-        session(d, centreY = 300f) { v, frames, capture ->
-            capture(950)
-            instrumentation.runOnMainSync { v.setProp("t", Value.Str("10")) }
-            drawn(v)
-            val loc = IntArray(2)
-            instrumentation.runOnMainSync { v.view.getLocationInWindow(loc) }
-            var frame = 0
-            while (frames.held != null && frame < 80) {
-                frame++
-                now += step
-                instrumentation.runOnMainSync { frames.run(now) }
-                val (hw, sw) = capture(950 + frame)
-                // The outgoing "9" rising out of the box: its ink above the box's top, on both paths.
-                val sAbove = (top - 24 until top - 1).sumOf { y -> (0 until 120).count { x -> sw.getPixel(x, y) != Color.BLUE } }
-                val hAbove = (top - 24 until top - 1).sumOf { y -> (0 until 120).count { x -> hw.getPixel(loc[0] + x, loc[1] + y) != Color.BLUE } }
-                above = maxOf(above, minOf(sAbove, hAbove))
+        val seen = ArrayList<String>()
+        for ((name, view) in cases) {
+            val d = def("""
+                component "reach" {
+                  props { t type=string default="9" }
+                  view { $view }
+                }""")
+            var above = 0
+            session(d, centreY = 300f) { v, frames, capture ->
+                capture(950)
+                instrumentation.runOnMainSync { v.setProp("t", Value.Str("10")) }
+                drawn(v)
+                val loc = IntArray(2)
+                instrumentation.runOnMainSync { v.view.getLocationInWindow(loc) }
+                var frame = 0
+                while (frames.held != null && frame < 80) {
+                    frame++
+                    now += step
+                    instrumentation.runOnMainSync { frames.run(now) }
+                    val (hw, sw) = capture(950 + frame)
+                    val sAbove = (top - 24 until top - 1).sumOf { y -> (0 until 120).count { x -> sw.getPixel(x, y) != Color.BLUE } }
+                    val hAbove = (top - 24 until top - 1).sumOf { y -> (0 until 120).count { x -> hw.getPixel(loc[0] + x, loc[1] + y) != Color.BLUE } }
+                    above = maxOf(above, minOf(sAbove, hAbove))
+                }
+                check(frames.held == null) { "reach, $name: the clock never stopped" }
+                ""
             }
-            check(frames.held == null) { "reach: the clock never stopped" }
-            ""
+            check(above > 20) { "$name: rolling ink above the box was cut ($above pixels)" }
+            seen += "$name $above"
         }
-        check(above > 20) { "rolling ink above the box was cut ($above pixels)" }
-        return "translucent text under a size transition: $above pixels of rising ink above its box on both paths"
+        return "rising ink above the text's box on both paths (pixels): ${seen.joinToString(", ")}"
     }
 
     /**

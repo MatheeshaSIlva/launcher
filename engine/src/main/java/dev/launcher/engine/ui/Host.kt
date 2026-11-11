@@ -238,9 +238,18 @@ class HostNode internal constructor(
     internal fun drawBounds(): FloatArray {
         val e = motion.envelope ?: floatArrayOf(0f, 0f, exactWidth, exactHeight)
         val o = outset()
-        val r = rollReach() ?: return if (o == 0f) e else floatArrayOf(e[0] - o, e[1] - o, e[2] + o, e[3] + o)
-        return floatArrayOf(e[0] - o - r[0], e[1] - o - r[1], e[2] + o + r[0], e[3] + o + r[1])
+        val r = rollReach()
+        val own = if (r == null) { if (o == 0f) e else floatArrayOf(e[0] - o, e[1] - o, e[2] + o, e[3] + o) }
+            else floatArrayOf(e[0] - o - r[0], e[1] - o - r[1], e[2] + o + r[0], e[3] + o + r[1])
+        val c = childReach ?: return own
+        return floatArrayOf(minOf(own[0], c[0]), minOf(own[1], c[1]), maxOf(own[2], c[2]), maxOf(own[3], c[3]))
     }
+
+    /**
+     * What its descendants draw outside its box while they roll, in its own px (left, top, right, bottom), or null: a
+     * layer of its own (`layer`, opacity) must hold it too (Codex: a layered or translucent parent cut its child's roll).
+     */
+    internal var childReach: FloatArray? = null
 
     /**
      * How far a rolling text's glyphs reach outside its box while it rolls (sideways, up and down), or null: a rise above
@@ -343,8 +352,41 @@ class ComponentHost(
         val done = ArrayList<HostNode>()
         moving.removeAll { n -> !n.step(frameTimeNanos).also { n.redraw(); if (!it && n.isLeaving) done += n } }
         done.forEach(::finishExit)
+        spread()
         requestFrame()
         return moving.isNotEmpty()
+    }
+
+    private var reaching: List<HostNode> = emptyList()
+
+    /**
+     * Each rolling text's drawing bounds, carried up through its ancestors as far as they leave a box, so a layer on the
+     * way holds them; worked out again at every step, and the ancestors whose bounds change draw again.
+     */
+    private fun spread() {
+        val before = reaching
+        before.forEach { it.childReach = null }
+        val now = LinkedHashSet<HostNode>()
+        for (n in moving) {
+            if (n.rollReach() == null) continue
+            var c = n
+            var b = n.drawBounds()
+            while (true) {
+                val p = c.parent ?: break
+                if (p.hidden.value) break
+                val ox = c.placedX + c.motion.drawX
+                val oy = c.placedY + c.motion.drawY
+                b = floatArrayOf(b[0] + ox, b[1] + oy, b[2] + ox, b[3] + oy)
+                if (b[0] >= 0f && b[1] >= 0f && b[2] <= p.exactWidth && b[3] <= p.exactHeight) break
+                val r = p.childReach
+                p.childReach = if (r == null) b else floatArrayOf(minOf(r[0], b[0]), minOf(r[1], b[1]), maxOf(r[2], b[2]), maxOf(r[3], b[3]))
+                now += p
+                b = p.drawBounds()
+                c = p
+            }
+        }
+        reaching = now.toList()
+        (before + now).distinct().forEach { it.redraw() }
     }
 
     private fun HostNode.within(top: HostNode): Boolean {
@@ -379,6 +421,7 @@ class ComponentHost(
         moving.clear()
         all.forEach { it.snapMotion(); it.redraw() }
         all.filter { it.isLeaving }.forEach(::finishExit)
+        spread()
         requestFrame()
     }
 
