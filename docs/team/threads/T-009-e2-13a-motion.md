@@ -445,6 +445,51 @@ could not take git's index lock)
   exit's). Test clock: `now` reads the last stepped frame, as `ComponentView`'s clock does.
 - **Not verified:** the S24 (no component declares presence yet, nothing on screen changes).
 
+### codex — work, 2026-11-11T18:27Z
+
+- **Commits / changed:** none, per round instruction; six assigned files left modified. Added `roll`, `rollCurve()`, agreed precedence, text-only validation, refusal spans, tests and documentation. No UI files touched.
+- **Verified (measured):** standalone Kotlin 2.2.21/JUnit: **32 model tests passed**, including 13 MotionGrammarTest tests (3 new). `git diff --check` passed.
+- **Not verified / surprises:** Gradle could not start: sandbox denied its wrapper lock. Full gate remains with lead; no device used or Gradle daemon started.
+- [x] **§7, judged—callers:** no new executable entry point; caller checks unchanged.
+- [x] **Inputs:** roll strings capped at 4096 characters; shared bounded curve grammar; no reflection.
+- [x] **Isolation:** no new route to shell, execution, external paths or other apps.
+- [x] **Capabilities:** requirements and `uses` derivation unchanged.
+- [x] **Captures:** no capture, persistence or transmission added.
+- [x] **Secrets:** no secret handling or logging added.
+- [x] **Refusal tests, measured:** bindings, unsupported words, invalid curves/types, oversize values and non-text use rejected with checked spans.
+
+### claude — 13a-3 report (`944e0d6`; Codex's grammar `f5c8af2`)
+
+- **Eligibility (`ui/RollEligibility.kt`).** The agreed filter (ASCII digits, `: . , % / -`, space, 32 characters at most),
+  then the complete string in its configuration. **Changed from §3, with the reason:** the background pixel check left
+  every new string pending at the moment it changes (a clock's next minute is always new), so on the emulator every change
+  rolled whole. On Android 12+ the check is now your round-two alternative, "identical shaped glyphs and positions":
+  `TextRunShaper` shapes the whole run and each character alone; eligible only if there is one glyph per character with the
+  same glyph id and font, at the run's advance for its offset (plus the glyph's own offset), on the same baseline. It runs
+  at once (0.18 ms a string on the emulator, once per string and configuration: cached, LRU 256, keyed by the paint's
+  typeface, size, features, letter spacing, scale, skew, flags and the tokens' version). Before Android 12 the pixel check
+  stays, off the drawing thread, whole while pending.
+- **Measured, emulator (`component-roll`):** 208 fixture strings × configurations (text family 400/600, tnum or not, 12,
+  17, 22.5 px, and the system font) equal pixel for pixel whole vs by characters at four sub-pixel origins; all 208 alike
+  by glyphs, none alike by glyphs and unlike by pixels; `ffi` (a ligature) refused by both checks; the cache bounded.
+- **Roll (`ui/motion/RollMotion.kt`, wired in `TextPainter`, stepped with `NodeMotion`).** StatusBarView's contract:
+  by characters when both strings are eligible, of one length and every unchanged character where it was; else whole.
+  Up for a larger number, down for a smaller, else up; changed characters start `motion.text.stagger` apart (the preset
+  role's duration; none in any preset yet, so 0); each glyph its own track, so a change mid-roll turns every glyph from
+  where it is (a glyph that never started arriving goes at once instead of crossing its place); at most 2 leaving per
+  slot. The roll starts from `measure` (which sees every content change); at rest the text draws whole; while rolling the
+  painter's key holds the glyphs' places (re-recorded each frame). Rise 0.55 × size (StatusBarView's).
+- **Measured, JVM:** `RollMotionTest` 8 tests; all `ui.*` and `model.*` pass.
+- **Measured, emulator (`component-motion` `roll`, both paths):** `09:58` to `09:59` in 20 frames, `09:59` to `10:00`
+  turned to `10:01` at frame 6 in 26 frames: the unchanged characters' columns equal the rest frame's pixels at every
+  frame, the clock stops, the last frame equals a fresh view of the final text. Judged from the frames: the changed digits
+  roll in their columns (`tools/shots/roll_sheet.png`, not committed). The jump check (ink centre per column) is weak:
+  outgoing and incoming ink average out; the frames were looked at.
+- **Decisions (judged, to log):** the glyph check replaces the pixel check on Android 12+; stagger from a preset role's
+  duration; at most 2 leaving per slot; glyphs are not clipped to the text's box (StatusBarView's look: they fade out as
+  they leave it).
+- **Not verified:** the S24 (no component rolls yet), a font with kerning between digits (none of the fixtures kern).
+
 ## 6. Cross-check
 
 Each agent reviews the other's diff and report. Findings as `fix`, `question` or `note`, with file:line. The owner of a
@@ -655,6 +700,12 @@ the old code 4 of the new tests fail (named below), and the emulator's new `rise
   flight go on to their targets (its parent no longer changes them). Proofs added: `rise` (rise effect, nested child,
   fractional size); unit tests cover each effect's arrival and exit values, an arrival's first value, nested retention and
   the root. The gate runs on the tip before merging.
+
+### claude — review of 13a-3's grammar (`f5c8af2`), 2026-11-12
+
+- note: `roll` is data-only (#true/#false or a literal curve, bindings refused, 4096 cap), only on `text`
+  (`motion-roll-not-text`), `stagger`/`up`/`down` refused as not yet supported; precedence curve > node spring >
+  `motion.text.roll` through an internal marker. Nothing to fix; the runtime reads `rollCurve()` unchanged.
 
 ## 7. Sign-off
 
