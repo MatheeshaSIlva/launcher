@@ -153,14 +153,20 @@ class HostNode internal constructor(
         val scale = (number("scale") ?: 1f).takeIf { it.isFinite() } ?: 1f
         motion.anchorX = anchorX; motion.anchorY = anchorY
         motion.restX = tx; motion.restY = ty
+        val before = shownState()
         val m = nodeMotion
         if (m == null) {
             motion.placeX = tx; motion.placeY = ty; motion.alphaOf(opacity); motion.scaleOf(scale)
-            return
+        } else {
+            if (m.update(x, y, tx, ty, exactWidth, exactHeight, opacity, scale, anchorX = anchorX, anchorY = anchorY)) onMoving(this)
+            shown()
         }
-        if (m.update(x, y, tx, ty, exactWidth, exactHeight, opacity, scale, anchorX = anchorX, anchorY = anchorY)) onMoving(this)
-        shown()
+        // Placement does not draw a node again: what it changed is drawn now, not at the node's next draw (13a-1b, measured:
+        // the root's first frame of a sub-pixel move showed its new place without the motion's shift, a 0.65 px jump).
+        if (shownState() != before) redraw()
     }
+
+    private fun shownState() = listOf(motion.placeX, motion.placeY, motion.alpha, motion.scale, motion.drawnWidth, motion.drawnHeight)
 
     /** Its motion's values onto what draws it; false once every track has settled. */
     internal fun step(now: Long): Boolean {

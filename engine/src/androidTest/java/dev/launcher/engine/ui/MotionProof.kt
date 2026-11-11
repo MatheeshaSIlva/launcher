@@ -43,6 +43,8 @@ import kotlin.math.abs
  */
 class MotionProof(private val instrumentation: Instrumentation) {
     private val step = 8_333_333L
+    /** Edges read from coverage are exact to a few hundredths: a quarter pixel catches a half-pixel jump. */
+    private val TOLERANCE = 0.25f
     private val t0 = 1_000_000_000L
     @Volatile private var now = t0
 
@@ -97,6 +99,8 @@ class MotionProof(private val instrumentation: Instrumentation) {
             val origins = listOf(origin(hw0), origin(sw0))
             var k = 0
             var lastRecords = records(v)
+            val contentSteps = ArrayList<Int>(); val frameSteps = ArrayList<Int>()
+            var midway = false
             while (frames.held != null && k < 600) {
                 k++
                 now = t0 + k * step
@@ -114,6 +118,7 @@ class MotionProof(private val instrumentation: Instrumentation) {
                 val (hw, sw) = capture(k)
                 val records = records(v)
                 if (records.second <= lastRecords.second) errors += "frame $k: no frame recorded (${records})"
+                contentSteps += records.first - lastRecords.first; frameSteps += records.second - lastRecords.second
                 lastRecords = records
                 val t = (now - redFrom) / 1e9; val g = (now - greenFrom) / 1e9; val y = (now - t0) / 1e9
                 // The green sibling is drawn after the red box: where it slides over it, red shows up to green's edge.
@@ -122,21 +127,29 @@ class MotionProof(private val instrumentation: Instrumentation) {
                 for ((path, shot) in listOf("gpu" to hw, "software" to sw)) {
                     val (ox, oy) = origins[if (path == "gpu") 0 else 1]
                     val got = listOf(redRight(shot, ox, oy + 70), greenLeft(shot, ox, oy + 70), yellowLeft(shot, ox, oy + 20))
+                    if (path == "gpu" && got[0] in 110f..290f) midway = true
                     for (i in got.indices) {
                         // The yellow child is revealed only inside the red box: past its drawn edge it is cut.
                         if (i == 2 && expected[2] > expected[0] - 1f) continue
+                        if (!got[i].isFinite()) { errors += "frame $k $path: edge $i not found"; continue }
                         val e = abs(got[i] - expected[i])
                         worst = maxOf(worst, e)
-                        if (e > 1f) errors += "frame $k $path ${listOf("red right", "green left", "yellow left")[i]}: ${got[i]} vs ${expected[i]}"
+                        if (e > TOLERANCE) errors += "frame $k $path ${listOf("red right", "green left", "yellow left")[i]}: ${got[i]} vs ${expected[i]}"
                     }
                 }
             }
+            check(k >= 20 && midway) { "no motion seen: $k frames, midway $midway" }
             check(frames.held == null) { "the clock never stopped" }
             check(errors.isEmpty()) { errors.take(8).joinToString("; ") }
-            "$k frames, both paths within ${"%.2f".format(worst)} px of the movers (red size, green place, yellow nested place; reversed at 12); every captured step recorded frames; clock stopped"
+            "$k frames, both paths within ${"%.2f".format(worst)} px of the movers (red size, green place, yellow nested place; reversed at 12); clock stopped; " +
+                "per captured step: content re-recorded ${contentSteps.take(24)}..., frames ${frameSteps.min()}..${frameSteps.max()}"
         }
     }
 
+    /**
+     * The root through `ComponentView`'s real placement: a centre-line move across whole pixels (60.5 px), then one inside a
+     * pixel (−0.65 px, the floor unchanged: placing the root at its whole pixel only would jump 0.65 px here).
+     */
     private fun root(): String {
         val d = def("""
             component "root" {
@@ -145,31 +158,48 @@ class MotionProof(private val instrumentation: Instrumentation) {
               }
             }""")
         val ease = Curve.Ease(0f, 0f, 0.58f, 1f, 200f)
-        val mover = Continuation.fresh(ease, -60.5f, 0f)
         val errors = ArrayList<String>()
         var worst = 0f
+        val report = ArrayList<String>()
         return session(d, centreY = 400.25f) { v, frames, capture ->
             val (hw0, sw0) = capture(-1)
             val tops = listOf(top(hw0, origin(hw0).first + 60), top(sw0, origin(sw0).first + 60))
-            instrumentation.runOnMainSync { v.centreY = 460.75f }
+            var at = 0f
             var k = 0
-            while (true) {
-                val (hw, sw) = capture(100 + k)
-                val expected = 60.5f + mover.value((now - t0) / 1e9)
-                for ((i, shot) in listOf(hw, sw).withIndex()) {
-                    val got = top(shot, origin(shot).first + 60) - tops[i]
-                    val e = abs(got - expected)
-                    worst = maxOf(worst, e)
-                    if (e > 1f) errors += "frame $k ${if (i == 0) "gpu" else "software"}: top +$got vs +$expected (records ${records(v)})"
+            for ((n, target) in listOf(460.75f, 460.10f).withIndex()) {
+                val from = at
+                val delta = target - (400.25f + at)
+                val start = now
+                val mover = Continuation.fresh(ease, -delta, 0f)
+                instrumentation.runOnMainSync { v.centreY = target }
+                var frame = 0
+                var midway = false
+                var last = records(v)
+                val frameSteps = ArrayList<Int>(); val contentSteps = ArrayList<Int>()
+                while (true) {
+                    val (hw, sw) = capture(100 * (n + 1) + frame)
+                    val expected = from + delta + mover.value((now - start) / 1e9)
+                    for ((i, shot) in listOf(hw, sw).withIndex()) {
+                        val got = top(shot, origin(shot).first + 60) - tops[i]
+                        if (!got.isFinite()) { errors += "move $n frame $frame: no top"; continue }
+                        val e = abs(got - expected)
+                        worst = maxOf(worst, e)
+                        if (i == 0 && abs(got - from) > 0.2f * abs(delta) && abs(got - from - delta) > 0.2f * abs(delta)) midway = true
+                        if (e > TOLERANCE) errors += "move $n frame $frame ${if (i == 0) "gpu" else "software"}: top +$got vs +$expected"
+                    }
+                    if (frames.held == null || frame > 60) break
+                    frame++; k++
+                    now += step
+                    instrumentation.runOnMainSync { frames.run(now) }
+                    val r = records(v); contentSteps += r.first - last.first; frameSteps += r.second - last.second; last = r
                 }
-                if (frames.held == null || k > 60) break
-                k++
-                now = t0 + k * step
-                instrumentation.runOnMainSync { frames.run(now) }
+                check(frame >= 8 && midway) { "move $n: no motion seen ($frame frames, midway $midway)" }
+                check(frames.held == null) { "move $n: the clock never stopped" }
+                report += "move ${"%.2f".format(delta)} px in $frame frames (content +${contentSteps.sum()}, frames ${frameSteps.min()}..${frameSteps.max()} a step)"
+                at += delta
             }
-            check(frames.held == null) { "the clock never stopped" }
             check(errors.isEmpty()) { errors.take(8).joinToString("; ") }
-            "$k frames, the root's fractional centre-line move (60.5 px) within ${"%.2f".format(worst)} px on both paths"
+            "${report.joinToString("; ")}; within ${"%.2f".format(worst)} px on both paths"
         }
     }
 

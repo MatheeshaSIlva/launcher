@@ -134,4 +134,21 @@ class HostMotionTest {
         assertTrue(h.isMoving)
         assertEquals("shown where it was", -3f, n.motion.drawY, 1e-4f)
     }
+
+    /** 13a-1b (measured on the emulator): placement draws nothing again by itself; a node whose shown values change asks. */
+    @Test fun aPlacementThatChangesWhatIsShownAsksForADraw() {
+        opacity = 1.0
+        val h = host("box width=10 height=10 opacity=\"{@o}\"")
+        val n = h.root
+        var draws = 0
+        n.redraw = { draws++ }
+        n.placed(0f, 0f, 0.5f, 0.5f)
+        val first = draws
+        n.placed(0f, 0f, 0.5f, 0.5f)
+        assertEquals("nothing changed: no draw", first, draws)
+        opacity = 0.5
+        h.refresh()
+        n.placed(0f, 0f, 0.5f, 0.5f)
+        assertEquals(first + 1, draws)
+    }
 }
