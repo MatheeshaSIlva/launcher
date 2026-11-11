@@ -140,4 +140,125 @@ class MotionGrammarTest {
         val bad = KdlParser.parse("""component "c" { view { box spring=1; }; }""")
         assertEquals("motion-literal", (Validator(TokenCheck { false }).load(bad) as ReadResult.Invalid).diagnostics.single().code)
     }
+    @Test fun presenceAcceptsEffectsAndEveryCurveForm() {
+        val curves = listOf("", "@motion.arrive", "240ms", "240ms ease-out", "240ms ease-in",
+            "240ms ease-in-out", "240ms linear", "cubic-bezier(0.1, -2, 0.9, 3) 220ms",
+            "spring(stiff)", "spring(0.4, 0.8)")
+        for (key in listOf("enter", "exit")) for (curve in curves) {
+            for (effect in PresenceEffect.entries) {
+                val text = "${effect.name.lowercase()} $curve".trimEnd()
+                val s = spec(text, key)
+                val p = (if (key == "enter") s.enter else s.exit)!!
+                assertEquals(text, setOf(effect), p.effects)
+                assertEquals(text, Span(11, 11 + text.length, 2, 4), p.span)
+                assertEquals(text, if (curve.isEmpty()) null else spec("place $curve").transitions.single().curve, p.curve)
+                // Reconstruct the declaration from its effects and original curve, then read it again.
+                val reread = spec(p.effects.joinToString(" ") { it.name.lowercase() } + " $curve", key)
+                val again = if (key == "enter") reread.enter!! else reread.exit!!
+                assertEquals(p.effects, again.effects)
+                assertEquals(p.curve, again.curve)
+            }
+        }
+        for (key in listOf("enter", "exit")) for (curve in curves) {
+            val p = (if (key == "enter") spec("fade-up grow scale $curve", key).enter
+                else spec("fade-up grow scale $curve", key).exit)!!
+            assertEquals(PresenceEffect.entries.toSet(), p.effects)
+            assertEquals(if (curve.isEmpty()) null else spec("place $curve").transitions.single().curve, p.curve)
+        }
+        assertEquals(setOf(PresenceEffect.FADE, PresenceEffect.RISE), spec("fade-up 240ms", "enter").enter!!.effects)
+        assertEquals(ease(0f,0f,.58f,1f,240f), spec("fade-up 240ms", "enter").enterCurve())
+        assertEquals(ease(0f,0f,.58f,1f,120f), spec("fade 120ms", "exit").exitCurve())
+    }
+    @Test fun presenceCurvePrecedenceAndAbsence() {
+        val enter = spec("fade @motion.own", "enter").enter!!
+        val exit = spec("grow @motion.own", "exit").exit!!
+        val own = CurveSpec.Role("motion.own")
+        val node = CurveSpec.Role("motion.node")
+        val s = NodeMotionSpec(emptyList(), node, enter, exit)
+        assertEquals(own, s.enterCurve())
+        assertEquals(own, s.exitCurve())
+        val inherited = s.copy(enter=enter.copy(curve=null), exit=exit.copy(curve=null))
+        assertEquals(node, inherited.enterCurve())
+        assertEquals(node, inherited.exitCurve())
+        assertEquals(CurveSpec.Role("motion.enter"), inherited.copy(spring=null).enterCurve())
+        assertEquals(CurveSpec.Role("motion.exit"), inherited.copy(spring=null).exitCurve())
+        assertNull(s.copy(enter=null).enterCurve())
+        assertNull(s.copy(exit=null).exitCurve())
+        assertNull(s.curveFor(MotionChannel.SIZE))
+    }
+    @Test fun presenceRefusalsHaveCodesReasonsAndExactSpans() {
+        for (key in listOf("enter", "exit")) for ((text, code, token) in listOf(
+            Triple("fdae", "motion-unknown-effect", "fdae"),
+            Triple("fade rize", "motion-unknown-effect", "rize"),
+            Triple("fade fade", "motion-duplicate-effect", "fade"),
+            Triple("fade-up fade-up", "motion-duplicate-effect", "fade-up"),
+            Triple("fade-up fade", "motion-duplicate-effect", "fade"),
+            Triple("fade-up rise", "motion-duplicate-effect", "rise"),
+            Triple("rise fade-up", "motion-duplicate-effect", "fade-up"),
+            Triple("fade fade-up", "motion-duplicate-effect", "fade-up"),
+            Triple("", "motion-no-effect", ""),
+            Triple("  ", "motion-no-effect", ""),
+            Triple("240ms", "motion-no-effect", "240ms"),
+            Triple("@motion.enter", "motion-no-effect", "@motion.enter"),
+            Triple("spring(stiff)", "motion-no-effect", "spring(stiff)"),
+            Triple("fade, grow", "motion-presence-comma", ","),
+            Triple("fade spring(0.4, 0.8), rise", "motion-presence-comma", ","),
+            Triple("place", "motion-presence-channel", "place"),
+            Triple("size", "motion-presence-channel", "size"),
+            Triple("opacity", "motion-presence-channel", "opacity"),
+            Triple("value", "motion-presence-channel", "value"),
+            Triple("fade value", "motion-presence-channel", "value"),
+            Triple("slide", "motion-not-supported", "slide"),
+            Triple("fade blur", "motion-not-supported", "blur"),
+            Triple("rotate", "motion-not-supported", "rotate"),
+            Triple("keyframes", "motion-not-supported", "keyframes"),
+            Triple("stagger", "motion-not-supported", "stagger"),
+            Triple("fade delay", "motion-not-supported", "delay"),
+            Triple("fade 200ms delay", "motion-not-supported", "delay"),
+            Triple("fade 0ms", "motion-bad-duration", "0ms"),
+            Triple("fade spring(0,1)", "motion-bad-spring", "spring(0,1)"),
+            Triple("fade cubic-bezier(2,0,1,1) 200ms", "motion-bad-bezier", "cubic-bezier(2,0,1,1) 200ms"),
+            Triple("fade 200ms ease-ot", "motion-unknown-easing", "ease-ot")
+        )) {
+            val r = parse(text, key)
+            assertNull(text, r.spec)
+            val d = r.diagnostics.single()
+            assertEquals(text, code, d.code)
+            assertTrue(d.message.isNotBlank())
+            val at = if (token.isEmpty()) text.length else text.lastIndexOf(token)
+            assertEquals(text, Span(11 + at, 11 + at + token.length, 2, 4 + at), d.span)
+            if (code == "motion-presence-channel") assertTrue(d.message.contains("transition"))
+        }
+        assertEquals("did you mean 'rise'?", parse("rize", "enter").diagnostics.single().hint)
+        for (key in listOf("enter", "exit")) {
+            for (text in listOf("\$state", "fade {1+2}", "@ink", "fade @ink")) {
+                val d = parse(text, key).diagnostics.single()
+                assertEquals("not-bindable", d.code)
+                assertEquals(Span(10, 12 + text.length, 2, 3), d.span)
+            }
+            val bounded = "fade" + " ".repeat(4092)
+            assertNotNull(spec(bounded, key))
+            val d = parse(bounded + " ", key).diagnostics.single()
+            assertEquals("motion-limit", d.code)
+            assertEquals(Span(10, 4109, 2, 3), d.span)
+        }
+    }
+    @Test fun readerAndValidatorRecognizePresenceOnlyNodes() {
+        for (key in listOf("enter", "exit")) {
+            val doc = KdlParser.parse("""component "c" { view { box $key="fade @motion.custom"; }; }""")
+            val c = (Validator(TokenCheck { false }).load(doc) as ReadResult.Ok).component
+            val motion = c.view.motion!!
+            assertEquals(CurveSpec.Role("motion.custom"), if (key == "enter") motion.enterCurve() else motion.exitCurve())
+            for ((value, code) in listOf("\"\$state\"" to "not-bindable", "\"{1+2}\"" to "not-bindable",
+                "\"@ink\"" to "not-bindable", "1" to "motion-literal", "#true" to "motion-literal")) {
+                val bad = KdlParser.parse("""component "c" { view { box $key=$value; }; }""")
+                assertEquals(code, (Validator(TokenCheck { false }).load(bad) as ReadResult.Invalid).diagnostics.single().code)
+            }
+            val binding = AttrValue.State("x", Span(0,4,1,1))
+            val d = MotionGrammar.read(mapOf(key to binding)).diagnostics.single()
+            assertEquals("motion-literal", d.code)
+            assertEquals(binding.span, d.span)
+        }
+    }
+
 }

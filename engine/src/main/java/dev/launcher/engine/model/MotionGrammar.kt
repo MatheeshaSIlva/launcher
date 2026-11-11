@@ -6,9 +6,10 @@ import dev.launcher.engine.kdl.Span
 
 /** Fixed, data-only motion declarations. No token lookup, expression evaluation or reflection. */
 object MotionGrammar {
-    val ATTRS = setOf("transition", "spring")
+    val ATTRS = setOf("transition", "spring", "enter", "exit")
     data class Result(val spec: NodeMotionSpec?, val diagnostics: List<Diagnostic>)
     private val channels = MotionChannel.entries.associateBy { it.name.lowercase() }
+    private val effects = PresenceEffect.entries.associateBy { it.name.lowercase() }
     private val easings = mapOf(
         "ease-out" to listOf(0f, 0f, .58f, 1f), "ease-in-out" to listOf(.42f, 0f, .58f, 1f),
         "ease-in" to listOf(.42f, 0f, 1f, 1f), "linear" to listOf(0f, 0f, 1f, 1f))
@@ -21,6 +22,7 @@ object MotionGrammar {
         val d = ArrayList<Diagnostic>()
         val transitions = ArrayList<Transition>()
         var spring: CurveSpec? = null
+        val presence = HashMap<String, Presence>()
         val seen = HashSet<MotionChannel>()
         for (key in ATTRS) attrs[key]?.let { value ->
             val raw = ((value as? AttrValue.Literal)?.value as? KdlValue.Str)
@@ -29,8 +31,9 @@ object MotionGrammar {
                 return@let
             }
             val run = Parse(raw, d)
-            if (!run.allowed(defaultSpring = key == "spring")) return@let
+            if (!run.allowed(defaultSpring = key == "spring", presence = key == "enter" || key == "exit")) return@let
             if (key == "spring") spring = run.curve(raw.value, 0, defaultSpring = true)
+            else if (key == "enter" || key == "exit") run.presence()?.let { presence[key] = it }
             else for ((text, offset) in run.clauses()) {
                 val words = Regex("\\S+").findAll(text).toList()
                 val selected = linkedSetOf<MotionChannel>()
@@ -59,7 +62,7 @@ object MotionGrammar {
                 }
             }
         }
-        return Result(if (d.isEmpty()) NodeMotionSpec(transitions, spring) else null, d)
+        return Result(if (d.isEmpty()) NodeMotionSpec(transitions, spring, presence["enter"], presence["exit"]) else null, d)
     }
 
     private class Parse(val raw: KdlValue.Str, val d: MutableList<Diagnostic>) {
@@ -70,17 +73,26 @@ object MotionGrammar {
             else Span(it.start + 1 + offset, it.start + 1 + offset + length, it.line, it.col + 1 + offset)
         }
         fun error(code: String, reason: String, offset: Int, length: Int) { d += Diagnostic(at(offset, length), code, reason) }
-        fun allowed(defaultSpring: Boolean): Boolean {
+        fun allowed(defaultSpring: Boolean, presence: Boolean): Boolean {
             if (text.length > 4096) {
                 d += Diagnostic(raw.span, "motion-limit", "Motion declarations are limited to 4096 characters")
                 return false
             }
-            if (text.any { it == '$' || it == '{' || it == '}' } || text.trim().startsWith("@") && !text.trim().startsWith("@motion.")) {
+            if (text.any { it == '$' || it == '{' || it == '}' } ||
+                text.trim().startsWith("@") && !text.trim().startsWith("@motion.") ||
+                presence && Regex("(?<!\\S)@(?!motion\\.)").containsMatchIn(text)) {
                 d += Diagnostic(raw.span, "not-bindable", "Motion declarations cannot contain bindings or expressions")
                 return false
             }
             if (defaultSpring && name.matches(text.trim())) return true
             val inspected = Regex("spring\\(\\s*[A-Za-z_][A-Za-z0-9_-]*\\s*\\)").replace(text) { " ".repeat(it.value.length) }
+            if (presence) {
+                val later = Regex("(?<![A-Za-z0-9_.-])(?:slide|blur|delay)(?![A-Za-z0-9_.-])").find(inspected)
+                if (later != null) {
+                    error("motion-not-supported", "'${later.value}' is not yet supported in E2 motion", later.range.first, later.value.length)
+                    return false
+                }
+            }
             val unsupported = Regex("(?<![A-Za-z0-9_.-])(?:keyframes?|stagger|rotate|stiffness|damping|mass|duration|bounce)(?![A-Za-z0-9_.-])|[a-z-]+\\s*=").find(inspected)
             if (unsupported != null) {
                 d += Diagnostic(at(unsupported.range.first, unsupported.value.length), "motion-not-supported", "'${unsupported.value}' is not yet supported in E2 motion")
@@ -99,6 +111,47 @@ object MotionGrammar {
             }
             out += text.substring(start) to start
             return out
+        }
+        fun presence(): Presence? {
+            val clauses = clauses()
+            if (clauses.size > 1) {
+                val comma = clauses.first().first.length
+                error("motion-presence-comma", "Presence takes one clause; commas only belong inside curves", comma, 1)
+                return null
+            }
+            val words = Regex("\\S+").findAll(text).toList()
+            val selected = linkedSetOf<PresenceEffect>()
+            var k = 0
+            while (k < words.size) {
+                val word = words[k].value
+                val next = if (word == "fade-up") setOf(PresenceEffect.FADE, PresenceEffect.RISE)
+                    else effects[word]?.let { setOf(it) } ?: break
+                if (next.any { it in selected }) {
+                    error("motion-duplicate-effect", "Effect '$word' is declared twice (fade-up includes fade and rise)", words[k].range.first, word.length)
+                    return null
+                }
+                selected += next
+                k++
+            }
+            val rest = words.getOrNull(k)
+            if (rest != null) {
+                val word = rest.value
+                val offset = rest.range.first
+                if (word in channels || word == "value") {
+                    error("motion-presence-channel", "'$word' belongs to transition; presence needs effects", offset, word.length)
+                    return null
+                }
+                if (name.matches(word) && !word.endsWith("ms")) {
+                    d += unknown(at(offset, word.length), "motion-unknown-effect", "presence effect", word, effects.keys + "fade-up")
+                    return null
+                }
+            }
+            if (selected.isEmpty()) {
+                error("motion-no-effect", "Presence needs at least one of fade, grow, scale or rise", rest?.range?.first ?: text.length, rest?.value?.length ?: 0)
+                return null
+            }
+            val curve = rest?.let { curve(text.substring(it.range.first), it.range.first) }
+            return Presence(selected, curve, at(0, text.length))
         }
         fun curve(input: String, offset: Int, defaultSpring: Boolean = false): CurveSpec? {
             val s = input.trim()
