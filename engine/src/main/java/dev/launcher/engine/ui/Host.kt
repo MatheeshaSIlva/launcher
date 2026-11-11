@@ -238,7 +238,19 @@ class HostNode internal constructor(
     internal fun drawBounds(): FloatArray {
         val e = motion.envelope ?: floatArrayOf(0f, 0f, exactWidth, exactHeight)
         val o = outset()
-        return if (o == 0f) e else floatArrayOf(e[0] - o, e[1] - o, e[2] + o, e[3] + o)
+        val r = rollReach() ?: return if (o == 0f) e else floatArrayOf(e[0] - o, e[1] - o, e[2] + o, e[3] + o)
+        return floatArrayOf(e[0] - o - r[0], e[1] - o - r[1], e[2] + o + r[0], e[3] + o + r[1])
+    }
+
+    /**
+     * How far a rolling text's glyphs reach outside its box while it rolls (sideways, up and down), or null: a rise above
+     * and below, and an outgoing string wider than the box on either side (Codex: a layer cut the rolling ink).
+     */
+    internal fun rollReach(): FloatArray? {
+        val r = nodeMotion?.roll?.takeIf { it.moving } ?: return null
+        val rise = dev.launcher.engine.ui.motion.RollMotion.RISE * (length("size") ?: TextPainter.DEFAULT_SIZE_PX)
+        val side = ((r.glyphs.maxOfOrNull { it.width } ?: 0f) - exactWidth).coerceAtLeast(0f)
+        return floatArrayOf(side, rise)
     }
     val motion = Motion({ m ->
         frame.translationX = m.drawX; frame.translationY = m.drawY

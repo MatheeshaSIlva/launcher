@@ -21,15 +21,19 @@ import kotlin.math.ceil
  * - verdicts kept by string and configuration (least recently used, [capacity]); a configuration's entries are never read
  *   for another, and a string not yet verified, or failing, rolls whole ([Verdict.PENDING], [Verdict.WHOLE]).
  */
-class RollEligibility(private val executor: Executor = WORKER, private val capacity: Int = 256) {
+class RollEligibility(private val executor: Executor = WORKER, private val capacity: Int = 256,
+    /** By shaped glyphs (Android 12+), else by pixels in the background; false in tests of the background path. */
+    private val byGlyphs: Boolean = android.os.Build.VERSION.SDK_INT >= 31) {
     enum class Verdict { CLUSTERS, WHOLE, PENDING }
 
     /** What shapes the string: everything in the paint that can change a glyph or its place. */
-    data class Config(val typeface: Typeface?, val size: Float, val features: String?, val letterSpacing: Float,
-        val scaleX: Float, val skewX: Float, val flags: Int, val version: Int) {
+    data class Config(val typeface: Typeface?, val size: Float, val features: String?, val variations: String?,
+        val letterSpacing: Float, val wordSpacing: Float, val scaleX: Float, val skewX: Float, val flags: Int, val hinting: Int,
+        val locales: android.os.LocaleList?, val elegant: Boolean, val version: Int) {
         companion object {
-            fun of(p: Paint, version: Int) = Config(p.typeface, p.textSize, p.fontFeatureSettings, p.letterSpacing,
-                p.textScaleX, p.textSkewX, p.flags, version)
+            fun of(p: Paint, version: Int) = Config(p.typeface, p.textSize, p.fontFeatureSettings, p.fontVariationSettings,
+                p.letterSpacing, p.wordSpacing, p.textScaleX, p.textSkewX, p.flags, p.hinting, p.textLocales,
+                p.isElegantTextHeight, version)
         }
     }
 
@@ -38,6 +42,8 @@ class RollEligibility(private val executor: Executor = WORKER, private val capac
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, Boolean>) = size > capacity
     }
     private val pending = HashSet<Key>()
+    /** Verifications waiting or running now (tests: bounded). */
+    val outstanding get() = synchronized(this) { pending.size }
 
     /** Kept verdicts now (tests: bounded). */
     val size get() = synchronized(this) { verdicts.size }
@@ -49,14 +55,18 @@ class RollEligibility(private val executor: Executor = WORKER, private val capac
     fun verdict(text: String, paint: Paint, version: Int): Verdict {
         if (!candidate(text)) return Verdict.WHOLE
         val key = Key(text, Config.of(paint, version))
+        synchronized(this) { verdicts[key]?.let { return if (it) Verdict.CLUSTERS else Verdict.WHOLE } }
+        if (byGlyphs && android.os.Build.VERSION.SDK_INT >= 31) {
+            // Shaped outside the lock: two texts never wait on each other's shaping (Codex).
+            val ok = runCatching { shapedAlike(text, paint) }.getOrDefault(false)
+            synchronized(this) { verdicts[key] = ok }
+            return if (ok) Verdict.CLUSTERS else Verdict.WHOLE
+        }
         synchronized(this) {
-            verdicts[key]?.let { return if (it) Verdict.CLUSTERS else Verdict.WHOLE }
-            if (android.os.Build.VERSION.SDK_INT >= 31) {
-                val ok = runCatching { shapedAlike(text, paint) }.getOrDefault(false)
-                verdicts[key] = ok
-                return if (ok) Verdict.CLUSTERS else Verdict.WHOLE
-            }
-            if (!pending.add(key)) return Verdict.PENDING
+            if (key in pending) return Verdict.PENDING
+            // Bounded too: past [MAX_PENDING] waiting, a string rolls whole and is not queued (Codex).
+            if (pending.size >= MAX_PENDING) return Verdict.WHOLE
+            pending += key
         }
         val copy = Paint(paint)
         executor.execute {
@@ -69,6 +79,12 @@ class RollEligibility(private val executor: Executor = WORKER, private val capac
     companion object {
         private const val ALLOWED = "0123456789:.,%/- "
         const val MAX_LENGTH = 32
+        const val MAX_PENDING = 16
+        /**
+         * How far a shaped position may be off and still count as the same place: none. Any difference could cross a
+         * rasteriser's sub-pixel step; measured on the device, every fixture string's error is exactly 0 (`RollProof`).
+         */
+        const val POSITION_TOLERANCE = 0f
         private val WORKER: Executor by lazy {
             Executors.newSingleThreadExecutor { r -> Thread(r, "roll-verify").apply { isDaemon = true; priority = Thread.MIN_PRIORITY } }
         }
@@ -94,24 +110,35 @@ class RollEligibility(private val executor: Executor = WORKER, private val capac
          * characters one by one at [positions] draws the same glyphs at the same places.
          */
         @androidx.annotation.RequiresApi(31)
-        fun shapedAlike(text: String, paint: Paint): Boolean {
+        fun shapedAlike(text: String, paint: Paint): Boolean = (shapeError(text, paint) ?: Float.MAX_VALUE) <= POSITION_TOLERANCE
+
+        /**
+         * How far (px) a character drawn alone at [positions] would sit from where the whole run puts its glyph, at most;
+         * null when the glyphs or fonts differ. Positions are floats from one shaper; what is left is rounding.
+         */
+        @androidx.annotation.RequiresApi(31)
+        fun shapeError(text: String, paint: Paint): Float? {
             val n = text.length
             val whole = android.graphics.text.TextRunShaper.shapeTextRun(text, 0, n, 0, n, 0f, 0f, false, paint)
-            if (whole.glyphCount() != n) return false
+            if (whole.glyphCount() != n) return null
             val at = positions(text, paint)
+            var worst = 0f
             for (i in 0 until n) {
                 val one = android.graphics.text.TextRunShaper.shapeTextRun(text, i, 1, i, 1, 0f, 0f, false, paint)
-                if (one.glyphCount() != 1) return false
-                if (one.getGlyphId(0) != whole.getGlyphId(i) || one.getFont(0) != whole.getFont(i)) return false
-                if (kotlin.math.abs(whole.getGlyphX(i) - (at[i] + one.getGlyphX(0))) > 1e-3f) return false
-                if (kotlin.math.abs(whole.getGlyphY(i) - one.getGlyphY(0)) > 1e-3f) return false
+                if (one.glyphCount() != 1) return null
+                if (one.getGlyphId(0) != whole.getGlyphId(i) || one.getFont(0) != whole.getFont(i)) return null
+                worst = maxOf(worst, kotlin.math.abs(whole.getGlyphX(i) - (at[i] + one.getGlyphX(0))),
+                    kotlin.math.abs(whole.getGlyphY(i) - one.getGlyphY(0)))
             }
-            return true
+            return worst
         }
 
-        /** Whole and as independent characters, pixel for pixel equal at origins 0, ¼, ½ and ¾ of a pixel. */
-        fun verify(text: String, paint: Paint): Boolean {
-            val p = Paint(paint).apply { xfermode = null; color = 0xFFFFFFFF.toInt(); alpha = 255; shader = null }
+        /**
+         * Whole and as independent characters, pixel for pixel equal at origins 0, ¼, ½ and ¾ of a pixel: in white on
+         * nothing, or with [asIs] in the paint's own colour, alpha and blend over [background].
+         */
+        fun verify(text: String, paint: Paint, asIs: Boolean = false, background: Int = 0): Boolean {
+            val p = if (asIs) Paint(paint) else Paint(paint).apply { xfermode = null; color = 0xFFFFFFFF.toInt(); alpha = 255; shader = null }
             val fm = p.fontMetrics
             val positions = positions(text, p)
             val w = ceil(maxOf(positions.last(), p.measureText(text))).toInt() + 4
@@ -124,7 +151,7 @@ class RollEligibility(private val executor: Executor = WORKER, private val capac
                 for (q in 0 until 4) {
                     val x = 1f + q / 4f
                     val baseline = 2f - fm.ascent
-                    whole.eraseColor(0); parts.eraseColor(0)
+                    whole.eraseColor(background); parts.eraseColor(background)
                     Canvas(whole).drawText(text, x, baseline, p)
                     drawClusters(Canvas(parts), text, positions, x, baseline, p)
                     whole.getPixels(a, 0, w, 0, 0, w, h); parts.getPixels(b, 0, w, 0, 0, w, h)

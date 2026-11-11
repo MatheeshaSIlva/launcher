@@ -39,6 +39,8 @@ class RollMotion {
     var text: String? = null; private set
     private var positions = FloatArray(0)
     private var clusters = false
+    /** The font configuration its glyphs were laid out in: a new one lays them out again, at rest (Codex). */
+    private var config: Any? = null
 
     val moving get() = list.any { it.track.moving || !it.goTo.isNaN() || it.leaving }
 
@@ -46,8 +48,16 @@ class RollMotion {
      * Shows [to] laid out at [at] (its characters' starts and its end), rolling from what shows on [curve] (null: at
      * once) when [byCharacters] allows it for both strings; changed characters start [staggerNs] apart.
      */
-    fun to(to: String, at: FloatArray, byCharacters: Boolean, curve: Curve?, staggerNs: Long, now: Long) {
+    fun to(to: String, at: FloatArray, byCharacters: Boolean, curve: Curve?, staggerNs: Long, now: Long, config: Any? = null) {
         val old = text
+        // Another font, size or theme: what showed was laid out in the old one; the text is laid out again at once (a
+        // change of look is not a roll), mid-roll too, and a change of text with it shows at once.
+        if (old != null && config != this.config) {
+            list.clear(); list += rest(to, at, byCharacters)
+            text = to; positions = at; clusters = byCharacters; this.config = config
+            return
+        }
+        this.config = config
         if (to == old) {
             // The same text, its verdict come in since: laid out again at rest (the same picture), never rolled.
             if (byCharacters != clusters && !moving) { list.clear(); list += rest(to, at, byCharacters); positions = at; clusters = byCharacters }
@@ -110,6 +120,8 @@ class RollMotion {
     }
 
     private fun bound() {
+        // Arrivals never seen go first: they are not what the bound keeps (Codex: they pushed out a visible glyph).
+        list.removeAll { it.leaving && !it.track.moving && it.goTo.isNaN() }
         for (slot in list.map { it.slot }.distinct()) {
             val out = list.filter { it.slot == slot && it.leaving }
             if (out.size > MAX_LEAVING) list.removeAll(out.take(out.size - MAX_LEAVING).toSet())
@@ -121,13 +133,25 @@ class RollMotion {
         /** How far a glyph travels out, as a share of the text size (StatusBarView's `0.55`). */
         const val RISE = 0.55f
 
-        /** +1 (up) when [to]'s number is larger than [from]'s or neither is a number; −1 (down) when it is smaller. */
+        private val NUMBER = Regex("-?\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?|-?\\d+(?:\\.\\d+)?")
+
+        /**
+         * −1 (down) when [to] is smaller than [from], else +1 (up). A time (with `:`) compares its digits in order (`23:59`
+         * to `0:00` is smaller); otherwise each string's one number, signed and decimal (`-3` to `-2` is larger, `1.9` to
+         * `1.10` smaller, `1,234.5` grouped); a string with no number or more than one is ambiguous: up.
+         */
         fun direction(from: String, to: String): Float {
-            val a = from.filter { it.isDigit() }.trimStart('0')
-            val b = to.filter { it.isDigit() }.trimStart('0')
-            if (from.none { it.isDigit() } || to.none { it.isDigit() }) return 1f
-            val c = if (a.length != b.length) a.length.compareTo(b.length) else a.compareTo(b)
-            return if (c > 0) -1f else 1f
+            fun clock(s: String) = s.contains(':') && s.all { it.isDigit() || it == ':' || it == ' ' }
+            if (clock(from) && clock(to)) {
+                val a = from.filter { it.isDigit() }.trimStart('0')
+                val b = to.filter { it.isDigit() }.trimStart('0')
+                val c = if (a.length != b.length) a.length.compareTo(b.length) else a.compareTo(b)
+                return if (c > 0) -1f else 1f
+            }
+            fun number(s: String) = NUMBER.findAll(s).toList().singleOrNull()?.value?.replace(",", "")?.toBigDecimalOrNull()
+            val a = number(from) ?: return 1f
+            val b = number(to) ?: return 1f
+            return if (b < a) -1f else 1f
         }
     }
 }

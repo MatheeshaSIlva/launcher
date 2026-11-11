@@ -119,4 +119,44 @@ class RollMotionTest {
         r.to("2", at("2"), true, null, 0, 0)
         assertEquals(listOf("2"), r.glyphs.map { it.text }); assertFalse(r.moving)
     }
+
+    @Test fun anotherFontLaysTheTextOutAgainAtRestEvenMidRoll() {
+        val r = RollMotion()
+        r.to("10", at("10"), true, ease, 0, 0, "a")
+        r.to("10", FloatArray(3) { it * 12f }, true, ease, 0, 0, "b")      // same text, new font: new places
+        assertEquals(listOf(0f, 12f), r.glyphs.map { it.offset }); assertFalse(r.moving)
+        r.to("11", FloatArray(3) { it * 12f }, true, ease, 0, 0, "b")
+        r.step(frame * 3, eps)
+        assertTrue(r.moving)
+        r.to("12", FloatArray(3) { it * 14f }, true, ease, 0, frame * 3, "c")  // text and font together: at once
+        assertFalse(r.moving)
+        assertEquals(listOf("1", "2"), r.glyphs.map { it.text }); assertEquals(listOf(0f, 14f), r.glyphs.map { it.offset })
+        assertTrue(r.glyphs.all { it.width == 28f && it.y == 0f })
+    }
+
+    @Test fun unseenArrivalsNeverPushOutAVisibleGlyph() {
+        val r = RollMotion()
+        r.to("1", at("1"), true, ease, 0, 0)
+        r.to("2", at("2"), true, ease, 0, 0); r.to("3", at("3"), true, ease, 0, 0); r.to("4", at("4"), true, ease, 0, 0)
+        r.step(frame, eps)
+        assertTrue("the '1' still leaves, visible", r.glyphs.any { it.text == "1" && it.alpha > 0.5f })
+        // Staggered: the second character's arrivals wait, then are replaced before they start.
+        val s = RollMotion()
+        s.to("10", at("10"), true, ease, 0, 0)
+        s.to("21", at("21"), true, ease, 100_000_000, 0); s.to("32", at("32"), true, ease, 100_000_000, 0)
+        s.to("43", at("43"), true, ease, 100_000_000, 0)
+        s.step(frame, eps)
+        assertTrue("the '0' still shows", s.glyphs.any { it.text == "0" && it.alpha > 0.99f })
+    }
+
+    @Test fun directionFollowsSignedDecimalNumbersAndTimes() {
+        assertEquals(1f, RollMotion.direction("-3", "-2"), 0f)
+        assertEquals(-1f, RollMotion.direction("-2", "-3"), 0f)
+        assertEquals(-1f, RollMotion.direction("1.9", "1.10"), 0f)
+        assertEquals(1f, RollMotion.direction("999.5", "1,234.5"), 0f)
+        assertEquals(-1f, RollMotion.direction("100%", "99%"), 0f)
+        assertEquals(1f, RollMotion.direction("09:59", "10:00"), 0f)
+        assertEquals(-1f, RollMotion.direction("23:59", "0:00"), 0f)
+        assertEquals("two numbers: ambiguous, up", 1f, RollMotion.direction("4 / 5", "3 / 5"), 0f)
+    }
 }

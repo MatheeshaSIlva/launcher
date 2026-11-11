@@ -76,7 +76,8 @@ class TextPainter(private val tokens: Tokens) : Painter {
             (r.text == null || r.text == text || ELIGIBILITY.verdict(r.text!!, p, tokens.version) == RollEligibility.Verdict.CLUSTERS)
         m.rollEpsilon = 0.5f / (RollMotion.RISE * p.textSize).coerceAtLeast(1f)
         val wasMoving = r.moving
-        r.to(text, RollEligibility.positions(text, p), byCharacters, m.rollCurve(), m.stagger(), m.now())
+        r.to(text, RollEligibility.positions(text, p), byCharacters, m.rollCurve(), m.stagger(), m.now(),
+            RollEligibility.Config.of(p, tokens.version))
         if (r.moving && !wasMoving) node.onMoving(node)
     }
 
