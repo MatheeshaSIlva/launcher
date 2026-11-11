@@ -184,6 +184,52 @@ The proposal with the three rounds' changes:
 
 ## 5. Reports
 
+### codex — work, 2026-11-11T21:58Z
+
+- **Commits:** none; files left modified on `team/codex/e2-13b-cutout`, following the lead’s specific instruction. Nothing pushed.
+- **Changed:** `DeviceSource`, the requested interfaces and members, optional registration, root-only literal `place`, device declaration checks, tests and two KDL docs.
+- **Verified — measured:** 74 source/model JVM tests passed, including 13 new tests; zero failures/errors. `git diff --check` clean. Both workspace Gradle daemons stopped.
+- **Not verified:** full gate (explicitly excluded), Android adapter/display filtering, placement proofs, emulator or S24.
+- **§7 security — judged:** caller authentication N/A (internal validation); existing input bounds unchanged; no reflection or privileged execution paths; capability remains `none`, with `uses device` enforced; no capture persistence; no secret handling changes; refusal paths tested.
+- **Surprises:** initial grammar fixtures emitted an empty statement; corrected and rerun successfully. No separate known-source registry found.
+
+Automatic command-policy review rejected recursive cleanup of the temporary Gradle cache; it supplied only “blocked by policy.” `.tmp/` remains untracked and must be excluded from the commit.
+
+### claude — report (`d9c66ab`; Codex's `5964189`)
+
+- **Changed:** `CutoutPlacement` (the rule in screen space, then the view's px), `ComponentView` (`place="cutout"`: the root's
+  horizontal centre and line from the `device` source, both axes split into a whole pixel and a fraction on the root's
+  translation; the resting origin from the window's place plus integer layout places, translations and scales left out;
+  placed again on a device-only change through Compose state and on the view's move), `HostNode.snapPlace`, the display
+  adapter `DeviceDisplayInfo` and its wiring in `KdlBar` (the bar stays `place="window"`).
+- **Moved from §4, with the reason:** the adapter is `engine/.../source/DeviceDisplayInfo.kt`, not under `app/`: the
+  engine's on-device proof must run it, and it is platform code like the rest of `:engine`'s `dev.launcher.app.*`.
+- **Two bugs the emulator found, fixed:** (1) the status bar's height read 0: an insets listener of ours on the
+  `ComposeView` is replaced by Compose's own; the adapter now reads the view's `rootWindowInsets` (ignoring visibility)
+  when asked. (2) A root with a place transition slid in from 273 px above on its first frame: the first layout ran
+  before the window was in its place, and the move from there was taken for motion. A change of the resting origin (the
+  host laid out or moved) now places the root at once (`snapPlace`); only a change of the device moves it on its
+  transition.
+- **Measured, JVM:** `CutoutPlacementTest` 8 (no cutout, centred hole, corner, wide notch, out of band both sides, strict
+  20 % and 80 %, an offset view, landscape fallback); all engine unit tests pass, with Codex's 13 new ones.
+- **Measured, emulator (`component-placement`, RenderNode and software paths):** overlays none, hole, corner, double and
+  tall, upright and turned: the box's centre within 0.003 px of the rule's point in every case (turned: no top cutout,
+  the fallback); with the host offset 37 px, and the view translated +0.4 and −0.4 px and an ancestor +0.4, moved by the
+  translation within 0.05 px. A moved cutout on a `place 200ms` transition, turned back at frame 6: 31 frames within
+  0.003 px of the movers on both paths, the clock stopped; with motion reduced (animator scale 0) at once.
+  `component-motion` unchanged (PASS).
+- **Not verified:** the S24 (outstanding exit check, the owner's); a display moved between screens (no second display).
+- **Note:** a fallback root may declare `place` (Codex's grammar allows it) but the runtime places from the view's root
+  only; no component has a fallback yet. Parked for when one does.
+
 ## 6. Cross-check
+
+### claude — review of Codex's share (`5964189`), 2026-11-12
+
+- note: `place` is a common attribute (`oneOf`, not bindable), refused on children and variant overrides, and `"cutout"`
+  without `uses { source device }` refused with a hint. `DeviceSource` copies the cutout array before delivering and
+  closes the register race with a second `trySend`. Nothing to fix.
+- question: a fallback root with `place="cutout"` passes the validator but is not placed on the camera by the runtime
+  (my report's note); fine to leave until a fallback exists?
 
 ## 7. Sign-off
