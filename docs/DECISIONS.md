@@ -1130,3 +1130,20 @@ Made without the owner while building node motion (T-009, 13a-1); none changes a
 - **A box's centred stroke is inside its drawing bounds** at rest and in motion alike (its outer half was cut by a layer before); no layered centred stroke exists in the status bar, so nothing on screen changes.
 - **Each moving node asks for its own draw at every step**, and a placement that changes what a node shows asks too (measured on the emulator: the window's invalidation drew nothing again on the GPU path). A node without a Compose layer of its own redraws its window's whole tree (frames re-recorded for every node at each step; painters' recordings only while a size moves). Its cost on the S24 is E2.17's measure (D-067's bound); giving moving nodes a layer of their own is the lever if it is too high.
 - **13a-1 went over the slice size** (about 400 production lines with the grammar's 166 apart): the drawing contract did not split without leaving one drawing path wrong in between.
+
+## D-100: E2.13a-2's presence choices (2026-11-11, lead and Codex) [team]
+
+Made without the owner while building `enter` and `exit` (T-009, 13a-2); nothing on screen changes today (no KDL in use
+declares presence).
+- **The effects' far values:** `scale` arrives from and leaves to 0.85, `rise` is 8 pt below its place, `grow` is 0 along
+  its parent's axis (width in a row, else height), `fade` 0. Judged; a theme's presets may name them later.
+- **`motion.enter` and `motion.exit` are in no preset yet:** an `enter`/`exit` with no curve of its own and no node spring
+  goes at once (as 13a-1's roles, D-099), until E2.14a's default preset.
+- **A leaving node draws right after the surviving sibling it followed** (first if none), out of layout, measured with the
+  constraints it last had; motions already in flight go on. A node planned again before its exit ends is the same node
+  turning back on its enter curve (its exit's, if it has no enter).
+- **Bounds:** at most 64 exits at once (the oldest ends at once); what is alive while a plan is built (active, retained and
+  the plan's new nodes) never passes 4096: the oldest exits not planned again end first, then removed nodes go at once
+  instead of leaving.
+- **13a-2 went over the slice size** (runtime and its review fixes about 350 production lines): presence and its bounds
+  did not split without one half leaking nodes.

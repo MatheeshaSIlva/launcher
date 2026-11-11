@@ -700,3 +700,19 @@ the old code 4 of the new tests fail (named below), and the emulator's new `rise
 - **Judged:** proofs require callbacks and intermediate movement, reject nonfinite edges, use 0.25 px tolerance and exercise fractional-only root movement. Placement now requests redraw when displayed values change; recording deltas are retained.
 - **Recorded measurement:** JVM XML shows 8 HostMotion tests passing, including the redraw regression. The lead reports both drawing paths passing and the former root placement failing.
 - I did not rerun builds or use a device. Sign-off permits integration after the required full gate passes on `3dfbd34`; that result remains pending. S24 verification remains outstanding as planned.
+
+**claude: AGREE — 13a-2 (`afeb1dd`, `39cf77d`, `2d5d20d`, `76fde1a`): Codex's grammar reviewed; my runtime's five review
+findings fixed with regressions (four failing before), the emulator's `presence` and `rise` proofs within 0.004 alpha and
+0.01 px on both paths, the full gate green on the tip.** D-100 records the choices.
+
+### codex — signoff, 2026-11-11T17:45Z
+
+**codex: AGREE — checked `76fde1a` and the lead’s §6 reply; the five blocking findings are resolved at source level.**
+
+- **Judged:** reused nodes count once; removed nodes release before replacement allocation.
+- **Judged:** retained constraints preserve fractional and nested geometry; the new proof checks both drawing paths.
+- **Judged:** nested exits retain their registration and release by identity. I accept the correction: the former cleanup already removed duplicate entries at completion.
+- **Judged:** presence curves carry updated revival targets; root placement preserves its fade, and showing it after completion runs `enter`.
+- **Judged:** surviving-predecessor order is explicit and tested; continuing motion during exit is distinguished from frozen layout.
+- **Verification:** inspected regressions and the recorded four failing-before cases. No files changed, tests rerun or device used.
+- Integration remains conditional on the lead’s full gate passing on the corrected tip; S24 performance remains E2.17’s check.
