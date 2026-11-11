@@ -454,7 +454,9 @@ class MotionProof(private val instrumentation: Instrumentation) {
             "row with a layer" to "row align=\"top\" layer=#true { $text }",
             "translucent row" to "row align=\"top\" opacity=0.9 { $text }",
             // Scaled twice about its centre: its ink rises 44 px, past the unscaled reach (22 px): rows 23-30 above the box.
-            "scaled text in a row with a layer" to "row align=\"top\" layer=#true { $text scale=2 }")
+            "scaled text in a row with a layer" to "row align=\"top\" layer=#true { $text scale=2 }",
+            // Mirrored (−2): the rise runs downward on screen, past the unscaled reach below the box.
+            "mirrored text in a row with a layer" to "row align=\"top\" layer=#true { $text scale=-2 }")
         // The text's box: its top is the baseline (300 + CAP × size / 2) less the font's ascent; ink above it is outside.
         val fm = android.graphics.Paint().apply { textSize = 40f }.fontMetrics
         val top = kotlin.math.floor(300f + TextPainter.CAP * 40f / 2f + fm.ascent).toInt()
@@ -478,7 +480,12 @@ class MotionProof(private val instrumentation: Instrumentation) {
                     now += step
                     instrumentation.runOnMainSync { frames.run(now) }
                     val (hw, sw) = capture(950 + frame)
-                    val band = if (name.startsWith("scaled")) (top - 30 until top - 23) else (top - 24 until top - 1)
+                    val bottom = kotlin.math.ceil(300f + TextPainter.CAP * 40f / 2f + fm.descent).toInt()
+                    val band = when {
+                        name.startsWith("scaled") -> (top - 30 until top - 23)
+                        name.startsWith("mirrored") -> (bottom + 23 until bottom + 30)
+                        else -> (top - 24 until top - 1)
+                    }
                     val sAbove = band.sumOf { y -> (0 until 160).count { x -> sw.getPixel(x, y) != Color.BLUE } }
                     val hAbove = band.sumOf { y -> (0 until 160).count { x -> hw.getPixel(loc[0] + x, loc[1] + y) != Color.BLUE } }
                     above = maxOf(above, minOf(sAbove, hAbove))
@@ -486,10 +493,10 @@ class MotionProof(private val instrumentation: Instrumentation) {
                 check(frames.held == null) { "reach, $name: the clock never stopped" }
                 ""
             }
-            check(above > 20) { "$name: rolling ink above the box was cut ($above pixels)" }
+            check(above > 20) { "$name: rolling ink outside the box was cut ($above pixels)" }
             seen += "$name $above"
         }
-        return "rising ink above the text's box on both paths (pixels): ${seen.joinToString(", ")}"
+        return "rolling ink outside the text's box on both paths (pixels): ${seen.joinToString(", ")}"
     }
 
     /**
