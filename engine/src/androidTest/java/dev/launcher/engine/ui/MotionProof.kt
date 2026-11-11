@@ -452,7 +452,9 @@ class MotionProof(private val instrumentation: Instrumentation) {
         val cases = listOf(
             "translucent text, size transition" to "row align=\"top\" { $text opacity=0.9 transition=\"size 160ms\" }",
             "row with a layer" to "row align=\"top\" layer=#true { $text }",
-            "translucent row" to "row align=\"top\" opacity=0.9 { $text }")
+            "translucent row" to "row align=\"top\" opacity=0.9 { $text }",
+            // Scaled twice about its centre: its ink rises 44 px, past the unscaled reach (22 px): rows 23-30 above the box.
+            "scaled text in a row with a layer" to "row align=\"top\" layer=#true { $text scale=2 }")
         // The text's box: its top is the baseline (300 + CAP × size / 2) less the font's ascent; ink above it is outside.
         val fm = android.graphics.Paint().apply { textSize = 40f }.fontMetrics
         val top = kotlin.math.floor(300f + TextPainter.CAP * 40f / 2f + fm.ascent).toInt()
@@ -476,8 +478,9 @@ class MotionProof(private val instrumentation: Instrumentation) {
                     now += step
                     instrumentation.runOnMainSync { frames.run(now) }
                     val (hw, sw) = capture(950 + frame)
-                    val sAbove = (top - 24 until top - 1).sumOf { y -> (0 until 120).count { x -> sw.getPixel(x, y) != Color.BLUE } }
-                    val hAbove = (top - 24 until top - 1).sumOf { y -> (0 until 120).count { x -> hw.getPixel(loc[0] + x, loc[1] + y) != Color.BLUE } }
+                    val band = if (name.startsWith("scaled")) (top - 30 until top - 23) else (top - 24 until top - 1)
+                    val sAbove = band.sumOf { y -> (0 until 160).count { x -> sw.getPixel(x, y) != Color.BLUE } }
+                    val hAbove = band.sumOf { y -> (0 until 160).count { x -> hw.getPixel(loc[0] + x, loc[1] + y) != Color.BLUE } }
                     above = maxOf(above, minOf(sAbove, hAbove))
                 }
                 check(frames.held == null) { "reach, $name: the clock never stopped" }

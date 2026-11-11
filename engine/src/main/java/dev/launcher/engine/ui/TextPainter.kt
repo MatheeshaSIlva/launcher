@@ -75,7 +75,6 @@ class TextPainter(private val tokens: Tokens) : Painter {
         val byCharacters = ELIGIBILITY.verdict(text, p, tokens.version) == RollEligibility.Verdict.CLUSTERS &&
             (r.text == null || r.text == text || ELIGIBILITY.verdict(r.text!!, p, tokens.version) == RollEligibility.Verdict.CLUSTERS)
         m.rollEpsilon = 0.5f / (RollMotion.RISE * p.textSize).coerceAtLeast(1f)
-        r.layout = { s -> RollEligibility.positions(s, p) }
         val wasMoving = r.moving
         r.to(text, RollEligibility.positions(text, p), byCharacters, m.rollCurve(), m.stagger(), m.now(),
             RollEligibility.Config.of(p, 0))   // its geometry only: a colour's crossfade moves the tokens' version, not a glyph

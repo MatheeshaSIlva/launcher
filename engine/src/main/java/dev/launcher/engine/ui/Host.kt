@@ -374,9 +374,13 @@ class ComponentHost(
             while (true) {
                 val p = c.parent ?: break
                 if (p.hidden.value) break
+                // Into the parent's px as the frame draws it: scaled about its box's centre (its pivot), then moved (Codex).
+                val k = c.motion.scale
+                val px = c.measured.size.width / 2f
+                val py = c.measured.size.height / 2f
                 val ox = c.placedX + c.motion.drawX
                 val oy = c.placedY + c.motion.drawY
-                b = floatArrayOf(b[0] + ox, b[1] + oy, b[2] + ox, b[3] + oy)
+                b = floatArrayOf(px + (b[0] - px) * k + ox, py + (b[1] - py) * k + oy, px + (b[2] - px) * k + ox, py + (b[3] - py) * k + oy)
                 if (b[0] >= 0f && b[1] >= 0f && b[2] <= p.exactWidth && b[3] <= p.exactHeight) break
                 val r = p.childReach
                 p.childReach = if (r == null) b else floatArrayOf(minOf(r[0], b[0]), minOf(r[1], b[1]), maxOf(r[2], b[2]), maxOf(r[3], b[3]))

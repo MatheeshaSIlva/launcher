@@ -120,28 +120,25 @@ class RollMotionTest {
         assertEquals(listOf("2"), r.glyphs.map { it.text }); assertFalse(r.moving)
     }
 
-    @Test fun anotherFontLaysTheGlyphsOutAgainAndTheRollGoesOn() {
+    @Test fun anotherFontShowsTheTextInItAtOnceEvenMidRoll() {
+        // The owner's call (D-101): a change of look is not a roll.
         val r = RollMotion()
-        r.layout = { t -> FloatArray(t.length + 1) { it * 10f } }
         r.to("10", at("10"), true, ease, 0, 0, "a")
-        r.layout = { t -> FloatArray(t.length + 1) { it * 12f } }
         r.to("10", FloatArray(3) { it * 12f }, true, ease, 0, 0, "b")      // same text, new font: new places, at rest
         assertEquals(listOf(0f, 12f), r.glyphs.map { it.offset }); assertFalse(r.moving)
         r.to("11", FloatArray(3) { it * 12f }, true, ease, 0, 0, "b")
         r.step(frame * 3, eps)
-        val arriving = r.glyphs.single { !it.leaving && it.slot == 1 }
-        val y = arriving.y
-        r.layout = { t -> FloatArray(t.length + 1) { it * 14f } }
-        r.to("11", FloatArray(3) { it * 14f }, true, ease, 0, frame * 3, "c") // a font change mid-roll
-        assertTrue("the roll goes on", r.moving)
-        assertEquals("from where it was", y, arriving.y, 0f)
-        assertEquals(listOf(0f, 14f), r.glyphs.filter { !it.leaving }.map { it.offset })
-        r.to("12", FloatArray(3) { it * 14f }, true, ease, 0, frame * 3, "c")  // then a text change rolls on from there
+        assertTrue(r.moving)
+        r.to("11", FloatArray(3) { it * 14f }, false, ease, 0, frame * 3, "c")  // mid-roll, now not eligible: at once, whole
+        assertFalse(r.moving)
+        assertEquals(listOf("11"), r.glyphs.map { it.text }); assertEquals(28f, r.glyphs[0].width, 0f)
+        r.to("12", FloatArray(3) { it * 16f }, true, ease, 0, frame * 3, "d")   // text and font together: at once
+        assertFalse(r.moving)
+        assertEquals(listOf("1", "2"), r.glyphs.map { it.text }); assertEquals(listOf(0f, 16f), r.glyphs.map { it.offset })
+        // The same geometry (a colour's change leaves it alone): the roll goes on.
+        r.to("13", FloatArray(3) { it * 16f }, true, ease, 0, frame * 3, "d")
         r.step(frame * 4, eps)
-        assertTrue(arriving.leaving); assertTrue(r.moving)
-        r.settle(frame * 4)
-        assertEquals(listOf("1", "2"), r.glyphs.map { it.text }); assertEquals(listOf(0f, 14f), r.glyphs.map { it.offset })
-        assertTrue(r.glyphs.all { it.width == 28f && it.y == 0f })
+        assertTrue(r.moving)
     }
 
     @Test fun unseenArrivalsNeverPushOutAVisibleGlyph() {

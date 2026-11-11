@@ -17,15 +17,13 @@ import kotlin.math.abs
 class RollMotion {
     class Glyph internal constructor(
         val text: String,
-        /** Where it starts in its string, from that string's left edge (laid out again with a new font). */
-        offset: Float,
+        /** Where it starts in its string, from that string's left edge. */
+        val offset: Float,
         /** Its string's width: what its alignment is worked out from. */
-        width: Float,
+        val width: Float,
         /** Its character index (by characters), or −1 for a whole string. */
         val slot: Int,
     ) {
-        var offset = offset; internal set
-        var width = width; internal set
         internal val track = Track()
         internal var leaving = false
         internal var startAt = 0L
@@ -52,16 +50,13 @@ class RollMotion {
      */
     fun to(to: String, at: FloatArray, byCharacters: Boolean, curve: Curve?, staggerNs: Long, now: Long, config: Any? = null) {
         val old = text
-        // Another font or size: what shows was laid out in the old one. Its glyphs keep their tracks (a roll goes on) and
-        // take their places in the new layout: each character its new start, a whole string its new width; leaving ones
-        // keep where they were. A change of text with it then rolls from there (Codex: a snap stopped the motion).
+        // Another font or size is a change of look, not of content: the text shows in it at once, a roll in flight ends,
+        // and a change of text with it shows at once too (the owner's call, 2026-11-12, D-101; Codex asked for a
+        // continuous handover). Only geometry counts: the painter leaves the tokens' version out, so a colour does not.
         if (old != null && config != this.config) {
-            this.config = config
-            val layout = rest(old, positions(old, at, to), clusters).associateBy { it.slot }
-            for (g in list) if (!g.leaving) layout[g.slot]?.let { g.offset = it.offset; g.width = it.width }
-            if (!moving) { list.clear(); list += rest(old, positions(old, at, to), byCharacters); clusters = byCharacters }
-            positions = positions(old, at, to)
-            if (to == old) return
+            list.clear(); list += rest(to, at, byCharacters)
+            text = to; positions = at; clusters = byCharacters; this.config = config
+            return
         }
         this.config = config
         if (to == old) {
@@ -95,12 +90,6 @@ class RollMotion {
         bound()
         text = to; positions = at; clusters = byCharacters
     }
-
-    /** [old]'s layout in the new configuration: [at] when it is [to]'s, else what [layout] gave (the caller lays out [to]). */
-    private fun positions(old: String, at: FloatArray, to: String) = if (old == to) at else layout?.invoke(old) ?: at
-
-    /** Lays a string out in the current configuration (set by the painter): the old text's places after a font change. */
-    var layout: ((String) -> FloatArray)? = null
 
     /** Every glyph at [now]; false once all have settled and the leaving have gone. [epsilon]: half a pixel, in rises. */
     fun step(now: Long, epsilon: Float): Boolean {
