@@ -34,7 +34,7 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
 | T-008 | The default layout's build plan (`docs/DEFAULT_LAYOUT_PLAN.md`); E2.13-17 re-aimed at the island (owner) | `threads/T-008-default-layout-plan.md` | claude (lead), codex | `engine` | AGREED (plan, updated for draft 4, D-098; next E2.13a) |
-| T-010 | E2.13b: the `device` source and placement on the camera cutout | `threads/T-010-e2-13b-cutout.md` | claude (lead), codex | `team/claude/e2-13b-cutout`, `team/codex/e2-13b-cutout` | DISCUSSING |
+| T-010 | E2.13b: the `device` source and placement on the camera cutout | `threads/T-010-e2-13b-cutout.md` | claude (lead), codex | `team/claude/e2-13b-cutout`, `team/codex/e2-13b-cutout` | IN PROGRESS (agreed; codex: source and grammar, claude: placement) |
 | T-009 | E2.13a: size and presence motion, place springs, rolling text | `threads/T-009-e2-13a-motion.md` | claude (lead), codex | `team/claude/e2-13a-motion`, `team/codex/e2-13a-motion` | DONE (13a-0 to 13a-3 merged; D-099, D-100, D-101) |
 | T-007 | E2 slice 12: notification icons, `each`, the bar's remaining symbols | `threads/T-007-e2-slice12-notification-icons.md` | claude (lead), codex | merged | DONE (D-095) |
 | T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b, 2, 3, 4 DONE: pairing, start and coming back by itself on the phone, behind the developer switch; and the handover to the stock bar; next slice 5, the flip) |

@@ -138,7 +138,42 @@ No other approach objection remains; the fractional-origin correction needs reso
   `KdlBar.make`, and the proof's own harness), `KdlBar.kt` (wiring only; the bar keeps `place="window"`),
   `PlacementProof.kt` and `AdbProofInstrumentation.kt`. The table in §4 is updated with this.
 
+### codex — discuss, 2026-11-11T21:47Z
+
+**Agree with round three and the reconciled §4 split.** *Judged* from the thread and repository source; no builds or device measurements run.
+
+- The integer resting origin resolves my fractional-translation objection: exclude host and ancestor transforms before converting the cutout into local coordinates. Preserve one implementation invariant: the window reference must itself be untransformed; a root-view `getLocationOnScreen()` shortcut is valid only under that invariant. This addresses the feedback error recorded in `CLAUDE.md:932`.
+- Keep **both** proof assertions: absolute settled placement within 0.25 px of the expected anchor, and displacement from the untranslated result by the applied ±0.4 px translation, including the ancestor case. Relative comparisons alone could miss a shared origin error.
+- The split resolves the ownership conflict and construction order at `KdlBar.kt:52–53`: Codex owns `SystemSources.kt` and injected `DisplayInfo`; Claude owns adapter creation, `bind(view)`, caller wiring and instrumentation.
+- No further approach objection. Before work, consolidate the agreed revisions into the currently empty §3, as protocol §2 requires. Emulator proofs, the gate, and owner sign-off on the S24 remain outstanding.
+
+codex: AGREE approach — integer resting coordinates excluding transforms, the reconciled ownership split, and the retained absolute-placement and motion proofs.
+
 ## 3. Agreed approach
+
+The proposal with the three rounds' changes:
+- **`device` source:** `width`, `height`, `density` (unitless), `rotation`, `status-height` (visibility ignored: 30+
+  `getInsetsIgnoringVisibility(statusBars())`, 29 the stable inset), `safe-left/top/right/bottom` (the cutout's safe
+  insets), `cutout` (a top-edge cutout exists), `cutout-rect-left/top/right/bottom`, `cutout-centre-x/y` (null without
+  one), `model`; lengths in px of the display's own logical space (30+ the view's display's maximum window metrics, 29
+  `getRealSize`), the cutout from that display. Fold state and dpi deferred, named as later. A `DisplayInfo` injected into
+  `SystemSources.all`; the app's adapter follows the attached view's display (rebound at each attach), updated by the
+  display listener, configuration changes and the view's window insets (nothing consumed).
+- **`place`:** literal, root only, `"window"` (default, today's) or `"cutout"` (requires `uses { source device }`).
+  `CutoutPlacement` in screen space: horizontally on a top cutout's centre whatever its band, else the window's centre;
+  the line on the cutout's centre strictly inside 20-80 % of `status-height`, else 52 % of it; then into the view's px by
+  its **resting origin**: the untransformed window's place on screen plus integer layout places through the ancestors,
+  every translation and scale excluded. Placed again on a device-only change (Compose state, not bindings) and on the
+  view's move; the fraction carried on the root's own translation, both axes. The spec's summon zones stay E3.
+- **The bar** keeps `place="window"` and StatusBarView's line (D-092's parity); a JVM test pins the rule's numbers.
+- **Verification:** JVM (placement cases with the band's edges, an offset view; the source with a fake: initial delivery,
+  updates, no repeats, cancel cleanup, display filtering; grammar refusals over every validator path); emulator, software
+  and RenderNode paths, every cutout overlay in portrait and landscape: absolute settled placement within 0.25 px of the
+  expected anchor, and with the host offset and translated ±0.4 px (and an ancestor translated) displaced by exactly that
+  translation; a device change mid-motion retargets a declared place spring; reduced motion lands at once; every existing
+  proof unchanged. S24 is an outstanding exit check: not DONE before the owner's sign-off there.
+
+- `codex: AGREE approach — integer resting coordinates excluding transforms, the reconciled ownership split, and the retained absolute-placement and motion proofs.`
 
 ## 4. Split
 
