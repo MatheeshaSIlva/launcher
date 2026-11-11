@@ -133,6 +133,8 @@ class HostNode internal constructor(
     /** Its plan key (template path and item ids). */
     internal var key: List<String> = emptyList()
     /** Where its parent last placed it, in whole px: where it stays while it leaves. */
+    /** The constraints its parent last measured it with (min/max width, min/max height): a leaving node keeps them. */
+    internal var measuredWith: IntArray? = null
     internal var placedX = 0
     internal var placedY = 0
     internal fun release() {
@@ -176,10 +178,9 @@ class HostNode internal constructor(
         if (m == null) {
             motion.placeX = tx; motion.placeY = ty; motion.alphaOf(opacity); motion.scaleOf(scale)
         } else {
-            val first = !m.placedOnce
             if (m.update(x, y, tx, ty, exactWidth, exactHeight, opacity, scale, anchorX = anchorX, anchorY = anchorY)) onMoving(this)
             // An arrival starts from its `enter` values at its first placement (a revived node is placed again, not first).
-            if (first && arriving && m.enter(rise(), alongX())) onMoving(this)
+            if (arriving && m.enter(rise(), alongX())) onMoving(this)
             arriving = false
             shown()
         }
@@ -334,18 +335,25 @@ class ComponentHost(
         return moving.isNotEmpty()
     }
 
+    private fun HostNode.within(top: HostNode): Boolean {
+        var p: HostNode? = this
+        while (p != null) { if (p === top) return true; p = p.parent }
+        return false
+    }
+
     /** Nodes kept for their exits now, their subtrees included (tests: bounded, released). */
     val retainedCount get() = retained.size
 
     /** An exit that settled (or was cut short): its node and subtree released once, out of its parent's drawing. */
     private fun finishExit(n: HostNode) {
         if (!exits.remove(n)) return
-        val gone = retained.filterKeys { it.size >= n.key.size && it.subList(0, n.key.size) == n.key }
+        // Its subtree by identity, not by key alone: a newer node under a reused key is not its (Codex).
+        val gone = retained.filter { (k, i) -> k.size >= n.key.size && k.subList(0, n.key.size) == n.key && i.node.within(n) }
         gone.keys.forEach { retained.remove(it) }
         gone.values.forEach { release(it.node) }
         // An exit inside one that ended first went with it.
         exits.removeAll { e -> gone.values.any { it.node === e } }
-        if (n === root) { root.hidden.value = true; root.leaving(false); return }
+        if (n === root) { root.hidden.value = true; root.leaving(false); root.nodeMotion?.ended(); return }
         n.parent?.let { p -> p.drawn(p.drawn.filter { it !== n }) }
     }
 
@@ -456,8 +464,16 @@ class ComponentHost(
         v.attrs["visible"]?.value?.let { evaluate(it, scope) != Value.Bool.FALSE } ?: true
 
     private fun reconcile(plan: Plan, reads: (Deps) -> Boolean): HostNode {
-        // Room first: the plan and the retained exits together never pass 4096 nodes (the oldest exits end at once).
-        while (exits.isNotEmpty() && count + retained.size > 4096) finishExit(exits.first())
+        // Room first, before anything is made: what is alive while the plan is built (active, retained, and the plan's new
+        // nodes; a planned key reuses its node) never passes 4096 (Codex). The oldest exits not planned again end first; then
+        // removed nodes go at once instead of leaving.
+        val planned = HashSet<List<String>>()
+        fun walk(p: Plan) { planned += p.key; p.children.forEach(::walk) }
+        walk(plan)
+        val fresh = planned.count { it !in instances && it !in retained }
+        fun alive() = instances.size + retained.size + fresh
+        while (alive() > 4096) finishExit(exits.firstOrNull { it.key !in planned } ?: break)
+        if (alive() > 4096) instances.filterKeys { it !in planned }.forEach { (k, i) -> instances.remove(k); release(i.node) }
         val next = LinkedHashMap<List<String>, Instance>()
         val revived = ArrayList<HostNode>()
         fun visit(p: Plan, parent: HostNode?): HostNode {
@@ -495,7 +511,15 @@ class ComponentHost(
         val node = visit(plan, null)
         for (n in revived) { exits.remove(n); n.leaving(false); n.nodeMotion?.revive(); startMoving(n) }
         // Under a revived node, what is no longer planned leaves now as anything else does.
-        val orphans = retained.filterKeys { k -> k !in next && revived.any { r -> k.size > r.key.size && k.subList(0, r.key.size) == r.key } }
+        // One already leaving keeps its exit, and what it carries stays with it (Codex: it was registered twice).
+        fun carried(n: HostNode): Boolean {
+            var p: HostNode? = n
+            while (p != null && p !in revived) { if (p.isLeaving) return true; p = p.parent }
+            return false
+        }
+        val orphans = retained.filter { (k, i) ->
+            k !in next && revived.any { r -> k.size > r.key.size && k.subList(0, r.key.size) == r.key } && !carried(i.node)
+        }
         orphans.keys.forEach { retained.remove(it) }
         val removed = instances.filterKeys { it !in next } + orphans
         for ((key, inst) in removed) {
@@ -509,7 +533,11 @@ class ComponentHost(
         // The root's own exit: hidden once it ends; shown again before then, it turns back.
         if (!rootShown && !node.hidden.value && !node.isLeaving && !building && rootExits(node)) { if (!startExit(node)) node.hidden.value = true }
         else if (rootShown && node.isLeaving) { exits.remove(node); node.leaving(false); node.nodeMotion?.revive(); startMoving(node) }
-        else if (!node.isLeaving && node.hidden.value == rootShown) node.hidden.value = !rootShown
+        else if (!node.isLeaving && node.hidden.value == rootShown) {
+            node.hidden.value = !rootShown
+            // Shown again after its exit ended: it arrives as a new node would (Codex).
+            if (rootShown && !building && node.nodeMotion?.enter(node.rise(), node.alongX()) == true) startMoving(node)
+        }
         instances = next
         // Drawn children: the laid-out ones, and each leaving one after the sibling it followed.
         for (inst in next.values) inst.node.drawn(merged(inst.node))
@@ -524,6 +552,7 @@ class ComponentHost(
         val m = n.nodeMotion ?: return false
         if (!m.exit(n.rise(), n.alongX())) return false
         n.leaving(true)
+        if (n in exits) return true
         if (exits.size >= MAX_EXITS) finishExit(exits.first())
         exits += n
         n.onMoving(n)

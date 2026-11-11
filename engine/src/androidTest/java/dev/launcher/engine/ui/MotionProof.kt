@@ -41,6 +41,8 @@ import kotlin.math.abs
  *   slides into the room it leaves; it comes back from alpha 0 while green makes room again; then it leaves and is called
  *   back at frame 10, turning back from the alpha and speed it had. Red's alpha (its colour over blue) within 0.02, green's
  *   left edge within a quarter pixel of the movers, both paths; every step records a frame; the clock stops after each.
+ * - `rise` (13a-2, Codex's review): a box 100.4 px wide holding a 40.3 px child leaves on `rise` (a blue sibling before it keeps the row's height and its edges off the screen's): its width, its child's
+ *   width (nested, out of layout) and its top on the ease, within a quarter pixel on both paths; gone after.
  * Afterwards the frame source holds no callback (the clock stopped). Frames 0, 6, 12, 13 and the last go to
  * `files/motion/` of the test APK's external folder for a look.
  *   adb shell am instrument -w -e mode component-motion dev.launcher.engine.test/dev.launcher.engine.adb.AdbProofInstrumentation
@@ -67,7 +69,7 @@ class MotionProof(private val instrumentation: Instrumentation) {
     /** Its findings are its own geometry (no peer input): reported in the result, then failed as the runner does. */
     fun run(result: Bundle) {
         var failed: Throwable? = null
-        for ((name, proof) in listOf("motion" to ::motion, "root" to ::root, "presence" to ::presence)) try { result.putString(name, proof()) }
+        for ((name, proof) in listOf("motion" to ::motion, "root" to ::root, "presence" to ::presence, "rise" to ::rise)) try { result.putString(name, proof()) }
         catch (e: IllegalStateException) { result.putString(name, "FAIL: ${e.message}"); failed = failed ?: e }
         failed?.let { throw it }
     }
@@ -283,6 +285,71 @@ class MotionProof(private val instrumentation: Instrumentation) {
         }
     }
 
+    private fun rise(): String {
+        val d = def("""
+            component "rise" {
+              props { on type=bool default=#true }
+              view {
+                row align="top" {
+                  box width=(px)50 height=(px)100 fill="#0000FF"
+                  box visible="{@on}" width=(px)100.4 height=(px)100 fill="#FF0000" exit="rise 160ms" {
+                    box width=(px)40.3 height=(px)40 fill="#FFFF00"
+                  }
+                }
+              }
+            }""")
+        val ease = Curve.Ease(0f, 0f, 0.58f, 1f, 160f)
+        val errors = ArrayList<String>()
+        var worst = 0f
+        return session(d, centreY = 300f) { v, frames, capture ->
+            val (hw0, sw0) = capture(0)
+            val shots0 = listOf(hw0, sw0)
+            val origins = shots0.map { origin(it) }
+            val tops = shots0.indices.map { top(shots0[it], origins[it].first + 60) }
+            val mover = Continuation.fresh(ease, 0f, 8f)
+            val start = now
+            instrumentation.runOnMainSync { v.setProp("on", Value.Bool.of(false)) }
+            drawn(v)
+            var frame = 0
+            var midway = false
+            while (frames.held != null && frame < 60) {
+                frame++
+                now += step
+                instrumentation.runOnMainSync { frames.run(now) }
+                val (hw, sw) = capture(500 + frame)
+                val dy = mover.value((now - start) / 1e9)
+                if (frames.held == null) break
+                for ((i, shot) in listOf(hw, sw).withIndex()) {
+                    val path = if (i == 0) "gpu" else "software"
+                    val (ox, oy) = origins[i]
+                    val down = top(shot, ox + 60) - tops[i]
+                    val row = (oy + 70 + dy).toInt()
+                    val got = listOf(down, redRight(shot, ox, row), greenRun(shot, ox, (oy + 20 + dy).toInt()))
+                    val want = listOf(dy, 100.4f, 40.3f)
+                    for (k in got.indices) {
+                        val e = abs(got[k] - want[k]); worst = maxOf(worst, e)
+                        if (!got[k].isFinite() || e > TOLERANCE)
+                            errors += "frame $frame $path ${listOf("top", "width", "child width")[k]}: ${got[k]} vs ${want[k]}"
+                    }
+                    if (i == 0 && down in 2f..6f) midway = true
+                }
+            }
+            check(frames.held == null) { "the clock never stopped" }
+            check(midway) { "no rise seen ($frame frames)" }
+            val (hwEnd, swEnd) = capture(599)
+            for (shot in listOf(hwEnd, swEnd)) check((0 until shot.width step 3).none { x -> shot.getPixel(x, origins[0].second + 50) == Color.RED }) { "still drawn after its exit" }
+            check(errors.isEmpty()) { errors.take(8).joinToString("; ") }
+            "rose 8 px in $frame frames, width 100.4 and its child's 40.3 kept, within ${"%.2f".format(worst)} px on both paths; gone after"
+        }
+    }
+
+    /** Green's coverage summed along row [y] from [x] (the yellow child over red): its width. */
+    private fun greenRun(b: Bitmap, x: Int, y: Int): Float {
+        var sum = 0f; var i = x
+        while (i < b.width) { val c = coverage(b.getPixel(i, y), 8); if (c == 0f) break; sum += c; i++ }
+        return sum
+    }
+
     /** Shows [d] in the proof activity at [centreY], runs [body] with a capture of the window and of a software draw. */
     private fun session(d: ComponentDef, centreY: Float,
         body: (ComponentView, Frames, (Int) -> Pair<Bitmap, Bitmap>) -> String): String {
@@ -308,7 +375,7 @@ class MotionProof(private val instrumentation: Instrumentation) {
                 val hw = window(activity)
                 val sw = Bitmap.createBitmap(made!!.view.width, made!!.view.height, Bitmap.Config.ARGB_8888)
                 instrumentation.runOnMainSync { Canvas(sw).apply { drawColor(Color.BLUE); made!!.view.draw(this) } }
-                if (k in setOf(-1, 0, 6, 12, 13, 100, 106, 112, 206, 306, 409, 411)) for ((name, b) in listOf("gpu" to hw, "software" to sw))
+                if (k in setOf(-1, 0, 6, 12, 13, 100, 106, 112, 206, 306, 409, 411, 506, 599)) for ((name, b) in listOf("gpu" to hw, "software" to sw))
                     File(out, "${d.name}_${name}_$k.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 hw to sw
             }

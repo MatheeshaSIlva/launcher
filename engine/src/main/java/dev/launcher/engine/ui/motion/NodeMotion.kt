@@ -30,14 +30,24 @@ class Track {
     var high = 0f; private set
     private var mover: Mover? = null
     private var started = 0L
+    /** The curve of the presence motion it is on (`enter`, `exit`, a revival): new targets follow it until it settles. */
+    private var carry: Curve? = null
     val moving get() = mover != null
 
     /** Goes to [to] on [curve], or jumps there when [curve] is null. The first value it is given, it shows at once. */
     fun to(to: Float, curve: Curve?, now: Long) {
-        // An arrival or a revival still on its way to this same target keeps going (its channel need not be animated).
-        if (curve == null && to == target && moving) return
-        if (value.isNaN() || curve == null) return snap(to)
-        if (to != target) go(to, curve, now, 0f)
+        // On a presence motion, a channel with no curve of its own retargets on that motion's curve (Codex: a revived node
+        // given a new opacity snapped).
+        val c = curve ?: carry.takeIf { moving }
+        if (value.isNaN() || c == null) return snap(to)
+        if (to != target) go(to, c, now, 0f)
+    }
+
+    /** Goes to [to] on [curve] as a presence motion: later targets follow [curve] until it settles. */
+    fun present(to: Float, curve: Curve, now: Long) {
+        if (value.isNaN()) return snap(to)
+        carry = curve
+        if (to != target || !moving) go(to, curve, now, 0f)
     }
 
     /** Shown [delta] further off than before, then on to its target: a layout move kept continuous. */
@@ -48,7 +58,7 @@ class Track {
     /** Shown at [from] now, then on to its target on [curve] (an arrival's start: `enter`). */
     fun launch(from: Float, curve: Curve, now: Long) {
         if (value.isNaN()) return
-        mover = null; value = from
+        mover = null; value = from; carry = curve
         go(target, curve, now, 0f)
     }
 
@@ -73,7 +83,7 @@ class Track {
         return true
     }
 
-    fun snap(to: Float = target) { value = to; target = to; low = to; high = to; mover = null }
+    fun snap(to: Float = target) { value = to; target = to; low = to; high = to; mover = null; carry = null }
 
     private fun elapsed(now: Long) = ((now - started) / 1e9).coerceAtLeast(0.0)
 }
@@ -95,6 +105,8 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     private val targets = FloatArray(6)
     /** On its way out (`exit`): no longer laid out, shown at its last place until it settles. */
     var leaving = false; private set
+    /** The tracks its exit drives while it leaves. */
+    private var exiting: Set<Track> = emptySet()
 
     val moving get() = tracks.any { it.moving }
     /** Placed at least once (its first placement shows it where layout put it). */
@@ -126,11 +138,14 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         }
         layoutX = placeX; layoutY = placeY; layoutW = w; layoutH = h
         floatArrayOf(translateX, translateY, w, h, opacity, scale).copyInto(targets)
-        x.to(translateX, place, now); y.to(translateY, place, now)
+        // While it leaves, the tracks its exit drives keep the exit's values; the others follow as before (Codex: the root,
+        // placed while it leaves, had its fade cancelled).
+        fun Track.follow(to: Float, c: Curve?) { if (this !in exiting) to(to, c, now) }
+        x.follow(translateX, place); y.follow(translateY, place)
         val size = curve(MotionChannel.SIZE)
-        width.to(w, size, now); height.to(h, size, now)
-        alpha.to(opacity, curve(MotionChannel.OPACITY), now)
-        this.scale.to(scale, curve(MotionChannel.SCALE), now)
+        width.follow(w, size); height.follow(h, size)
+        alpha.follow(opacity, curve(MotionChannel.OPACITY))
+        this.scale.follow(scale, curve(MotionChannel.SCALE))
         return moving
     }
 
@@ -168,7 +183,7 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         val p = spec.exit ?: return false
         val c = exitCurve() ?: return false
         leaving = true
-        for (e in p.effects) presence(e, rise, alongX).let { (track, out) -> track.to(out, c, now) }
+        exiting = p.effects.map { e -> presence(e, rise, alongX).also { (track, out) -> track.present(out, c, now) }.first }.toSet()
         return true
     }
 
@@ -177,7 +192,14 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         if (!leaving) return
         leaving = false
         val c = enterCurve() ?: exitCurve()
-        for ((i, t) in tracks.withIndex()) if (c == null) t.snap(targets[i]) else t.to(targets[i], c, now)
+        for ((i, t) in tracks.withIndex()) if (t in exiting) { if (c == null) t.snap(targets[i]) else t.present(targets[i], c, now) }
+        exiting = emptySet()
+    }
+
+    /** Its exit ended (a root that stays, hidden): at rest on what its bindings ask, ready to arrive again. */
+    fun ended() {
+        leaving = false; exiting = emptySet()
+        for ((i, t) in tracks.withIndex()) t.snap(targets[i])
     }
 
     private fun presence(e: PresenceEffect, rise: Float, alongX: Boolean): Pair<Track, Float> = when (e) {

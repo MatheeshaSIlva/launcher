@@ -60,14 +60,17 @@ private class Policy(val n: HostNode) : MeasurePolicy {
             object : Child {
                 override val flex = drawn[k].flex
                 override fun measure(c: EngineConstraints): Measured {
+                    drawn[k].measuredWith = intArrayOf(c.minWidth, c.maxWidth, c.minHeight, c.maxHeight)
                     val p = m.measure(ComposeConstraints(c.minWidth, c.maxWidth, c.minHeight, c.maxHeight)).also { placeables[k] = it }
                     return drawn[k].measured.copy(size = Size(p.width, p.height))
                 }
             }
         }
-        // A leaving child keeps the size it had (its frozen geometry): measured at exactly that.
-        for (k in drawn.indices) if (drawn[k].isLeaving) drawn[k].measured.size.let { sz ->
-            placeables[k] = measurables[k].measure(ComposeConstraints.fixed(sz.width.coerceAtLeast(0), sz.height.coerceAtLeast(0)))
+        // A leaving child is measured again with the constraints it last had: its exact (fractional) size and its subtree's
+        // layout come out as they were (Codex: fixed whole-pixel constraints made a 10.2 px box 11).
+        for (k in drawn.indices) if (drawn[k].isLeaving) {
+            val w = drawn[k].measuredWith
+            placeables[k] = measurables[k].measure(if (w == null) ComposeConstraints.fixed(0, 0) else ComposeConstraints(w[0], w[1], w[2], w[3]))
         }
         val c = constraints
         val a = n.arrange(EngineConstraints(c.minWidth, c.maxWidth, c.minHeight, c.maxHeight), kids)
