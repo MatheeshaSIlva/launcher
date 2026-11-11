@@ -365,9 +365,51 @@ does something.
   value has a u^1.5 term), so fixed small differences converge slowly; and the launcher's ease reads such a start as slope
   0, so ease-out (0, 0, 0.58, 1) does not jump there, only curves with a sloped start do.
 
+**13a-1, runtime** (`7df5eed`, over Codex's grammar `9b8be46`, committed by the lead from its worktree: its sandbox
+could not take git's index lock)
+- **What changed:** `ui/motion/NodeMotion.kt` (`Track`: fresh start when settled, `Continuation.continued` at every
+  interruption, `shift` for a layout move, the envelope `low..high` set at a start, grown only at an interruption, the target
+  alone at rest; `NodeMotion`: place x/y (declared `translate-x/y` as target, a layout move shifting from where it was shown),
+  width/height, opacity, scale; epsilons 0.5 px, 1/255, half a pixel of the node's size for scale; `MotionContext`).
+  `ui/motion/Envelope.kt`: the analytic bounds of round three, with a second bound per spring regime so near-critical damping
+  stays finite (`|x0| + |v0 + ζωx0|/(eζω)` underdamped, `/(e(ζω − β))` overdamped; the smaller of each pair). `Host.kt`:
+  `Motion` keeps place, rest place, drawn size, anchor and envelope apart from the root's baseline translation; `HostNode.placed`
+  (bound `translate-x/y`, `opacity`, `scale` now applied, animated where a transition names them); `ComponentHost` keeps the
+  moving nodes, `step`, `snapMotion`, released and disposed nodes dropped. `ComposeHost.kt`: the parent places each child
+  (`placed`, its anchor from the parent: a row's start and cross alignment, a stack's alignment, the root centred); whole pixels
+  worked out from the rest place; the surface drawn at the moving size where its anchor puts it, the box's clips at that size,
+  children revealed through it; the frame node's bounds the envelope while a size moves, its pivot kept at the layout centre;
+  the software layer over the envelope. `ComponentView.kt`: the ticker on `ChoreographerSource`, `PresetMotion`, reduced motion
+  snapping what moves.
+- **Verified (measured, JVM):** `NodeMotionTest` (8): a layout move starts where it was shown and ends at exactly 0; placing
+  again does not restart; a second move mid-motion keeps place and speed (ease and spring); a size spring ends on its target
+  inside its envelope at every frame; the envelope grows only at an interruption; reduced motion jumps; unnamed channels jump;
+  Codex's figures exact (29.63, 23.42 px) and eight curves (three ease, five springs including ζ 0.999, 1, 1.001) x three
+  speeds x three spans within their bounds at every 0.2 ms. `HostMotionTest` (4): the clock stops once settled (one wake for two
+  placements, no step after), bound transforms without a transition, opacity following its binding, reduced motion and
+  disposal. `ComposeHostTest` (5, one new): the software layer covers the envelope while moving, the layout box at rest.
+- **Not verified:** nothing on a device. Compose re-drawing every node on `invalidate` (so a frame clock step reaches every
+  moving node's draw) is judged from the existing `frameRecords` behaviour, not measured; the frames-against-geometry check on
+  both drawing paths is the next commit (13a-1b: the `motion-frames` hook on the emulator), with the re-record counts.
+- **Decided (judged, logged at integration):** a layered box's centred stroke is cut at its drawn bounds at rest and in
+  motion alike (the envelope holds the drawn size only), so nothing changes when motion stops; the status bar has no layered
+  centred stroke. A preset without `motion.move`/`motion.state` makes those channels jump (none of the launcher's presets has
+  them yet: the default preset's roles come with E2.14a).
+- **Size:** 405 production lines with the grammar's 166 apart, over the slice's ~200: the drawing contract (anchor, clips,
+  envelope on both paths) did not split without leaving one path wrong in between.
+
 ### codex — report
 
 (appended by `scripts/team/codex.sh … work`)
+
+### codex — work, 2026-11-11T13:12Z
+
+- **Commits:** none. `git add` cannot create `D:/Launcher/.git/worktrees/launcher-codex/index.lock` under this sandbox. Seven assigned files remain uncommitted; nothing pushed.
+- **Changed:** added the exact motion API, transition/spring grammar, reader/validator integration, diagnostics with spans, tests and `KDL_MOTION.md`. Enter/exit/roll unchanged.
+- **Verified (measured):** final source passed 25/25 standalone model tests, including six motion tests. The Gradle run passed 330 engine and 437 app tests. `git diff --check` passed; daemon stopped.
+- **Not verified:** fast gate failed on four native configurations (`clang++.exe: Permission denied`); no green build/lint gate. Full gate remains with integration. No device or runtime verification.
+- **Surprises:** existing primitive definitions needed no changes. Added a 4,096-character declaration bound; propose recording that limit in the lead’s decision log.
+- **Security §7 (judged):** caller checks—no new IPC entry point; inputs—bounded, nonrecursive parsing without reflection; privileged paths—none added; capabilities—unchanged; captures—none; secrets—none. **Refusal paths (measured):** tested bindings, unsupported features, malformed/out-of-range numbers, duplicate channels, empty clauses, limits, codes and spans.
 
 ## 6. Cross-check
 
@@ -415,11 +457,98 @@ for 120 px over 220 ms); ends keep their tangent limits; the curve ends at its e
 the fit cache is counted (`fitCount`). Each new test fails on the commit before its fix. `scripts/check.sh` PASSED. The
 watch's Android registration is exercised on the device only.
 
+### claude — review of 13a-1's grammar (`9b8be46`), 2026-11-11
+
+Read the diff; 6 tests pass in the merged build (and every model test). No blocking finding.
+- **note — `MotionGrammar.kt:114`:** `numbers.any { it.toFloat() <= 0f }` repeats the two bounds before it.
+- **note — `MotionGrammar.kt:54–55`:** a word after the channels that is a plain name (`place linear`) is reported as an
+  unknown channel; a hint that a curve needs a duration (`200ms linear`) would say more. Not blocking.
+- **note — the 4096-character bound:** agreed; logged with 13a-1's decisions.
+- **note — security §7 (claude, judged):** the grammar reads file input only, bounded (4096 characters, no recursion, regexes
+  without nested quantifiers over unbounded input), never evaluates or resolves a token, and refuses bindings; no IPC, privilege,
+  capability, capture or secret is touched. Refusal paths are tested (Codex's list).
+
+### codex — review, 2026-11-11T13:20Z
+
+Reviewed `7df5eed` against §3. **Judged:** source, maths and drawing geometry. **Recorded measurement:** existing JVM XML shows 8 NodeMotion, 4 HostMotion and 5 ComposeHost tests passing. I did not rerun tests or use a device; this session is read-only. Paths below are under `engine/src/main/java/dev/launcher/`.
+
+- **fix — `engine/ui/ComposeHost.kt:76,224`; `engine/ui/motion/NodeMotion.kt:98`:** Centred size and place motion double-compensate the same layout change. In a 300 px stack, a centred child growing 100→200 moves its layout x from 100→50. Place adds 50, and the size anchor adds another 50: its first drawn left becomes **150 instead of 100**. Include the old/new anchor offsets when computing place continuity. Test simultaneous size/place growth, shrink and reversal.
+
+- **fix — `engine/ui/ComposeHost.kt:81–85`:** Whole-pixel placement omits the child’s own rest translation. With parent fraction 0, residual 0.3 and child `translate-x=0.5`, the node finishes at x=0.5 and the painter receives residual 0.3; the complete rest position is 0.8, requiring whole origin 0 and residual 0.8. Include the child’s rest contribution in rounding and compensation; test fractional declared translations and interrupted motion.
+
+- **fix — `engine/ui/ComposeHost.kt:69`; `engine/ui/ComponentView.kt:127–130`:** Root placement always supplies `(0,0)`, although its actual integer placement and baseline fraction can change outside `NodeMotion`. A centre-line change therefore jumps the root even with a declared place transition. Pass the actual root placement through the continuity calculation while keeping baseline correction separate; test centreY and font/centre-line changes.
+
+- **fix — `engine/ui/Host.kt:185–192`; `engine/ui/motion/NodeMotion.kt:60,65`:** The node envelope is rebuilt from track bounds every frame, but each track discards its bounds upon settlement. If width settles before height, the layer’s horizontal bounds shrink while height still moves. Retain the node-level envelope until size motion finishes, expanding only at interruptions. Test unequal width/height settling times and assert unchanged layer bounds between retargets.
+
+- **fix — `engine/ui/Host.kt:189–192`; `engine/ui/ComposeHost.kt:203,232`:** Stroke extents remain absent from the envelope. The report’s assertion that a layered centred stroke is cut identically during motion and at rest does not follow: during shrink, the retained larger envelope permits the moving right/bottom stroke outside the drawn rectangle; at rest, the target-sized layer cuts it. Preserve stroke extents as §3 requires, or resolve an explicitly different clipping contract. Add layered centred-stroke growth/shrink captures on both paths.
+
+- **question — `engine/ui/Host.kt:262–265`; `engine/ui/ComponentView.kt:108`; `engine/ui/ComposeHost.kt:107`:** Please establish the View-invalidation assumption in 13a-1b. Steps change plain fields and call `view.invalidate()`; they neither apply RenderNode properties directly nor explicitly invalidate the DrawModifierNode. Android provides [`invalidateDraw`](https://developer.android.com/reference/kotlin/androidx/compose/ui/node/DrawModifierNode#extension-functions) for requesting its draw pass. This is an integration question, not a confirmed caching defect: require progressing pixels and record counts after an otherwise unchanged layout, including a nested moving node.
+
+- **note — `engine/ui/motion/NodeMotion.kt:44–53`; `engine/ui/motion/Envelope.kt:30–62`:** Fresh versus continued selection correctly depends on track state, preserving interruptions at zero velocity. The ease hull uses corrected carry; both underdamped bounds, both overdamped bounds and the critical bound are conservative in the implemented spring regimes. The dense numerical tests are useful, but do not cover the placement, anchoring, stroke or envelope-lifetime failures above.
+
+- **note — `engine/ui/Host.kt:301`; `engine/ui/ComponentView.kt:241–245`:** Moving-set removal, snap, release and disposal look sound. The tests exercise host bookkeeping directly; actual drawing, cancellation registrations and both rendering paths still need the planned integration checks.
+
+- **note — security §7:** This runtime commit changes none of the listed attack surfaces: no caller-facing entry point, parser/evaluator, privileged path, capability derivation, capture or secret handling. Refusal-path testing is therefore not applicable to this commit.
+
+**codex: OBJECT — resolve the geometry, envelope-lifetime and stroke findings; complete the planned drawing-path verification before signing off 13a-1.**
+
+**claude — on Codex's 13a-1 review (fixed in `7e85bf2`):** all five fixes accepted; my report's stroke claim was wrong.
+- Place continuity is measured at the anchor point (`NodeMotion.update`'s `anchorX/Y`, the old box's anchor against the
+  new): a centred box growing 100 → 200 in a 300 px stack is drawn from 100, not 150 (`aCentredGrowthIsNotCompensatedTwice`,
+  with a reversal mid-way, no jump).
+- Whole pixels include the node's own rest translation (`wholePixel(parent, residual, rest)`: parent 0, residual 0.3,
+  translate 0.5 gives origin 0 on the screen, residual 0.8; `wholePixelsIncludeTheNodesOwnRestTranslation`).
+- The root is placed from its window (`ComponentView`'s layout: `root.placed(0, whole, …)`, the baseline's fraction kept on
+  its own translation); `ComposeHost` no longer places it at (0, 0) (`theRootsWindowPlaceMovesOnItsTransition`).
+- The node's envelope is kept and only grown until both size tracks settle (`theEnvelopeHoldsUntilEverySizeTrackSettles`:
+  height settles first, all four edges never shrink, dropped at rest).
+- A box's centred stroke: its outer half is in the bounds at rest and in motion (`HostNode.drawBounds`, both paths: the frame
+  node's position and the software layer); no layered centred stroke exists in the status bar, so nothing at rest changes on
+  screen (`aCentredStrokeIsInsideTheBoundsAtRestAndInMotion`).
+- **Failed before the fix: judged, not run.** The new tests call what the fixes added (`wholePixel`, `drawBounds`, the anchor
+  parameters), so they cannot compile on `7df5eed`; each case was worked through on the old code (150 instead of 100; residual
+  0.3 instead of 0.8; envelope edges shrinking at height's settle; the stroke's outer half outside the target-sized layer).
+- **Your question (invalidation):** taken into 13a-1b as an acceptance check: progressing pixels and record counts for a
+  nested moving node after an unchanged layout, on both paths; `invalidateDraw` on the draw node if `view.invalidate()` does
+  not reach it.
+- UI tests 75/75 green (measured, JVM).
+
+**claude — on Codex's 13a-1 sign-off objection (fixed in `c230651`):** both accepted. The anchor counts in place continuity
+only while the size has a curve (a size that jumps leaves the old edge to hold: `aPlaceOnlyTransitionHoldsTheOldEdgeWhenTheSizeJumps`,
+growth and shrink, centred in 300 px: starts at 100 / 50 where it was); the root is placed with its full `top`, the baseline's
+fraction included, while that fraction is still applied on its own translation (`fractionalPlaceChangesAreCarried`: 12.25 →
+12.75 and across a whole pixel, 12.75 → 13.25, shown where it was). UI tests green (measured, JVM); the root's path through
+`ComponentView` is on the device check list of 13a-1b. 13a-1b (frames against geometry on both paths, nested invalidation,
+record counts) stays the merge condition into `engine`, as you put it.
+
 ## 7. Sign-off
 
 - **13a-0:** `claude: AGREE — 13a-0: 15 motion tests and the full gate green; Codex's four findings fixed with regressions.`
   `codex: AGREE — 13a-0: checked both corrective commits, derivative limits, exact completion, cache assertion and recorded regression results; all blocking findings are resolved.`
 
+- **13a-1a** (grammar `9b8be46`, runtime `7df5eed`, fixes `7e85bf2`, `c230651`):
+  `claude: AGREE — 13a-1a: UI tests green on c230651, model tests and the full gate green on 7e85bf2; Codex's seven findings fixed with tests.`
+  `codex: AGREE — 13a-1a: checked c230651 against both sign-off findings and the lead's reply; both are resolved at source level.`
+  Merge condition into `engine` (both): 13a-1b passes (frames against geometry on both drawing paths, nested invalidation,
+  record counts, `ComponentView`'s root path for fractional and centre-line changes).
+
 - `claude: AGREE / OBJECT — <what was checked>`
 - `codex: AGREE / OBJECT — <what was checked>`
 - `owner: <for on-screen work: signed off on the S24, date>`
+
+### codex — signoff, 2026-11-11T13:44Z
+
+**codex: OBJECT — two placement gaps remain in 13a-1a.** Reviewed `7e85bf2` and the lead’s reply; judged from source and geometry. Existing JVM XML records 9 NodeMotion, 7 HostMotion and 6 ComposeHost tests passing; I did not rerun Gradle or use a device.
+
+- **fix — `NodeMotion.kt:104–110`:** Anchor compensation applies even without a size transition. For `transition="place 200ms"`, a centred child growing 100→200 in a 300 px stack moves layout x 100→50. The anchor delta is zero, width snaps to 200, and the drawn left jumps to **50 instead of starting at 100**. Account for whether size actually continues; add a place-only growth/shrink regression.
+- **fix — `ComponentView.kt:127–134`:** Root continuity includes only `floor(top)`; the baseline fraction changes immediately outside it. With fixed size and `top` 12.25→12.75, `placed` receives 12 both times, so no transition starts and the root jumps **0.5 px**. Include the full placement delta while retaining separate baseline correction; test fractional changes and integer-boundary crossings.
+- **note:** Own-rest whole-pixel compensation, envelope retention until both size tracks settle, and centred-stroke bounds address those findings at source level.
+- **merge condition:** I accept 13a-1b as a separate commit required before merging 13a-1 into `engine`: geometry-matched frames, nested-node invalidation and record counts on both paths. It does not defer the two runtime fixes above. Grammar has no new objection; security assessment is unchanged.
+
+### codex — signoff, 2026-11-11T14:08Z
+
+**codex: AGREE — 13a-1a: checked `c230651` against both sign-off findings and the lead’s reply; both are resolved at source level.**
+
+- **Judged:** place-only growth/shrink preserves the old edge; root continuity includes fractional placement while baseline correction stays separate.
+- **Recorded measurement:** JVM XML shows 11 NodeMotion, 7 HostMotion and 6 ComposeHost tests passing, including both new regressions. I did not rerun Gradle or use a device.
+- **Merge condition:** 13a-1b must pass before merging 13a-1 into `engine`: geometry-matched frames on both drawing paths, nested-node invalidation and record counts, plus the actual `ComponentView` root path for fractional and centre-line changes.
