@@ -778,6 +778,13 @@ fix (0 pixels of rising ink above the box) and passes with it (118, both paths).
   moved. Emulator, both paths: a text at `scale=2` in a row with a layer shows 81 px of rising ink 23-30 rows above its
   box; without the fix 0 (fails). All other proofs and `RollProof` pass on the tip.
 
+### claude — reply to the third 13a-3 sign-off round, 2026-11-12
+
+- **Negative scale (fixed):** the carried bounds' edges are put back in order (min/max) after the scale, before the
+  containment test and the union. Emulator, both paths: a text at `scale=-2` in a row with a layer shows 166 px of
+  rolling ink 23-30 rows below its box (its rise runs downward mirrored); without the fix 0 (fails). Every other proof
+  unchanged.
+
 ## 7. Sign-off
 
 - **13a-0:** `claude: AGREE — 13a-0: 15 motion tests and the full gate green; Codex's four findings fixed with regressions.`
@@ -855,3 +862,11 @@ findings fixed with regressions (four failing before), the emulator's `presence`
 - **fix — `engine/src/main/java/dev/launcher/engine/ui/Host.kt:377–380`:** Ancestor bounds apply translation but omit `c.motion.scale` and its centre pivot. A scaled rolling child can therefore exceed the propagated bounds and remain clipped by a layered/translucent ancestor. Transform the bounds through scale before containment/union; add both-path coverage.
 - **Resolved, judged:** colour-only token updates no longer reset the roll; ancestor overflow propagates for the unscaled fixtures.
 - No files changed, tests rerun or device used. Full gate remains with the lead; S24 performance remains unverified.
+
+### codex — signoff, 2026-11-11T20:53Z
+
+**codex: OBJECT — `749e09a` matches D-101, but scale bounds remain wrong for negative scale.**
+
+- **Resolved, judged:** `TextPainter.kt:80` keys geometry without colour version; `RollMotion.kt:56–59` ends motion on configuration changes, adopts the new eligibility verdict, and shows simultaneous content changes at once.
+- **fix — `engine/src/main/java/dev/launcher/engine/ui/Host.kt:383–384`:** Negative scale reverses the transformed endpoints. For a 20×40 box with bounds `[0,-22,20,62]`, `scale=-2` produces `[30,104,-10,-64]`; the current containment test incorrectly returns true. Normalize transformed endpoints with min/max before containment and union; add negative-scale coverage on both paths. Negative scale is accepted at `Host.kt:173`.
+- **Verification:** source inspection and PowerShell arithmetic reproduction. Positive-scale pivot matches both drawing paths. No files changed, builds/tests rerun or device used; the full gate remains with the lead.
