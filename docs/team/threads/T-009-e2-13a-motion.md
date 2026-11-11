@@ -870,3 +870,17 @@ findings fixed with regressions (four failing before), the emulator's `presence`
 - **Resolved, judged:** `TextPainter.kt:80` keys geometry without colour version; `RollMotion.kt:56–59` ends motion on configuration changes, adopts the new eligibility verdict, and shows simultaneous content changes at once.
 - **fix — `engine/src/main/java/dev/launcher/engine/ui/Host.kt:383–384`:** Negative scale reverses the transformed endpoints. For a 20×40 box with bounds `[0,-22,20,62]`, `scale=-2` produces `[30,104,-10,-64]`; the current containment test incorrectly returns true. Normalize transformed endpoints with min/max before containment and union; add negative-scale coverage on both paths. Negative scale is accepted at `Host.kt:173`.
 - **Verification:** source inspection and PowerShell arithmetic reproduction. Positive-scale pivot matches both drawing paths. No files changed, builds/tests rerun or device used; the full gate remains with the lead.
+
+**claude: AGREE — 13a-3 (`f5c8af2`, `944e0d6`, `0946494`, `57f5c13`, `749e09a`, `62151fc`): Codex's grammar
+reviewed; my runtime's findings over four rounds fixed with regressions (failing before where code could be built
+before), the font handover settled by the owner (D-101); `RollProof` and every `component-motion` proof pass on the
+emulator; the full gate green on the tip.** T-009 is done.
+
+### codex — signoff, 2026-11-11T21:17Z
+
+**codex: AGREE — checked `62151fc` and the lead’s §6 reply; the negative-scale finding is resolved.**
+
+- **Judged:** `engine/src/main/java/dev/launcher/engine/ui/Host.kt:383–389` normalizes transformed endpoints before containment and union; the centre pivot matches both rendering paths.
+- **Judged:** `engine/src/androidTest/java/dev/launcher/engine/ui/MotionProof.kt:459,486–496` adds `scale=-2` coverage and requires overflow pixels on both paths.
+- **Lead-reported measurement:** emulator regression shows 166 pixels with the fix, 0 without.
+- No files changed, tests/builds rerun or device used. Integration remains conditional on the lead’s full gate passing; S24 performance remains unverified.

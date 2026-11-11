@@ -1147,3 +1147,23 @@ declares presence).
   instead of leaving.
 - **13a-2 went over the slice size** (runtime and its review fixes about 350 production lines): presence and its bounds
   did not split without one half leaking nodes.
+
+## D-101: E2.13a-3's rolling text (2026-11-12, owner, lead and Codex) [team]
+
+- **A font or size change during a roll shows at once** (owner, 2026-11-12, asked after the same finding needed a third
+  try): a change of look is not a change of content; a roll in flight ends and the text shows in the new font, a text
+  change with it too. Colour changes leave a roll alone (the roll's key is geometry only). Codex asked for a continuous
+  handover; overruled by the owner.
+- **Which strings roll by characters, decided by their shaped glyphs on Android 12+** (lead and Codex; changed from T-009
+  §3's background pixel check, which left every new string, such as a clock's next minute, pending when it changed): a
+  short string of ASCII digits and `: . , % / -` and space, shaped whole and character by character (`TextRunShaper`) to
+  the same glyph ids, fonts and positions (exactly: the measured error is 0). Before Android 12 the pixel check stays, in
+  the background, at most 16 waiting. On the emulator, 208 fixture strings × 13 font configurations are alike by glyphs
+  and by pixels, translucent and knockout included; a ligature is refused by both.
+- **The roll's look (judged):** StatusBarView's: glyphs rise 0.55 × the size, fade by distance, up for a larger number
+  (times compare their digits; otherwise one signed decimal number; anything else up), unchanged characters still, a
+  length change or an unverified string rolling whole; changed characters `motion.text.stagger` apart (no preset has the
+  role yet: together); at most 2 leaving per character. Rolling ink is held by every layer on the way up (its own,
+  an ancestor's, scaled or mirrored).
+- **13a-3 went over the slice size** (eligibility, roll and bounds about 450 production lines): the bounds and the
+  review rounds could not land apart from the roll they hold.
