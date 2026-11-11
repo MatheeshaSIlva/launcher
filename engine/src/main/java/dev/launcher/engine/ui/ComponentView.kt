@@ -68,7 +68,13 @@ class ComponentView(
     private val centre = mutableFloatStateOf(0f)
     private var disposed = false
     /** Whether motion is reduced, followed on this thread; the node motion reads it through [Env.reducedMotion]. */
-    private val reduced = dev.launcher.engine.ui.motion.ReducedMotion.Watch(context.contentResolver, handler) { }
+    private val reduced = dev.launcher.engine.ui.motion.ReducedMotion.Watch(context.contentResolver, handler) { on ->
+        if (on && !disposed) host.snapMotion()
+    }
+    /** Its nodes' motion clock: registered only while some node moves, nothing at rest (13a-0's [MotionTicker]). */
+    private val ticker = dev.launcher.engine.ui.motion.MotionTicker(dev.launcher.engine.ui.motion.ChoreographerSource()) { nanos ->
+        !disposed && host.step(nanos)
+    }
     private val textPainters = ArrayList<TextPainter>()
     /** Its icons' glyphs, prepared on [GLYPHS]' worker and published to this thread ([GlyphCache]). */
     private val glyphs = GlyphCache(symbols, { r -> GLYPHS.execute(r) }, { r -> handler.post(r) })
@@ -99,7 +105,8 @@ class ComponentView(
         val env = binder.env(base)
         var built: ComponentHost? = null
         binder.start(def.uses.sources.map { it.name }) { reads -> built?.let { h -> h.settled(reads, ::settle); applied() } }
-        host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it; if (it is IconPainter) it.pictures = allowedPictures } }, { view.invalidate() }, { n -> textPainters.remove(n.painter) })
+        host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it; if (it is IconPainter) it.pictures = allowedPictures } }, { view.invalidate() }, { n -> textPainters.remove(n.painter) },
+            dev.launcher.engine.ui.motion.MotionContext(dev.launcher.engine.ui.motion.PresetMotion, { reduced.on }), { ticker.wake() })
         built = host
         prepareGlyphs()
         constructing = false
@@ -234,6 +241,7 @@ class ComponentView(
         if (disposed) return
         disposed = true
         reduced.close()
+        ticker.dispose()
         onDispose.forEach { it() }
         onDispose.clear()
         tokens.removeOnChange(tokensChanged)

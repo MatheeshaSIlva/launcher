@@ -21,6 +21,7 @@ import dev.launcher.engine.expr.Value
 import dev.launcher.engine.layout.Child
 import dev.launcher.engine.layout.Measured
 import dev.launcher.engine.layout.Size
+import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Canvas as ComposeCanvas
@@ -37,16 +38,16 @@ internal val CentreLine = HorizontalAlignmentLine(::minOf)
 @Composable
 fun ComponentHost.Content(modifier: Modifier = Modifier) {
     val label = (root.value("label") as? Value.Str)?.value ?: def.name
-    Primitive(root, modifier.clearAndSetSemantics { contentDescription = label })
+    Primitive(root, modifier.clearAndSetSemantics { contentDescription = label }, isRoot = true)
 }
 
 @Composable
-private fun Primitive(n: HostNode, modifier: Modifier = Modifier) {
-    Layout(content = { n.children.forEach { key(it) { Primitive(it) } } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n))
+private fun Primitive(n: HostNode, modifier: Modifier = Modifier, isRoot: Boolean = false) {
+    Layout(content = { n.children.forEach { key(it) { Primitive(it) } } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n, isRoot))
 }
 
 /** Measures through 5a's maths; the bound values it reads make Compose measure again, never compose. */
-private class Policy(val n: HostNode) : MeasurePolicy {
+private class Policy(val n: HostNode, val isRoot: Boolean) : MeasurePolicy {
     override fun MeasureScope.measure(measurables: List<Measurable>, constraints: ComposeConstraints): MeasureResult {
         n.epoch.intValue
         val placeables = arrayOfNulls<Placeable>(measurables.size)
@@ -64,11 +65,15 @@ private class Policy(val n: HostNode) : MeasurePolicy {
         n.centre = a.measured.centre
         n.measured = a.measured
         return layout(a.measured.size.width, a.measured.size.height, mapOf(CentreLine to a.measured.centre.roundToInt())) {
-            // Placed top-down: this node's own place is known by now.
-            val fx = n.parentFractionX + n.motion.drawX
-            val fy = n.parentFractionY + n.motion.drawY
+            // Placed top-down: this node's own place is known by now (the root's: its window's, centred if its size moves).
+            if (isRoot) n.placed(0f, 0f, 0.5f, 0.5f)
+            // Whole pixels are worked out from where it rests, not where its motion has it this frame.
+            val fx = n.parentFractionX + n.motion.restDrawX
+            val fy = n.parentFractionY + n.motion.restDrawY
+            val (ax, ay) = n.childAnchor()
             a.placements.forEachIndexed { k, p ->
                 val child = n.children[k]
+                child.placed(p.x + p.residualX, p.y + p.residualY, ax, ay)
                 child.parentFractionX = fx
                 child.parentFractionY = fy
                 if (child.painter.wholePixels(child)) {
@@ -110,30 +115,45 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
             software.target = target.nativeCanvas
             try {
                 softwareFrame(software, n) {
-                    n.painter.paint(target.nativeCanvas, n, n.exactWidth, n.exactHeight)
+                    val c = target.nativeCanvas
+                    surface(c, n) { n.painter.paint(c, n, n.drawnWidth, n.drawnHeight) }
                     drawContent()
                 }
             } finally { software.target = null }
             return
         }
         val own = n.own
-        if (listOf(key, n.exactWidth, n.exactHeight, n.residualX, n.residualY) != n.ownKey || own.width != w || own.height != h) {
-            own.setPosition(0, 0, w, h)
-            n.painter.paint(own.beginRecording(), n, n.exactWidth, n.exactHeight)
+        val sized = !n.motion.drawnWidth.isNaN()
+        // A moving size draws its surface at the size it has this frame (13a-1); at rest, at its layout's, as before.
+        val ow = if (sized) ceil(n.drawnWidth).toInt() else w
+        val oh = if (sized) ceil(n.drawnHeight).toInt() else h
+        val ownKey = listOf(key, n.drawnWidth, n.drawnHeight, n.residualX, n.residualY)
+        if (ownKey != n.ownKey || own.width != ow || own.height != oh) {
+            own.setPosition(0, 0, ow, oh)
+            n.painter.paint(own.beginRecording(), n, n.drawnWidth, n.drawnHeight)
             own.endRecording()
             n.ownRecords++
-            n.ownKey = listOf(key, n.exactWidth, n.exactHeight, n.residualX, n.residualY)
+            n.ownKey = ownKey
         }
         val frame = n.frame
-        frame.setPosition(0, 0, w, h)
+        val m = n.motion
+        // The envelope of a moving size: one size for the whole motion (grown only at an interruption), never cut.
+        val e = m.envelope
+        val left = e?.let { floor(it[0]).toInt() } ?: 0
+        val top = e?.let { floor(it[1]).toInt() } ?: 0
+        if (e == null) frame.setPosition(0, 0, w, h) else frame.setPosition(left, top, ceil(e[2]).toInt(), ceil(e[3]).toInt())
+        frame.pivotX = w / 2f - left
+        frame.pivotY = h / 2f - top
+        frame.translationX = m.drawX; frame.translationY = m.drawY
+        frame.alpha = m.alpha; frame.scaleX = m.scale; frame.scaleY = m.scale
         frame.setUseCompositingLayer(n.value("layer") == Value.Bool.TRUE, null)
         frame.clipToBounds = false
         own.clipToBounds = false
         val recording = frame.beginRecording()
         n.frameRecords++
         try {
-            clipFrame(recording, n)
-            recording.drawRenderNode(own)
+            if (left != 0 || top != 0) recording.translate(-left.toFloat(), -top.toFloat())
+            surface(recording, n) { recording.drawRenderNode(own) }
             drawContext.canvas = ComposeCanvas(recording)
             drawContent()
         } finally {
@@ -149,7 +169,7 @@ internal interface FrameCanvas {
     fun save(): Int
     fun translate(x: Float, y: Float)
     fun scale(scale: Float, cx: Float, cy: Float)
-    fun layer(width: Float, height: Float, alpha: Int)
+    fun layer(left: Float, top: Float, right: Float, bottom: Float, alpha: Int)
     fun clip(n: HostNode)
     fun restore(count: Int)
 }
@@ -160,8 +180,11 @@ private class AndroidFrameCanvas : FrameCanvas {
     override fun save() = canvas.save()
     override fun translate(x: Float, y: Float) = canvas.translate(x, y)
     override fun scale(scale: Float, cx: Float, cy: Float) = canvas.scale(scale, scale, cx, cy)
-    override fun layer(width: Float, height: Float, alpha: Int) { canvas.saveLayerAlpha(0f, 0f, width, height, alpha) }
-    override fun clip(n: HostNode) = clipFrame(canvas, n)
+    override fun layer(left: Float, top: Float, right: Float, bottom: Float, alpha: Int) {
+        canvas.saveLayerAlpha(left, top, right, bottom, alpha)
+    }
+    /** The box's clips are applied with its surface ([surface]), at the size it draws now. */
+    override fun clip(n: HostNode) {}
     override fun restore(count: Int) = canvas.restoreToCount(count)
 }
 
@@ -176,8 +199,10 @@ internal fun softwareFrame(canvas: FrameCanvas, motion: Motion, measured: Measur
     try {
         canvas.translate(motion.drawX, motion.drawY)
         canvas.scale(motion.scale, measured.size.width / 2f, measured.size.height / 2f)
-        if (layered || motion.alpha != 1f)
-            canvas.layer(measured.exactWidth, measured.exactHeight, (motion.alpha * 255).toInt().coerceIn(0, 255))
+        if (layered || motion.alpha != 1f) {
+            val e = motion.envelope ?: floatArrayOf(0f, 0f, measured.exactWidth, measured.exactHeight)
+            canvas.layer(e[0], e[1], e[2], e[3], (motion.alpha * 255).toInt().coerceIn(0, 255))
+        }
         clip()
         draw()
     } finally { canvas.restore(save) }
@@ -187,16 +212,37 @@ internal fun softwareFrame(canvas: FrameCanvas, motion: Motion, measured: Measur
 internal fun revealFraction(n: HostNode): Float? =
     if ("reveal" !in n.bindings) null else n.number("reveal")?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
 
-private fun clipFrame(canvas: android.graphics.Canvas, n: HostNode) {
+/**
+ * The primitive's own surface at the size it draws now, where its anchor puts it in its layout box ([draw] paints it at
+ * the origin), the box's clips around it and its children; while its size moves, the children are revealed through the
+ * drawn bounds (laid out at the target, never resized). At rest the drawn box is the layout box: nothing changes.
+ */
+private inline fun surface(canvas: android.graphics.Canvas, n: HostNode, draw: () -> Unit) {
+    val m = n.motion
+    val w = n.drawnWidth
+    val h = n.drawnHeight
+    val x = (n.exactWidth - w) * m.anchorX
+    val y = (n.exactHeight - h) * m.anchorY
+    clipFrame(canvas, n, x, y, w, h)
+    if (!m.drawnWidth.isNaN()) {
+        val save = canvas.save()
+        canvas.translate(x, y)
+        draw()
+        canvas.restoreToCount(save)
+        canvas.clipRect(x, y, x + w, y + h)
+    } else draw()
+}
+
+private fun clipFrame(canvas: android.graphics.Canvas, n: HostNode, x: Float, y: Float, w: Float, h: Float) {
     if (n.view.primitive != "box") return
     // A box that names `reveal` clips whatever its value: at 1 too, as StatusBarView's level does (its antialiased clip on
     // a fractional edge is part of how the edge looks, T-006).
-    revealFraction(n)?.let { canvas.clipRect(0f, 0f, n.exactWidth * it, n.exactHeight) }
+    revealFraction(n)?.let { canvas.clipRect(x, y, x + w * it, y + h) }
     if (n.value("clip") == Value.Bool.TRUE) {
         val radius = (n.length("radius") ?: 0f).coerceAtLeast(0f)
-        if (radius == 0f) canvas.clipRect(0f, 0f, n.exactWidth, n.exactHeight)
+        if (radius == 0f) canvas.clipRect(x, y, x + w, y + h)
         else canvas.clipPath(android.graphics.Path().apply {
-            addRoundRect(0f, 0f, n.exactWidth, n.exactHeight, radius, radius, android.graphics.Path.Direction.CW)
+            addRoundRect(x, y, x + w, y + h, radius, radius, android.graphics.Path.Direction.CW)
         })
     }
 }

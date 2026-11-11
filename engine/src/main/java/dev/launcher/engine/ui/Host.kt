@@ -60,11 +60,32 @@ class Motion internal constructor(private val apply: (Motion) -> Unit, private v
     private var offsetY = 0f
     var translationX = 0f; set(v) { field = v; applyTranslation(); frame() }
     var translationY = 0f; set(v) { field = v; applyTranslation(); frame() }
-    var alpha = 1f; set(v) { field = v; apply(this); frame() }
-    var scale = 1f; set(v) { field = v; apply(this); frame() }
+    private var shownAlpha = 1f
+    private var shownScale = 1f
+    var alpha get() = shownAlpha; set(v) { shownAlpha = v; apply(this); frame() }
+    var scale get() = shownScale; set(v) { shownScale = v; apply(this); frame() }
+    /** Set by the node's own placement and motion, whose drawing applies them: no callback, no frame request. */
+    internal fun alphaOf(v: Float) { shownAlpha = v }
+    internal fun scaleOf(v: Float) { shownScale = v }
     internal fun place(x: Float, y: Float) { offsetX = x; offsetY = y; applyTranslation() }
-    internal val drawX get() = translationX + offsetX
-    internal val drawY get() = translationY + offsetY
+    /** The node's place contribution: its declared translate and, while it moves, where layout had it before (13a-1). */
+    internal var placeX = 0f
+    internal var placeY = 0f
+    /** The same at rest (its target): what its children's whole pixels are worked out from. */
+    internal var restX = 0f
+    internal var restY = 0f
+    /** The size its own surface draws at; NaN: its layout's (nothing moves its size). */
+    internal var drawnWidth = Float.NaN
+    internal var drawnHeight = Float.NaN
+    /** Where a smaller or larger drawn size sits in its layout box, as a fraction of the difference (its parent's axis). */
+    internal var anchorX = 0f
+    internal var anchorY = 0f
+    /** The bounds it may draw over while its size moves (left, top, right, bottom, in its own px); null: its layout's. */
+    internal var envelope: FloatArray? = null
+    internal val drawX get() = translationX + offsetX + placeX
+    internal val drawY get() = translationY + offsetY + placeY
+    internal val restDrawX get() = translationX + offsetX + restX
+    internal val restDrawY get() = translationY + offsetY + restY
     private fun applyTranslation() { apply(this) }
 }
 
@@ -110,6 +131,57 @@ class HostNode internal constructor(
     val exactWidth get() = measured.exactWidth
     val exactHeight get() = measured.exactHeight
     var frameRecords = 0; internal set
+    /** Its declared motion (`transition`), or null: its bound transforms then apply at once. */
+    internal var nodeMotion: dev.launcher.engine.ui.motion.NodeMotion? = null
+    /** Told when its motion starts moving (its component steps it each frame until it settles). */
+    internal var onMoving: (HostNode) -> Unit = {}
+    /** The size its surface draws at now. */
+    val drawnWidth get() = motion.drawnWidth.takeIf { !it.isNaN() } ?: exactWidth
+    val drawnHeight get() = motion.drawnHeight.takeIf { !it.isNaN() } ?: exactHeight
+
+    /**
+     * Placed by its parent at ([x], [y]) in it (exact px), [anchorX]/[anchorY] where a moving size sits: its bound
+     * `translate-x/y`, `opacity` and `scale` applied, animated where its `transition` names them. Read in placement, so a
+     * change of them places it again and never measures.
+     */
+    internal fun placed(x: Float, y: Float, anchorX: Float, anchorY: Float) {
+        val tx = length("translate-x") ?: 0f
+        val ty = length("translate-y") ?: 0f
+        val opacity = (number("opacity") ?: 1f).takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
+        val scale = (number("scale") ?: 1f).takeIf { it.isFinite() } ?: 1f
+        motion.anchorX = anchorX; motion.anchorY = anchorY
+        motion.restX = tx; motion.restY = ty
+        val m = nodeMotion
+        if (m == null) {
+            motion.placeX = tx; motion.placeY = ty; motion.alphaOf(opacity); motion.scaleOf(scale)
+            return
+        }
+        if (m.update(x, y, tx, ty, exactWidth, exactHeight, opacity, scale)) onMoving(this)
+        shown()
+    }
+
+    /** Its motion's values onto what draws it; false once every track has settled. */
+    internal fun step(now: Long): Boolean {
+        val m = nodeMotion ?: return false
+        val busy = m.step(now)
+        shown()
+        return busy
+    }
+
+    internal fun snapMotion() { nodeMotion?.let { it.snap(); shown() } }
+
+    private fun shown() {
+        val m = nodeMotion ?: return
+        motion.placeX = m.x.value; motion.placeY = m.y.value
+        motion.alphaOf(m.alpha.value.coerceIn(0f, 1f)); motion.scaleOf(m.scale.value)
+        val sized = m.width.moving || m.height.moving
+        motion.drawnWidth = if (sized) m.width.value.coerceAtLeast(0f) else Float.NaN
+        motion.drawnHeight = if (sized) m.height.value.coerceAtLeast(0f) else Float.NaN
+        motion.envelope = if (!sized) null else floatArrayOf(
+            minOf(0f, (exactWidth - m.width.high) * motion.anchorX), minOf(0f, (exactHeight - m.height.high) * motion.anchorY),
+            maxOf(exactWidth, exactWidth * motion.anchorX + m.width.high * (1 - motion.anchorX)),
+            maxOf(exactHeight, exactHeight * motion.anchorY + m.height.high * (1 - motion.anchorY)))
+    }
     val motion = Motion({ m ->
         frame.translationX = m.drawX; frame.translationY = m.drawY
         frame.alpha = m.alpha; frame.scaleX = m.scale; frame.scaleY = m.scale
@@ -138,6 +210,14 @@ class HostNode internal constructor(
         else -> Layout.leaf(frame(), c, Measurer { w, h -> painter.measure(this, w, h) ?: Measured(dev.launcher.engine.layout.Size(0, 0)) })
     }
 
+    /** Where a child's moving size sits in its slot: a row's start on its axis and its alignment across, a stack's alignment. */
+    internal fun childAnchor(): Pair<Float, Float> = when (view.primitive) {
+        "row" -> 0f to when (word("align")) { "top" -> 0f; "bottom" -> 1f; else -> 0.5f }
+        "stack" -> (word("align") ?: "center").let { if (it == "centre-line") 0.5f to 0.5f else Layout.stackAlign(it) }
+        "box" -> 0f to if (word("align") == "centre-line") 0.5f else 0f
+        else -> 0f to 0f
+    }
+
     private fun String?.enumName(default: String) = this?.uppercase()?.replace('-', '_') ?: default
 
     internal object Unrecorded
@@ -154,7 +234,13 @@ class ComponentHost(
     private val painters: (ViewNode) -> Painter,
     private val requestFrame: () -> Unit = {},
     private val onRemoved: (HostNode) -> Unit = {},
+    /** Roles, reduced motion and the time for its nodes' `transition`s; [wake] asks the frame clock for a frame. */
+    private val motionContext: dev.launcher.engine.ui.motion.MotionContext = dev.launcher.engine.ui.motion.MotionContext(),
+    private val wake: () -> Unit = {},
 ) {
+    /** Nodes whose motion has not settled: [step] runs them each frame, and none is left once all have. */
+    private val moving = LinkedHashSet<HostNode>()
+    private val startMoving: (HostNode) -> Unit = { n -> if (!disposed && moving.add(n)) wake() }
     private val props = def.props.map { it.name }.toSet()
     private val epoch = mutableIntStateOf(0)
     private val compiled = HashMap<AttrValue, Compiled>()
@@ -171,6 +257,25 @@ class ComponentHost(
     init { root = reconcile(plan(), { true }) }
 
     fun invalidateAll() { epoch.intValue++ }
+
+    /** Moves every moving node to [frameTimeNanos] and asks for a frame to show it; false once all have settled. */
+    fun step(frameTimeNanos: Long): Boolean {
+        if (moving.isEmpty()) return false
+        moving.removeAll { !it.step(frameTimeNanos) }
+        requestFrame()
+        return moving.isNotEmpty()
+    }
+
+    /** Whether any node still moves (its frame clock runs while so). */
+    val isMoving get() = moving.isNotEmpty()
+
+    /** Reduced motion turned on: every moving node on its target now, in one frame. */
+    fun snapMotion() {
+        if (moving.isEmpty()) return
+        moving.forEach { it.snapMotion() }
+        moving.clear()
+        requestFrame()
+    }
 
     fun refresh(reads: (Deps) -> Boolean = { true }) = settled(reads, null)
 
@@ -189,10 +294,11 @@ class ComponentHost(
         disposed = true
         instances.values.forEach { release(it.node) }
         instances.clear()
+        moving.clear()
         compiled.clear()
     }
 
-    private fun release(node: HostNode) { node.release(); onRemoved(node) }
+    private fun release(node: HostNode) { moving.remove(node); node.release(); onRemoved(node) }
     private class InvalidRepeat(val limit: Boolean = false) : RuntimeException()
     private fun error() { diagnostics = listOf("Invalid repeat or component expansion limit (256 items, 4096 nodes)") }
     private fun scoped(scope: Map<String, Value>) = object : Env by env {
@@ -270,7 +376,10 @@ class ComponentHost(
                 val bindings = named.mapValues { (_, a) ->
                     Binding(if (a is AttrValue.Literal) null else expression(a), evaluate(a, p.scope))
                 }
-                Instance(HostNode(p.view, bindings, emptyList(), painters(p.view), units, requestFrame, epoch), p.scope)
+                val node = HostNode(p.view, bindings, emptyList(), painters(p.view), units, requestFrame, epoch)
+                p.view.motion?.let { node.nodeMotion = dev.launcher.engine.ui.motion.NodeMotion(it, motionContext) }
+                node.onMoving = startMoving
+                Instance(node, p.scope)
             }
             val changed = instance.scope != p.scope
             instance.scope = p.scope

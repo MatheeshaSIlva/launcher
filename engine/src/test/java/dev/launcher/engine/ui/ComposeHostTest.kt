@@ -12,7 +12,7 @@ class ComposeHostTest {
         override fun save(): Int { calls += "save"; return 7 }
         override fun translate(x: Float, y: Float) { calls += "translate $x $y" }
         override fun scale(scale: Float, cx: Float, cy: Float) { calls += "scale $scale $cx $cy" }
-        override fun layer(width: Float, height: Float, alpha: Int) { calls += "layer $width $height $alpha" }
+        override fun layer(left: Float, top: Float, right: Float, bottom: Float, alpha: Int) { calls += "layer $left $top $right $bottom $alpha" }
         override fun clip(n: HostNode) { calls += "clip" }
         override fun restore(count: Int) { calls += "restore $count" }
     }
@@ -40,7 +40,7 @@ class ComposeHostTest {
             canvas.calls += "painter"; canvas.calls += "children"
         }
         assertEquals(listOf("save", "translate 4.25 2.75", "scale 2.0 32.5 17.0",
-            "layer 64.575 33.075 127", "clip", "painter", "children", "restore 7"), canvas.calls)
+            "layer 0.0 0.0 64.575 33.075 127", "clip", "painter", "children", "restore 7"), canvas.calls)
     }
     @Test fun explicitLayerIsIsolatedEvenWhenOpaqueAndAlwaysRestoresOnFailure() {
         val c = Recording(); val m = Motion({}, {})
@@ -48,11 +48,23 @@ class ComposeHostTest {
             softwareFrame(c, m, Measured(Size(10, 8)), true, {}) { throw IllegalStateException("painter") }
             fail("failure swallowed")
         } catch (_: IllegalStateException) { /* the layer still restores */ }
-        assertTrue(c.calls.contains("layer 10.0 8.0 255"))
+        assertTrue(c.calls.contains("layer 0.0 0.0 10.0 8.0 255"))
         assertEquals("restore 7", c.calls.last())
         c.calls.clear()
         softwareFrame(c, m, Measured(Size(10, 8)), false, {}) {}
         assertFalse(c.calls.any { it.startsWith("layer") })
+    }
+
+    /** T-009 13a-1: while a size moves, a layer covers the motion's whole envelope, not the layout box it rests in. */
+    @Test fun aMovingSizeIsLayeredOverItsEnvelope() {
+        val c = Recording(); val m = Motion({}, {})
+        m.envelope = floatArrayOf(-6f, 0f, 30f, 8f)
+        softwareFrame(c, m, Measured(Size(20, 8)), true, {}) {}
+        assertTrue(c.calls.toString(), c.calls.contains("layer -6.0 0.0 30.0 8.0 255"))
+        m.envelope = null
+        c.calls.clear()
+        softwareFrame(c, m, Measured(Size(20, 8)), true, {}) {}
+        assertTrue("at rest: its layout box", c.calls.contains("layer 0.0 0.0 20.0 8.0 255"))
     }
 
     private fun revealOf(attr: String): Float? {

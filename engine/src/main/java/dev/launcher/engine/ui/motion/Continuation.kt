@@ -22,6 +22,10 @@ object Continuation {
     /** Spring fits searched so far (tests: one per curve, however often it is continued). */
     internal val fitCount get() = fitted.get()
 
+    /** The spring an interrupted [curve] with a vertical initial tangent continues as (fitted once per curve). */
+    fun springFor(curve: Curve.Ease): Curve.Spring =
+        fits.computeIfAbsent(curve) { fitted.incrementAndGet(); CurveFit.springLike(it) }
+
     /** A channel at rest at [from] starting towards [to]: the authored curve from rest. */
     fun fresh(curve: Curve, from: Float, to: Float): Mover = when (curve) {
         is Curve.Spring -> Spring(curve.response, curve.damping).apply { start(from, 0f, to) }
@@ -35,7 +39,7 @@ object Continuation {
             val slope = EngineEase.initialSlope(curve)
             if (slope == null) {
                 // A vertical initial tangent cannot be met by a finite correction: the spring that runs most like it.
-                val s = fits.computeIfAbsent(curve) { fitted.incrementAndGet(); CurveFit.springLike(it) }
+                val s = springFor(curve)
                 Spring(s.response, s.damping).apply { start(from, velocity, to) }
             } else EngineEase(curve).apply { continueFrom(from, velocity, to, slope) }
         }
@@ -63,6 +67,9 @@ class EngineEase(curve: Curve.Ease) : Mover {
 
     /** The carried term's coefficient (units/s), for the envelope. */
     val carry get() = carried
+
+    /** Where the curve's progress can go: the hull of its y controls, 0 and 1 (a bezier lies inside its control hull). */
+    val hull get() = minOf(0.0, y1, y2) to maxOf(1.0, y1, y2)
 
     override fun start(from: Float, velocity: Float, to: Float) {
         this.from = from.toDouble()
