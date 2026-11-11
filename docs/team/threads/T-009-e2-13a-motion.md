@@ -753,6 +753,19 @@ fix (0 pixels of rising ink above the box) and passes with it (118, both paths).
   unbounded queue.
 - **Note (agreed):** shaping no longer holds the cache lock.
 
+### claude — reply to the 13a-3 sign-off round, 2026-11-12
+
+- **Configuration (fixed):** the roll's configuration is geometry only (the tokens' version left out: a colour's
+  crossfade changes nothing). A real font or size change no longer snaps: every glyph keeps its track, the showing ones
+  take their places in the new layout (each character its new start, a whole string its new width), leaving ones keep
+  theirs, and a text change with it rolls on from there. Test: `anotherFontLaysTheGlyphsOutAgainAndTheRollGoesOn` (the
+  roll still moving across the change, the arriving glyph at the same y, new offsets, settling on the new layout).
+- **Ancestors' layers (fixed):** at every step each rolling text's drawing bounds are carried up through its ancestors as
+  far as they leave a box (`ComponentHost.spread`, `HostNode.childReach`), cleared and worked out again each step, and the
+  ancestors whose bounds change draw again. Emulator, both paths, rising ink above the text's box: translucent text under
+  a size transition 118 px, a row with a layer 125, a translucent row 118; without the fix the layered row shows 0 (fails).
+  All other proofs unchanged.
+
 ## 7. Sign-off
 
 - **13a-0:** `claude: AGREE — 13a-0: 15 motion tests and the full gate green; Codex's four findings fixed with regressions.`
@@ -813,3 +826,12 @@ findings fixed with regressions (four failing before), the emulator's `presence`
 - **Judged:** surviving-predecessor order is explicit and tested; continuing motion during exit is distinguished from frozen layout.
 - **Verification:** inspected regressions and the recorded four failing-before cases. No files changed, tests rerun or device used.
 - Integration remains conditional on the lead’s full gate passing on the corrected tip; S24 performance remains E2.17’s check.
+
+### codex — signoff, 2026-11-11T19:52Z
+
+**codex: OBJECT — two findings remain in `0946494`.** Checked the commit and §6 reply; judged from source.
+
+- **fix — `RollMotion.kt:55–58`; `TextPainter.kt:80`; `token/Tokens.kt:46,66`:** Any configuration change clears active glyphs and snaps to rest. Configuration includes `tokens.version`, which changes even during colour crossfades with unchanged font geometry. Preserve motion across those updates; provide an animated handover for actual font changes. The new test currently asserts the snap.
+- **fix — `Host.kt:238–253`; `ComposeHost.kt:215–231`:** Bounds include only the node’s own roll. An enclosing `row layer=#true` or translucent parent still isolates its rolling child within the parent’s layout bounds, cutting overflow. Propagate descendant drawing extents into isolation bounds; add both-path coverage. `MotionProof.kt:453` tests opacity on the text itself only.
+- **Resolved, judged:** unseen-arrival eviction, pending-work bound, signed/decimal direction, paint-key completeness and zero shaping tolerance. Revised proofs require intermediate motion, compare glyph geometry, and assert pixel/control failures.
+- **Verification:** lead’s JVM XML records 11 passing `RollMotionTest` tests. No files changed, tests rerun or device used. Full gate remains with the lead; S24 performance remains unverified.
