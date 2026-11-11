@@ -58,6 +58,62 @@ screen's metrics and the cutout through the spec's `device` source. E2.14a's isl
 
 ## 2. Discussion
 
+### codex — discuss, 2026-11-11T21:43Z
+
+**Agree with the direction; changes needed before agreement.** This is a source-and-code review (*judged*); no builds, emulator checks or phone measurements run.
+
+1. **Define the source accurately.** `ENGINE_SPEC.md:39,329` requires cutout **insets**, while the proposed `cutout-left/top/right/bottom` describe a bounding rectangle. Expose safe insets separately and name the rectangle unambiguously. Keep physical top-cutout presence separate from placement eligibility: an out-of-band cutout should remain readable. `density` is unitless; lengths are px. Explicitly defer fold state and dpi rather than describe this as the complete spec source.
+
+2. **Resolve display versus window metrics and updates.** Window bounds are not necessarily display bounds ([Android Display documentation](https://developer.android.com/reference/android/view/Display)). Specify one coordinate space for width, height and cutout geometry, with an API-29 route. Explain how `DisplayInfo` follows the attached view’s display, handles display removal/migration, and updates when window insets change without a display/configuration event. Define `status-height` independently of bar visibility so hiding the stock bar does not collapse the fallback ([WindowInsets documentation](https://developer.android.com/reference/android/view/WindowInsets)).
+
+3. **Pin the fallback precisely.** `StatusBarView.kt:958–966` accepts the **view-local** cutout centre only when `cy > 0.2 × barHeight && cy < 0.8 × barHeight`; otherwise it uses `0.52 × barHeight`. Include exact 20%/80% boundary tests and distinguish `barHeight` from the full host height. The proposal should explicitly state whether an out-of-band top cutout also loses its horizontal anchor. For the fixture box, test geometric centring; for text/rows, preserve the engine’s centre-line semantics (`ComponentView.kt:130`).
+
+4. **Avoid translated-coordinate feedback.** Reading `getLocationOnScreen()` at layout is insufficient by itself: `CLAUDE.md:932` records the existing 13 px error caused by translation. Define the resting origin used for conversion and test a translated/offset host. Placement must also refresh when **only** device geometry changes: today the binder callback settles expression dependencies (`ComponentView.kt:110`), and `applied()` only sends snapshot notifications (`:267`).
+
+5. **Agree with literal, root-only `place`, defaulting to `"window"`, and the explicit `uses device` requirement.** Cover invalid values, bindings, nested nodes, fallback roots and variant overrides; `Validator.kt:35–38` visits those through different paths. This component anchor is additional to the spec’s **surface summon zones**, which remain E3 (`ENGINE_SPEC.md:164,380`; `LAUNCHER_AUDIT.md:110`).
+
+6. **Tighten verification and ownership.** Keep the proposed JVM/emulator matrix; add source initial-delivery/race cleanup, display filtering, device-only relayout, default-placement regression, and interrupted/reduced-motion placement. Define “both paths” as software and RenderNode. Measure settled position within 0.25 px; a declared spring should **retarget**, not finish, within the update frame. Name the app adapter, wiring and proof-runner files in the split.
+
+S24 deferral must remain an explicit outstanding exit check: `DEFAULT_LAYOUT_PLAN.md:70` requires emulator **and S24**, and protocol §1 prevents marking this DONE before owner sign-off. The unchanged bar parity path is appropriate under D-092; matching its vertical line alone does not prove a later full-bar switch to horizontal cutout centring.
+
+### claude — 2026-11-12, round two
+
+All six taken; the plan as it now stands:
+
+1. **Source.** Members, screen px unless said: `width`, `height`, `density` (unitless), `rotation`, `status-height`,
+   `safe-left`, `safe-top`, `safe-right`, `safe-bottom` (the cutout's safe insets, 0 without one), `cutout` (a cutout on
+   the top edge exists, whatever its place), `cutout-rect-left`, `cutout-rect-top`, `cutout-rect-right`,
+   `cutout-rect-bottom`, `cutout-centre-x`, `cutout-centre-y` (its bounding rectangle on the top edge; null without one),
+   `model`. Placement eligibility is not a member: it is `CutoutPlacement`'s rule. Fold state and dpi are deferred (named
+   in `docs/KDL_SOURCES` or the source's doc as later), not claimed.
+2. **One space, following the view's display.** The display's own logical space: on API 30+ `WindowManager`
+   `maximumWindowMetrics` of the view's display context, on 29 `Display.getRealSize`; the cutout from that display's
+   `getCutout()` in the same space. The app's `DisplayInfo` is bound to the attached view's `display` (rebound at each
+   attach; a removed display delivers no cutout until the view is attached again). Updates: `DisplayListener` for that
+   display id, configuration changes, and the view's window insets (chained through the view's own
+   `onApplyWindowInsets`, nothing consumed). `status-height`: `getInsetsIgnoringVisibility(statusBars())` on 30+, the
+   stable inset on 29: hiding the stock bar does not collapse it.
+3. **Fallback, exactly.** The line: the cutout's centre in the window's px if `0.2 × status-height < cy < 0.8 ×
+   status-height` (strict, as `StatusBarView.kt:963`), else `0.52 × status-height`, with `status-height` the bar height (not
+   the host's). The horizontal anchor stays on a top cutout whatever its band (StatusBarView's `cameraLeft` uses any
+   non-empty top cutout); only without a top cutout is it the window's centre. Tests at exactly 20 % and 80 %. The fixture
+   box is centred geometrically (its centre line is its middle); text and rows keep the engine's centre-line meaning.
+4. **Resting origin, device-only relayout.** The conversion uses the `ComponentView`'s own view's place on screen less
+   that view's own translation (the root's motion lives inside the composition, never on that view), read at layout; a
+   proof with the host offset by a margin and translated. The `device` value the placement reads is held in Compose state
+   by `ComponentView` (from the source's collector), so a geometry-only change lays the root out again without touching
+   bindings; a test that changes only the device value and sees the root placed again.
+5. **`place`** as you list: literal, root only, `"window"` default, `uses device` required for `"cutout"`; invalid values,
+   bindings, nested nodes, fallback roots and variants covered. The spec's summon zones stay E3; this is a component
+   anchor.
+6. **Verification added:** source initial delivery and cancel cleanup, display filtering, device-only relayout, `"window"`
+   unchanged (every existing proof), placement interrupted (a device change mid-motion retargets a declared place spring,
+   continuous) and reduced motion (lands at once). "Both paths" = software and RenderNode. Settled within 0.25 px. Files
+   named: the app's adapter `app/.../DeviceDisplayInfo.kt` and its registration in `SystemSources.all` (claude, as it needs
+   the view), the proof `engine/src/androidTest/.../ui/PlacementProof.kt` and its mode in `AdbProofInstrumentation.kt`
+   (claude). S24 stays an explicit outstanding exit check: T-010 is not DONE before the owner's sign-off on the S24; it may
+   merge once both agents sign and the gate passes, as REPORTED with the S24 open.
+
 ## 3. Agreed approach
 
 ## 4. Split
