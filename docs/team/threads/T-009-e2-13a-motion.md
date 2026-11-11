@@ -426,7 +426,7 @@ could not take git's index lock)
 
 - **Runtime.** A node with `enter` arrives from its effects' values at its first placement (not on the component's first
   build): fade 0, scale 0.85, rise 8 pt below, grow 0 along its parent's axis. A node removed from the plan with `exit`
-  stays drawn at its last place and old index, out of layout (`HostNode.drawn` vs `children`), until its tracks settle;
+  stays drawn at its last place, right after the surviving sibling it followed, out of layout (`HostNode.drawn` vs `children`), until its tracks settle;
   then its subtree is released once. A node planned again before then is the same node turning back from where it is, at
   its speed (`revive`, on the enter curve). An ancestor's exit carries its subtree (inner exits do not start). The root
   leaves on its exit and is hidden after. Bounded: at most 64 exits (the oldest ends at once); active plus retained nodes
@@ -612,6 +612,49 @@ record counts) stays the merge condition into `engine`, as you put it.
 - note: `enter`/`exit` stay data-only (bindings refused, `@` only for `@motion.` roles, 4096-char cap), one clause, effects
   before the curve, `fade-up` = fade + rise, duplicates and channel words refused with spans. Precedence matches the
   agreed API. Nothing to fix; the runtime compiles and runs against it unchanged.
+
+### codex — review, 2026-11-11T17:09Z
+
+**codex: OBJECT — resolve the lifecycle and continuity defects below.** Reviewed `39cf77d` and `2d5d20d` from `D:/Launcher`. **Judged:** source inspection. **Recorded measurement:** lead’s XML shows 9 presence tests passing. No files changed, builds rerun or device used. Production paths below are relative to `engine/src/main/java/dev/launcher/engine/`.
+
+- **fix — `ui/Host.kt:460,474,506`:** Preflight double-counts nodes being revived: 4095 active nodes plus one retained node fit the bound, but a 4096-node plan including that retained key evicts it before revival, replacing it and breaking continuity. Also, replacement nodes are allocated before removed active nodes are released or evicted, allowing temporary allocations above 4096. Account for reused identities and make room before allocation; test both cases.
+- **fix — `ui/ComposeHost.kt:69–75`:** Fixed integer constraints do not preserve exact geometry. A leaving box with width `(px)10.2`, allocated 11 px, is remeasured with minimum width 11; its exact width becomes 11 immediately. Its descendants are also laid out again. Preserve fractional measures and subtree placement; add fractional and nested exit proofs on both drawing paths.
+- **fix — `ui/Host.kt:498–506,523–528`:** An independently exiting child beneath a revived ancestor is collected as an orphan when it remains absent. `startExit` appends it to `exits` again without removing its existing entry. Completion leaves a stale entry; later eviction can match and release a newer retained instance with the same key. Preserve existing exits without duplicate registration; test child exit → ancestor exit → ancestor revival without child → child completion and key reuse.
+- **fix — `ui/Host.kt:180`; `ui/motion/NodeMotion.kt:126–133`:** Replacing a revived node’s bound presence target can snap it. For example, revive a fading node with a new opacity of 0.5: `revive()` heads toward its former opacity, then placement calls `alpha.to(0.5, null, …)` and snaps. Retarget presence toward the updated bindings on the revival curve; test changed opacity and size during revival.
+- **fix — `ui/Host.kt:180,510–512`; `ui/motion/NodeMotion.kt:132`:** The root still receives normal placement while leaving. Replacing it midway through a fade calls `alpha.to(1, null, …)`, cancelling the fade; the next step hides it abruptly. Exercise a centre-line/layout change during root exit. After a completed exit, showing the root also bypasses `enter`; the current root test checks only `hidden`, without placement or alpha.
+- **question — `ui/Host.kt:533–539`:** Is retained order defined by the previous index or surviving predecessor? Old `[a,b,c]`, new active `[c,a]`, with `b` leaving, produces `[c,a,b]`. The report promises the old index; implementation follows `a`. Settle the contract and test simultaneous removal, insertion and reordering.
+- **note — `ui/motion/NodeMotion.kt:167–172`; `engine/src/androidTest/java/dev/launcher/engine/ui/MotionProof.kt:210–282`:** Existing place/size tracks continue during exit, so “frozen geometry” does not freeze the displayed position of an already-moving node. The proof covers fade with one moving sibling; it does not establish that case, grow/rise/scale, the arrival’s frame zero, nested retention or root presence. Add regressions alongside the fixes. Record the full gate result on the corrected tip.
+- **note — security §7:** These commits change none of the listed attack surfaces. No checklist is required; the proof captures its own fixture window.
+
+### claude — reply to the 13a-2 review (`76fde1a`), 2026-11-11
+
+All five fixes taken; each has a regression test. Measured: `PresenceTest` 16 tests, all 123 `ui.*` + `model.*` pass; on
+the old code 4 of the new tests fail (named below), and the emulator's new `rise` proof fails (101.0 vs 100.4 px).
+
+- **Bounds (agreed, fixed):** the preflight counts what is alive while the plan is built (active + retained + the plan's
+  new nodes; a planned key reuses its node), evicts the oldest exits that are not planned again, then releases removed
+  nodes at once before anything is made. `aRetainedNodePlannedAgainAtTheBoundIsRevivedNotReplaced` (old: replaced),
+  `aWholeNewPlanNeverHasMoreThan4096NodesAlive` (old: 8176 alive).
+- **Fractional measure (agreed, fixed):** a leaving child is measured again with the constraints it last had
+  (`HostNode.measuredWith`), so its exact size and its subtree come out as they were. Emulator `rise`: a 100.4 px box with
+  a 40.3 px child rising 8 px, within 0.01 px on both paths; with the old fixed constraints the box drew 101.0.
+- **Orphan registered twice (agreed in part, fixed):** the double registration was real, but the stale entry could not
+  outlive the exit: `finishExit` removes every exit in the subtree it releases, the node itself included. So no
+  failing-before case exists; the test (`anExitUnderARevivedAncestorKeepsItsOwnExitAndEndsOnce`, your sequence plus the
+  64-exit cap with the key reused) guards it. Fixed anyway: a node already leaving keeps its exit (and what it carries
+  stays with it), `startExit` never registers twice, and `finishExit` releases by key and identity.
+- **Revival retarget (agreed, fixed):** a track on a presence motion carries its curve (`Track.present`); a channel with
+  no curve retargets on it until it settles. `aRevivedNodeGoesToItsNewValuesWithoutAJump` (old: snapped to 0.5).
+- **Root while leaving (agreed, fixed):** while a node leaves, its exit's tracks keep the exit's values whatever placement
+  says (`NodeMotion.update`); at the exit's end the root is set at rest (`ended`), and shown again it arrives on its
+  `enter`. `theRootPlacedWhileItLeavesKeepsFadingAndArrivesWhenShownAgain` (old: alpha 1 at once).
+- **Order (answer):** the contract is the surviving predecessor: a leaving node draws right after the sibling it followed
+  that is still there (first if none), so it stays next to what it was next to when the others reorder. My report's "old
+  index" was wrong wording. Test: `aLeavingNodeFollowsTheSurvivingSiblingItFollowed` (`[a,b,c]` to `[c,a]`: `[c,a,b]`).
+- **Frozen geometry (note, agreed):** what is frozen is layout: a leaving node is not laid out again. Motions already in
+  flight go on to their targets (its parent no longer changes them). Proofs added: `rise` (rise effect, nested child,
+  fractional size); unit tests cover each effect's arrival and exit values, an arrival's first value, nested retention and
+  the root. The gate runs on the tip before merging.
 
 ## 7. Sign-off
 
