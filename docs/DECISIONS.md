@@ -1107,3 +1107,17 @@ Still open from section 4: volume key interception (measured on the S24 first) a
 
 D-096's open point. The owner: "Playback only". No audio is read: the bars animate while media plays and rest when it pauses, from the media session's state. No `RECORD_AUDIO`, no capture consent. Real levels may come later only through a route with no prompt, if the shell is found to hold one.
 
+## D-098: Draft 4 of the default layout is approved; it replaces draft 2 (2026-11-11, owner) [owner]
+
+The owner reviewed draft 3 and asked for draft 4's changes, then: "Approved" (https://www.figma.com/design/7E43AzlCpFNqhUkApcstZA, page "Draft 4"; drafts 2 and 3 stay in the file for history). What changed from draft 2 (D-094):
+- **No frame on home.** The wallpaper runs edge to edge; nothing is docked to an edge. The concave joins and the frame are gone from the design.
+- **The island floats everywhere,** home included, a black pill under the top edge. The panel grows out of it and absorbs it while open.
+- **The panel is a stack of pages,** not an accordion. Page 1: the time, Controls (four toggles, brightness), the playing song, Notifications (the two newest, no buttons); "Controls ›" and "Notifications ›" each grow into a full panel of their own. Today (weather, events) and System are pages 2 and 3, one sideways swipe away. Swipe rule (lead's, shown in the draft): a sideways swipe that starts on a notification row moves that row and clears it; anywhere else it changes page; the full Notifications panel has no pages; the direction is decided after 12 dp, so a pull that drifts sideways still closes the panel.
+- **The bottom is Android's thin gesture pill,** nothing docked. Swipe up and hold: the pill itself stretches into the recents blob; its power button turns the same blob into Power. Up is home, along the bottom switches, as before.
+- **Recents, minimal:** app icons with names, swiped sideways, the selected one centred and ringed; the whole screen behind shows the selected app's picture; one line under them, power on the left, Clear all on the right. Tap opens, a flick up closes that app.
+- **Power** is reached from the button in recents (owner's choice), floating, not docked: Lock at a tap, Restart and Power off held until the fill completes.
+- **Glass** (the design language's, re-read 2026-11-11): plain frosted blur 24 dp, saturation 1.2, tint 76 %, no refraction, on what floats over content: the panel, recents, power, the launcher, the dock. The island and the pill stay solid black (owner's choice). Cards inside glass are translucent fills, never glass on glass; text on glass is `ink` and `ink-2` only; with blur unavailable, the opaque surface colour.
+- **Terracotta (`signal`) used more, one meaning:** everything live or selected (levels, the current page, the selected app, the power-off hold, the playing song's button, the next event, a full disk, the notification count, the clock's minutes). Active control tiles stay white; a tap on a tile plays a short terracotta animation (owner, 2026-11-11), designed with the motion work.
+- **Kept:** the launcher rising from the dock (owner's choice), its A to Z and `>` commands; simpler panels with no cards, borders or capital labels.
+
+Still open, asked in the draft's notes: a long press on the pill opening Power directly; what recents shows behind it when opened from home (lead's proposal: the most recent app); whether a swipe up from the pill on home opens the launcher. The build plan is updated for draft 4 (T-008).
