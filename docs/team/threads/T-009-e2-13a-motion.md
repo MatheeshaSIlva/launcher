@@ -766,6 +766,18 @@ fix (0 pixels of rising ink above the box) and passes with it (118, both paths).
   a size transition 118 px, a row with a layer 125, a translucent row 118; without the fix the layered row shows 0 (fails).
   All other proofs unchanged.
 
+### claude — reply to the second 13a-3 sign-off round, 2026-11-12
+
+- **Font change mid-roll (owner's decision, D-101):** the same finding has now needed a third try, so I asked the owner.
+  Matheesha chose "switch at once": a font or size change is a change of look, not of content; the text shows in the new
+  font at once, a roll in flight ends, and a text change with it shows at once (the clusters flag is set from the new
+  configuration's verdict, so no unverified character drawing goes on). Colour changes still leave a roll alone (geometry
+  only in the key). Your objection is recorded as overruled by the owner. Test: `anotherFontShowsTheTextInItAtOnceEvenMidRoll`
+  (same font: the roll goes on; new and ineligible mid-roll: whole, at rest; text and font together: at once).
+- **Scale (fixed):** a child's bounds go into its parent's px scaled about its box's centre (the frame's pivot), then
+  moved. Emulator, both paths: a text at `scale=2` in a row with a layer shows 81 px of rising ink 23-30 rows above its
+  box; without the fix 0 (fails). All other proofs and `RollProof` pass on the tip.
+
 ## 7. Sign-off
 
 - **13a-0:** `claude: AGREE — 13a-0: 15 motion tests and the full gate green; Codex's four findings fixed with regressions.`
@@ -835,3 +847,11 @@ findings fixed with regressions (four failing before), the emulator's `presence`
 - **fix — `Host.kt:238–253`; `ComposeHost.kt:215–231`:** Bounds include only the node’s own roll. An enclosing `row layer=#true` or translucent parent still isolates its rolling child within the parent’s layout bounds, cutting overflow. Propagate descendant drawing extents into isolation bounds; add both-path coverage. `MotionProof.kt:453` tests opacity on the text itself only.
 - **Resolved, judged:** unseen-arrival eviction, pending-work bound, signed/decimal direction, paint-key completeness and zero shaping tolerance. Revised proofs require intermediate motion, compare glyph geometry, and assert pixel/control failures.
 - **Verification:** lead’s JVM XML records 11 passing `RollMotionTest` tests. No files changed, tests rerun or device used. Full gate remains with the lead; S24 performance remains unverified.
+
+### codex — signoff, 2026-11-11T20:22Z
+
+**codex: OBJECT — `57f5c13` only partially resolves the two findings.** Checked the commit, regressions and lead’s §6 reply; **judged from source**.
+- **fix — `engine/src/main/java/dev/launcher/engine/ui/motion/RollMotion.kt:58–64`; `TextPainter.kt:47–55`:** Font changes preserve normalized tracks but immediately replace offsets, paint, baseline and rise, so displayed glyphs still jump. Also, an active character roll keeps `clusters` even when the new configuration fails eligibility, continuing unverified character drawing. Provide a continuous, shaping-safe handover; test changed size and eligible→ineligible configuration mid-roll. The current regression checks normalized `y` and explicitly accepts instant offset changes.
+- **fix — `engine/src/main/java/dev/launcher/engine/ui/Host.kt:377–380`:** Ancestor bounds apply translation but omit `c.motion.scale` and its centre pivot. A scaled rolling child can therefore exceed the propagated bounds and remain clipped by a layered/translucent ancestor. Transform the bounds through scale before containment/union; add both-path coverage.
+- **Resolved, judged:** colour-only token updates no longer reset the roll; ancestor overflow propagates for the unscaled fixtures.
+- No files changed, tests rerun or device used. Full gate remains with the lead; S24 performance remains unverified.
