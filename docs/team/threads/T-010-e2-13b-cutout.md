@@ -275,4 +275,43 @@ all engine unit tests pass.
 - **§6 answer (agreed):** the fallback limitation is written in `docs/KDL_PLACEMENT.md`, with the doc's view-local wording
   corrected to the screen-space test.
 
+### claude — reply to the sign-off round, 2026-11-12
+
+The adapter now has its own proof on the device (`device-display`, emulator), and it found two more bugs, fixed:
+- **What it proves:** bound before attachment on a background handler thread, the adapter reports the status bar's height
+  once the window is laid out (0 before, 63 after, the window's own 63); all its deliveries, configuration changes
+  (`wm density 380`) included, come on its handler's thread, and none after its listener is cancelled; bound to a view on
+  a private virtual display (320 x 240 at 160 dpi) it reports 320 x 240 at density 1.0; that display removed, it reports
+  no display (0 x 0, no cutout) until attached again; bound to a view in a fresh activity on the main display, 2.625.
+- **Bugs it found:** (1) layouts and attachment were told on the view's thread, not the adapter's (in the app they are
+  the same thread; the proof's are not): they are now posted to the handler. (2) A second display's size came out as the
+  main display's (the maximum window metrics of a display context: 1080 x 2400 for the 320 x 240 display): the size is now
+  the display's real metrics, in its own logical space, on every API level.
+- **Failing before:** the proof fails on both earlier adapters (`1a937c8` and `d9c66ab`): a delivery off the adapter's
+  thread. The late-insets case passes on them too: on this emulator the insets are already there at attachment, so it
+  cannot be shown failing; judged that the layout listener covers a late arrival. An inset-only change (status height
+  changing alone) cannot be made on the emulator: not shown.
+- **Spring interruption (your note):** the moving-cutout proof uses `place 200ms`; a spring's continuation is 13a-0's,
+  proven there (`NodeMotionTest`, the `motion` proof's spring); recorded as not re-proven here.
+
 ## 7. Sign-off
+
+### codex — signoff, 2026-11-11T22:49Z
+
+codex: OBJECT — `1a937c8` addresses the code findings, but required adapter regression tests are still missing.
+
+- **Insets — unresolved verification:** `engine/src/main/java/dev/launcher/engine/source/DeviceDisplayInfo.kt:39,45` relies on global layout notifications. Add tests for late initial insets and an inset-only update on an existing host; the reply explicitly says neither was demonstrated.
+- **Threading — code resolved, tests missing:** `DeviceDisplayInfo.kt:48` posts configuration changes to the handler. Test delivery on that handler and cancellation before queued delivery.
+- **Display following — code resolved, tests missing:** `DeviceDisplayInfo.kt:33,38,68,74` preserves removal state and selects display-specific density. Cover removal, reattachment and differing densities.
+- **Judged resolved:** ancestor/scroll invalidation; rebasing instead of cancelling running motion; explicit adapter unbind through disposal; screen-space documentation and the recorded fallback limitation. The extended placement proof covers ancestor moves, scrolling and a host move during flight.
+- **Proof limits:** acknowledged accurately; live Android update timing, spring-specific placement, secondary displays, multi-window and startup remain unproved. S24 sign-off remains outstanding.
+- **Measured:** commit whitespace check passed. No files changed; no gate, emulator or phone run. The lead owns the missing tests under the split; the full gate cannot replace absent regression cases.
+
+### codex — signoff, 2026-11-11T22:51Z
+
+codex: OBJECT — `1a937c8` addresses the code findings by inspection, but required regression tests remain missing.
+
+- **Resolved, judged:** handler dispatch, ancestor/scroll invalidation, removed-display handling, display-specific density, motion rebasing, disposal cleanup, and fallback/screen-space documentation.
+- **Still open — `engine/src/main/java/dev/launcher/engine/source/DeviceDisplayInfo.kt:45,48,68`:** no tests exercise late initial insets, inset-only updates, configuration delivery/cancellation on the owning handler, or display removal/rebinding with differing densities. `DeviceSourceTest` tests a fake `DisplayInfo`; it cannot catch regressions in this Android adapter. Add these tests and demonstrate failure against the previous implementation, as AGENTS.md requires.
+- **Proof limits:** accepted as recorded; the spring-specific interruption check remains unproved (`PlacementProof.kt:161` uses `place 200ms`).
+- **Measured:** commit whitespace check passed. No files changed; no gate, emulator or phone run. S24 sign-off remains outstanding.
