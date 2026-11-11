@@ -246,4 +246,33 @@ Automatic command-policy review rejected recursive cleanup of the temporary Grad
 - **note — `engine/.../model/Validator.kt:37`; `engine/.../ui/ComponentView.kt:73` — answer to §6:** deferring fallback-specific placement is reasonable because fallback rendering itself is absent from this runtime. Record that limitation explicitly and implement placement from the **active** root when fallback rendering arrives. Also correct `docs/KDL_PLACEMENT.md:21`: it still describes the eligibility test as view-local, whereas the implementation now tests the screen-space centre.
 - **note — §7 security, judged:** caller checks: N/A, no new external production entry point; input bounds/reflection: unchanged; privileged execution paths: none added in production; capabilities: public `device`, declaration enforced; other-app capture persistence: none introduced—the proof captures its own fixture; secrets: untouched; refusal coverage: existing grammar refusal tests inspected, not rerun.
 
+### claude — reply to the review, 2026-11-12
+
+All five fixes taken; the question answered by changing the policy. Measured on the emulator (`component-placement`,
+both paths): every overlay upright and turned within 0.003 px, now also with an ancestor moved by layout (its own bounds
+unchanged) and scrolled, live, the box staying on its anchor; the moving-cutout flight with its host moved 29 px at frame
+3 and turned back at frame 6: 31 frames within 0.003 px of the movers; reduced motion at once; `component-motion` PASS;
+all engine unit tests pass.
+
+- **Insets (fixed):** the adapter adds a global layout listener on the view's window while attached (insets arriving or
+  changing lay the window out) and publishes when its state changes; nothing consumed, Compose's own listener untouched.
+  Not shown separately on the emulator (its insets arrive before the first frame); judged.
+- **Threads (fixed):** configuration callbacks are posted to the adapter's handler.
+- **Ancestors, scrolls, the window (fixed):** `ComponentView` follows its window's global layout and scroll changes while
+  attached and places the root again when its resting origin changed (own bounds, an ancestor, a scroll, the window).
+- **Display following (fixed):** a removed display leaves no display (no cutout, nothing measured) until the view is
+  attached again; density from the selected display's own context. A second display could not be shown on this emulator.
+- **Origin policy (question, changed):** no snapping any more. When the resting origin moves, the root's motion is
+  rebased (`NodeMotion.rebase`): its last layout place is re-expressed in the new coordinates, so the next placement's
+  shift is only a real change of anchor; a device motion already running goes on (the frame-3 move above), and a host's
+  first layout or move never slides the root. A window-width change alone is a change of anchor (the fallback's centre)
+  and moves on the transition.
+- **Cleanup (note, done):** `DeviceDisplayInfo.unbind`, called from `KdlBar`'s dispose (and safe before attaching).
+- **Proof limits (note):** agreed and recorded: a live overlay or rotation change recreates the proof's activity, so live
+  Android display updates are shown through the fake display only; secondary displays, multi-window and startup frames
+  stay unproved. The proof also waits until the display reports the overlay before measuring (the tall overlay once read
+  late) and draws the software path with a margin (a box near the edge was cut by the view's bounds there, not on screen).
+- **§6 answer (agreed):** the fallback limitation is written in `docs/KDL_PLACEMENT.md`, with the doc's view-local wording
+  corrected to the screen-space test.
+
 ## 7. Sign-off
