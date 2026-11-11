@@ -156,4 +156,27 @@ class NodeMotionTest {
         m.run(m.width, 80 * ms)
         assertEquals(100f, left(100f, 100f), 1e-3f)
     }
+
+    /** Codex, 13a-1 sign-off: with place alone, a size that jumps leaves the old left edge to hold (no anchor). */
+    @Test fun aPlaceOnlyTransitionHoldsTheOldEdgeWhenTheSizeJumps() {
+        for ((from, to) in listOf(100f to 200f, 200f to 100f)) {
+            val m = motion(ease, MotionChannel.PLACE)
+            val x0 = (300f - from) / 2; val x1 = (300f - to) / 2          // centred in a 300 px stack
+            m.update(x0, 0f, 0f, 0f, from, 10f, 1f, 1f, 0, anchorX = 0.5f)
+            m.update(x1, 0f, 0f, 0f, to, 10f, 1f, 1f, 0, anchorX = 0.5f)
+            assertEquals("$from → $to: its left starts where it was", x0, x1 + m.x.value, 1e-3f)
+            m.run(m.x, 0)
+            assertEquals(x1, x1 + m.x.value, 0f)
+        }
+    }
+
+    /** Codex, 13a-1 sign-off: a fractional place change (the root's baseline) is carried too, across a whole pixel. */
+    @Test fun fractionalPlaceChangesAreCarried() {
+        for ((a, b) in listOf(12.25f to 12.75f, 12.75f to 13.25f)) {
+            val m = motion(ease, MotionChannel.PLACE)
+            m.update(0f, a, 0f, 0f, 10f, 10f, 1f, 1f, 0)
+            assertTrue(m.update(0f, b, 0f, 0f, 10f, 10f, 1f, 1f, 0))
+            assertEquals("shown at $a", a, b + m.y.value, 1e-4f)
+        }
+    }
 }

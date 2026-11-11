@@ -99,9 +99,13 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     fun update(placeX: Float, placeY: Float, translateX: Float, translateY: Float, w: Float, h: Float, opacity: Float,
         scale: Float, now: Long = context.now(), anchorX: Float = 0f, anchorY: Float = 0f): Boolean {
         val place = curve(MotionChannel.PLACE)
+        // The anchor holds the surface only while its size moves; a size that jumps leaves the old edge to hold (Codex).
+        val held = curve(MotionChannel.SIZE) != null
+        val ax = if (held) anchorX else 0f
+        val ay = if (held) anchorY else 0f
         if (!layoutX.isNaN()) {
-            x.shift(layoutX + layoutW * anchorX - (placeX + w * anchorX), place, now)
-            y.shift(layoutY + layoutH * anchorY - (placeY + h * anchorY), place, now)
+            x.shift(layoutX + layoutW * ax - (placeX + w * ax), place, now)
+            y.shift(layoutY + layoutH * ay - (placeY + h * ay), place, now)
         }
         layoutX = placeX; layoutY = placeY; layoutW = w; layoutH = h
         x.to(translateX, place, now); y.to(translateY, place, now)
