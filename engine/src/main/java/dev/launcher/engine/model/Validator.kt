@@ -71,7 +71,9 @@ class Validator(private val tokens: TokenCheck) {
                 else d += Diagnostic(a.span, "unexpected-argument", if (arg == null) "'${def.name}' takes no argument: name its attributes (key=value)"
                     else "'${def.name}' takes one argument, its ${arg.name}")
             }
+            d += MotionGrammar.read(n.attrs.filterKeys { it in MotionGrammar.ATTRS }.mapValues { it.value.value }).diagnostics
             for (a in n.attrs.values) {
+                if (a.name in MotionGrammar.ATTRS) continue
                 val ad = def.attrs[a.name]
                 if (ad == null) d += unknown(a.keySpan, "unknown-attribute", "attribute of '${def.name}'", a.name, def.attrs.keys)
                 else value(ad, a.value, if (a.name == "each") scope else inner)

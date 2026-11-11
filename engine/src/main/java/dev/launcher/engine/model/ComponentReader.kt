@@ -81,7 +81,9 @@ object ComponentReader {
     }
 
     private fun node(n: KdlNode): ViewNode = ViewNode(n.name, n.args.map(::value),
-        n.props.mapValues { (k, p) -> Attr(k, p.keySpan, value(p.value)) }, n.children.map(::node), n.span, n.nameSpan)
+        n.props.mapValues { (k, p) -> Attr(k, p.keySpan, if (k in MotionGrammar.ATTRS) AttrValue.Literal(p.value) else value(p.value)) },
+        n.children.map(::node), n.span, n.nameSpan,
+        MotionGrammar.read(n.props.filterKeys { it in MotionGrammar.ATTRS }.mapValues { AttrValue.Literal(it.value.value) }).spec)
 
     /** Sorts a value: a whole `$name` or `@name` is a reference, a string with `{` an expression, the rest literals. */
     internal fun value(v: KdlValue): AttrValue {

@@ -43,6 +43,7 @@ data class ViewNode(
     val children: List<ViewNode>,
     val span: Span,
     val nameSpan: Span,
+    val motion: NodeMotionSpec? = null,
 )
 
 data class Attr(val name: String, val keySpan: Span, val value: AttrValue)
