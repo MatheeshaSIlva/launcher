@@ -51,6 +51,9 @@ class ComponentView(
     granted: Set<String> = emptySet(),
     /** Pictures for `icon picture`, given only to a component that declares `notifications` and was granted its capability. */
     pictures: PictureSource? = null,
+    /** Its motion's frames and time (ns): the display's by default; a proof steps them at exact times (13a-1b). */
+    frames: dev.launcher.engine.ui.motion.FrameSource = dev.launcher.engine.ui.motion.ChoreographerSource(),
+    private val clock: () -> Long = System::nanoTime,
 ) {
     private val allowedPictures = pictures?.takeIf { dev.launcher.engine.source.Access.allowed(def.uses.sources.map { it.name }, "notifications", "notifications.read", granted) }
     private val handler = Handler(Looper.myLooper() ?: error("ComponentView needs a Looper thread"))
@@ -72,7 +75,7 @@ class ComponentView(
         if (on && !disposed) host.snapMotion()
     }
     /** Its nodes' motion clock: registered only while some node moves, nothing at rest (13a-0's [MotionTicker]). */
-    private val ticker = dev.launcher.engine.ui.motion.MotionTicker(dev.launcher.engine.ui.motion.ChoreographerSource()) { nanos ->
+    private val ticker = dev.launcher.engine.ui.motion.MotionTicker(frames) { nanos ->
         !disposed && host.step(nanos)
     }
     private val textPainters = ArrayList<TextPainter>()
@@ -106,7 +109,7 @@ class ComponentView(
         var built: ComponentHost? = null
         binder.start(def.uses.sources.map { it.name }) { reads -> built?.let { h -> h.settled(reads, ::settle); applied() } }
         host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it; if (it is IconPainter) it.pictures = allowedPictures } }, { view.invalidate() }, { n -> textPainters.remove(n.painter) },
-            dev.launcher.engine.ui.motion.MotionContext(dev.launcher.engine.ui.motion.PresetMotion, { reduced.on }), { ticker.wake() })
+            dev.launcher.engine.ui.motion.MotionContext(dev.launcher.engine.ui.motion.PresetMotion, { reduced.on }, clock), { ticker.wake() })
         built = host
         prepareGlyphs()
         constructing = false

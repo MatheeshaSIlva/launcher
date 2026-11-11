@@ -15,6 +15,7 @@ import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import dev.launcher.engine.expr.Value
@@ -92,7 +93,7 @@ private class Policy(val n: HostNode) : MeasurePolicy {
 
 private class DrawElement(val n: HostNode) : ModifierNodeElement<DrawNode>() {
     override fun create() = DrawNode(n)
-    override fun update(node: DrawNode) { node.n = n }
+    override fun update(node: DrawNode) { node.n.redraw = {}; node.n = n; n.redraw = node::redraw }
     override fun equals(other: Any?) = other is DrawElement && other.n === n
     override fun hashCode() = System.identityHashCode(n)
 }
@@ -104,6 +105,13 @@ private class DrawElement(val n: HostNode) : ModifierNodeElement<DrawNode>() {
  */
 private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
     private val software = AndroidFrameCanvas()
+    /**
+     * A motion step changes no Compose state, and the window's own invalidation does not draw a node again (13a-1b, measured
+     * on the emulator: no frame recorded, nothing moved on the GPU path): each moving node asks for its own draw.
+     */
+    fun redraw() { if (isAttached) invalidateDraw() }
+    override fun onAttach() { n.redraw = ::redraw }
+    override fun onDetach() { if (n.redraw == ::redraw) n.redraw = {} }
     override fun ContentDrawScope.draw() {
         if (n.hidden.value) return
         n.epoch.intValue

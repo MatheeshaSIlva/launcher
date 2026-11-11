@@ -135,6 +135,8 @@ class HostNode internal constructor(
     internal var nodeMotion: dev.launcher.engine.ui.motion.NodeMotion? = null
     /** Told when its motion starts moving (its component steps it each frame until it settles). */
     internal var onMoving: (HostNode) -> Unit = {}
+    /** Asks its draw node to draw again (set by the draw node while attached): a motion step changes no Compose state. */
+    internal var redraw: () -> Unit = {}
     /** The size its surface draws at now. */
     val drawnWidth get() = motion.drawnWidth.takeIf { !it.isNaN() } ?: exactWidth
     val drawnHeight get() = motion.drawnHeight.takeIf { !it.isNaN() } ?: exactHeight
@@ -280,7 +282,7 @@ class ComponentHost(
     /** Moves every moving node to [frameTimeNanos] and asks for a frame to show it; false once all have settled. */
     fun step(frameTimeNanos: Long): Boolean {
         if (moving.isEmpty()) return false
-        moving.removeAll { !it.step(frameTimeNanos) }
+        moving.removeAll { n -> !n.step(frameTimeNanos).also { n.redraw() } }
         requestFrame()
         return moving.isNotEmpty()
     }
@@ -291,7 +293,7 @@ class ComponentHost(
     /** Reduced motion turned on: every moving node on its target now, in one frame. */
     fun snapMotion() {
         if (moving.isEmpty()) return
-        moving.forEach { it.snapMotion() }
+        moving.forEach { it.snapMotion(); it.redraw() }
         moving.clear()
         requestFrame()
     }

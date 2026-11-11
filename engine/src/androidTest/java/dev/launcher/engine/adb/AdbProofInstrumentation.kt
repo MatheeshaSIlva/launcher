@@ -59,6 +59,8 @@ class AdbProofInstrumentation : Instrumentation() {
                 "component-icon-reveal" -> dev.launcher.engine.ui.IconRevealProof(this).run(result)
                 // T-006: knockout and reveal on the GPU.
                 "component-layer" -> dev.launcher.engine.ui.LayerProof(this).run(result)
+                // T-009 13a-1b: node motion on both drawing paths against its movers.
+                "component-motion" -> dev.launcher.engine.ui.MotionProof(this).run(result)
                 else -> error("Unknown proof mode")
             }
             result.putString("result", "PASS (test APK UID; no launcher UID claim)")
