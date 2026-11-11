@@ -75,8 +75,7 @@ class ComponentView(
     private val placeTick = androidx.compose.runtime.mutableIntStateOf(0)
     private lateinit var env: Env
     /** The resting origin the root was last placed from: a new one (the window laid out, moved) places it at once. */
-    private var lastOrigin: List<Float>? = null
-    private var originMoved = false
+    private var lastOrigin: FloatArray? = null
     private var disposed = false
     /** Whether motion is reduced, followed on this thread; the node motion reads it through [Env.reducedMotion]. */
     private val reduced = dev.launcher.engine.ui.motion.ReducedMotion.Watch(context.contentResolver, handler) { on ->
@@ -133,8 +132,21 @@ class ComponentView(
         view.setViewTreeLifecycleOwner(owner)
         view.setViewTreeSavedStateRegistryOwner(owner)
         view.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-        // Placed on the camera: a move of this view in its window places the root again.
-        if (onCutout) view.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob -> if (l != ol || t != ot || r != or || b != ob) placeTick.intValue++ }
+        // Placed on the camera: any move of this view on screen (its own layout, an ancestor's, a scroll, the window's)
+        // places the root again (Codex, T-010: its own bounds alone missed an ancestor moving).
+        if (onCutout) {
+            val moved = { if (!disposed && lastOrigin?.let { !it.contentEquals(restingOrigin()) } == true) placeTick.intValue++ }
+            val layout = android.view.ViewTreeObserver.OnGlobalLayoutListener { moved() }
+            val scroll = android.view.ViewTreeObserver.OnScrollChangedListener { moved() }
+            view.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: android.view.View) {
+                    v.viewTreeObserver.addOnGlobalLayoutListener(layout); v.viewTreeObserver.addOnScrollChangedListener(scroll); moved()
+                }
+                override fun onViewDetachedFromWindow(v: android.view.View) {
+                    v.viewTreeObserver.removeOnGlobalLayoutListener(layout); v.viewTreeObserver.removeOnScrollChangedListener(scroll)
+                }
+            })
+        }
         view.setContent {
             Layout(content = { host.Content() }) { measurables, constraints ->
                 val p = measurables.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
@@ -158,9 +170,6 @@ class ComponentView(
                     // the root's own translation, and its change too is carried by the place transition): a centre-line
                     // change moves it on its place transition if it declares one (Codex, 13a-1 review and sign-off).
                     host.root.placed(left, top, 0.5f, 0.5f)
-                    // Placed on the camera from a host that moved (its first layout included): there at once, never
-                    // sliding from where the window was before (measured: a first frame placed it 273 px up).
-                    if (onCutout && (originMoved || !view.isAttachedToWindow)) { originMoved = false; host.root.snapPlace() }
                     p.place(wholeX.toInt(), whole.toInt())
                 }
             }
@@ -174,9 +183,10 @@ class ComponentView(
             val l = px("cutout-rect-left"); val t = px("cutout-rect-top"); val r = px("cutout-rect-right"); val b = px("cutout-rect-bottom")
             if (l != null && t != null && r != null && b != null) CutoutPlacement.Cutout(l, t, r, b) else null
         } else null
-        val (ox, oy, windowX, windowWidth) = restingOrigin()
-        val origin = listOf(ox, oy, windowX, windowWidth)
-        originMoved = lastOrigin != null && origin != lastOrigin
+        val origin = restingOrigin()
+        val (ox, oy, windowX, windowWidth) = origin
+        // The view moved on screen: its root's last place is seen from there, so only a real change of anchor moves it.
+        lastOrigin?.let { o -> if (o[0] != ox || o[1] != oy) host.root.nodeMotion?.rebase(o[0] - ox, o[1] - oy) }
         lastOrigin = origin
         return CutoutPlacement.of(cutout, px("status-height") ?: 0f, ox, oy, windowX + windowWidth / 2f)
     }

@@ -55,7 +55,7 @@ object KdlBar {
         val view = ComponentView(ctx, def, tokens, icons?.let { system + dev.launcher.engine.source.NotificationSource.of(it.feed) } ?: system, units,
             granted = GRANTED, pictures = icons)
         display.bind(view.view)
-        view.addOnDispose { icons?.dispose() }
+        view.addOnDispose { icons?.dispose(); display.unbind() }
         view.derive = {
             view.textWidth("Time")?.let { w ->
                 val moon = view.read("dnd.on") == Value.Bool.TRUE

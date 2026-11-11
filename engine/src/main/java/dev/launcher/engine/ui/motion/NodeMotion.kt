@@ -154,6 +154,13 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         return moving
     }
 
+    /**
+     * Its last layout place seen from coordinates moved by ([dx], [dy]): the next placement's shift is then only what
+     * really moved (T-010: a host moving under a component placed on the screen is no motion of its own, and a motion
+     * already running keeps going).
+     */
+    fun rebase(dx: Float, dy: Float) { if (!layoutX.isNaN()) { layoutX += dx; layoutY += dy } }
+
     /** Every track at [now]; false once all have settled. Scale settles within half a pixel of the node's size. */
     fun step(now: Long): Boolean {
         var busy = false

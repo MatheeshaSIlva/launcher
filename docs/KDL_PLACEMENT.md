@@ -18,11 +18,14 @@ Without it validation reports `place-needs-device` and the required declaration.
 
 Cutout placement centres the root horizontally on a top-edge cutout (even outside the
 status band), or on the window's centre when none exists. Its centre line follows the
-cutout's view-local centre only when strictly between 20% and 80% of `status-height`;
-otherwise it is 52% of that height. Boxes use their geometric middle; text and rows retain
+cutout's centre on the screen only when that lies strictly between 20% and 80% of
+`status-height` (the band is the screen's); otherwise it is 52% of that height. Boxes use their geometric middle; text and rows retain
 their centre-line semantics. Coordinates are converted using the host's resting screen
 origin, excluding translations and scales. Geometry changes place the root again and
-retarget a declared `transition="place ..."`; reduced motion lands immediately.
+retarget a declared `transition="place ..."`; reduced motion lands immediately. The host
+moving on screen (its layout, an ancestor's, a scroll) is no motion: the root stays on its
+anchor, and a motion already running goes on. Only the view's root is placed: a fallback
+root's `place` takes effect when fallback rendering exists.
 
 This component anchor is separate from surface summon zones, which come in E3.
 Other refusal codes are `place-root-only`, `not-bindable` and `wrong-type`.

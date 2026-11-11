@@ -47,6 +47,7 @@ import kotlin.math.abs
  */
 class PlacementProof(private val instrumentation: Instrumentation) {
     private val TOLERANCE = 0.25f
+    private val PAD = 64
     private val MARGIN = 37
 
     private fun def(kdl: String): ComponentDef =
@@ -99,7 +100,12 @@ class PlacementProof(private val instrumentation: Instrumentation) {
         if (name == "none") all.forEach { sh("cmd overlay disable $it") }
         else all.firstOrNull { it.endsWith(".$name") }?.let { sh("cmd overlay enable-exclusive --category $it") }
             ?: error("no cutout overlay '$name' on this device: $all")
-        SystemClock.sleep(2500)
+        // Until the display says so (an overlay applies a while after the command returns), then a moment more.
+        val until = SystemClock.uptimeMillis() + 10_000
+        fun has() = instrumentation.targetContext.getSystemService(android.hardware.display.DisplayManager::class.java)
+            .getDisplay(android.view.Display.DEFAULT_DISPLAY)?.cutout?.boundingRects?.isNotEmpty() == true
+        while ((name == "none") == has() && SystemClock.uptimeMillis() < until) SystemClock.sleep(100)
+        SystemClock.sleep(1500)
     }
 
     /** One overlay and turn: the box's centre against the rule, untranslated and translated, both paths. */
@@ -131,6 +137,16 @@ class PlacementProof(private val instrumentation: Instrumentation) {
                 val mx = moved[0] - gpu[0] - t; val my = moved[1] - gpu[1] - t
                 if (abs(mx) > 0.05f || abs(my) > 0.05f) errors += "$name turn $turn $what: moved (${moved[0] - gpu[0]}, ${moved[1] - gpu[1]})"
             }
+            // Live: an ancestor moved by layout (the view's own bounds unchanged), then scrolled: the box stays on its anchor.
+            val outer = host.parent as FrameLayout
+            for ((what, change) in listOf<Pair<String, () -> Unit>>(
+                "ancestor moved" to { outer.setPadding(23, 0, 0, 0) }, "ancestor scrolled" to { outer.scrollTo(-11, 0) })) {
+                instrumentation.runOnMainSync { change() }
+                val (g2, s2) = capture()
+                val e = maxOf(abs(g2[0] - ex), abs(g2[1] - ey), abs(s2[0] - ex), abs(s2[1] - ey))
+                if (e > TOLERANCE) errors += "$name turn $turn $what: gpu (${g2[0]}, ${g2[1]}) software (${s2[0]}, ${s2[1]}) vs ($ex, $ey)"
+            }
+            instrumentation.runOnMainSync { outer.setPadding(0, 0, 0, 0); outer.scrollTo(0, 0) }
             report = "$name ${if (turn == 0) "upright" else "turned"} ${if (cut == null) "no top cutout" else "cutout"}: " +
                 "off by ${"%.3f".format(maxOf(dx, dy, sx, sy))} px"
         }
@@ -148,7 +164,7 @@ class PlacementProof(private val instrumentation: Instrumentation) {
         val ease = Curve.Ease(0f, 0f, 0.58f, 1f, 200f)
         var worst = 0f
         var frames = 0
-        session(d, real = false, fake = fake) { _, _, v, capture ->
+        session(d, real = false, fake = fake) { _, host, v, capture ->
             val (start, _) = capture()
             // From x = 300 to 700, turned back to 500 at frame 6.
             var mover = Continuation.fresh(ease, -400f, 0f)
@@ -160,6 +176,11 @@ class PlacementProof(private val instrumentation: Instrumentation) {
                 frames++
                 now += STEP
                 instrumentation.runOnMainSync { held.run(now) }
+                if (frames == 3) {
+                    // The host moved under it mid-flight (an ancestor's layout): no motion of its own, the flight goes on.
+                    instrumentation.runOnMainSync { (host.parent as FrameLayout).setPadding(29, 0, 0, 0) }
+                    drawn(v)
+                }
                 if (frames == 6) {
                     val t = (now - from) / 1e9
                     mover = Continuation.continued(ease, mover.value(t) + layout - 500f, mover.velocity(t), 0f).also { from = now }
@@ -192,7 +213,7 @@ class PlacementProof(private val instrumentation: Instrumentation) {
             }
         } finally { sh("settings put global animator_duration_scale ${scale.ifEmpty { "1" }}") }
         check(landed) { "with motion reduced the move did not land at once" }
-        return "a moved cutout followed on a place transition, turned back at frame 6, $frames frames within ${"%.3f".format(worst)} px on both paths; with motion reduced at once"
+        return "a moved cutout followed on a place transition, its host moved 29 px at frame 3, turned back at frame 6, $frames frames within ${"%.3f".format(worst)} px on both paths; with motion reduced at once"
     }
 
     /** A display whose cutout's centre the proof sets (a 60 × 60 hole at the top, the status bar 80 px). */
@@ -247,7 +268,10 @@ class PlacementProof(private val instrumentation: Instrumentation) {
                 (info as? DeviceDisplayInfo)?.bind(v.view)
                 host = FrameLayout(activity).apply { setPadding(MARGIN, 0, 0, 0); clipChildren = false; clipToPadding = false }
                 host.addView(v.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-                activity.setContentView(host)
+                // An outer frame to move the host by (an ancestor-only layout move, and a scroll).
+                val outer = FrameLayout(activity).apply { clipChildren = false; clipToPadding = false }
+                outer.addView(host, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+                activity.setContentView(outer)
                 v.show(true)
             }
             drawn(made!!)
@@ -257,8 +281,9 @@ class PlacementProof(private val instrumentation: Instrumentation) {
                 val win = window(activity)
                 val loc = IntArray(2); activity.window.decorView.getLocationOnScreen(loc)
                 val g = centroid(win).let { floatArrayOf(it[0] + loc[0], it[1] + loc[1]) }
-                val sw = Bitmap.createBitmap(v.view.width, v.view.height, Bitmap.Config.ARGB_8888)
-                instrumentation.runOnMainSync { Canvas(sw).apply { drawColor(Color.BLUE); v.view.draw(this) } }
+                // A margin round the view: the root may lie partly outside it (a cutout near the edge, the view moved).
+                val sw = Bitmap.createBitmap(v.view.width + 2 * PAD, v.view.height + PAD, Bitmap.Config.ARGB_8888)
+                instrumentation.runOnMainSync { Canvas(sw).apply { drawColor(Color.BLUE); translate(PAD.toFloat(), 0f); v.view.draw(this) } }
                 // The software draw in the view's own px, put on screen at its resting origin (integer layout places).
                 var ox = loc[0]; var oy = loc[1]
                 var p: View = v.view
@@ -268,7 +293,7 @@ class PlacementProof(private val instrumentation: Instrumentation) {
                         ox += p.left - parent.scrollX; oy += p.top - parent.scrollY; p = parent
                     }
                 }
-                val s = centroid(sw).let { floatArrayOf(it[0] + ox, it[1] + oy) }
+                val s = centroid(sw).let { floatArrayOf(it[0] - PAD + ox, it[1] + oy) }
                 g to s
             }
         } finally {

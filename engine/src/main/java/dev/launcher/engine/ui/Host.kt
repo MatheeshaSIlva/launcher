@@ -209,9 +209,6 @@ class HostNode internal constructor(
 
     internal fun snapMotion() { nodeMotion?.let { it.snap(); shown() } }
 
-    /** Its place at once, nothing else (the window it is in moved: a host's move is no motion of its own, T-010). */
-    internal fun snapPlace() { nodeMotion?.let { it.x.snap(); it.y.snap(); shown(); redraw() } }
-
     private fun shown() {
         val m = nodeMotion ?: return
         motion.placeX = m.x.value; motion.placeY = m.y.value
