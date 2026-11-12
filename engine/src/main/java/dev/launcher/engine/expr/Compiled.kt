@@ -45,6 +45,17 @@ sealed class Value {
     }
     /** A colour as ARGB, as the launcher's design system gives it (a token at the current light/dark blend). */
     data class Color(val argb: Int) : Value()
+    /**
+     * A prepared picture (T-013): the source that holds it, its id and revision. Only the engine's sources make one (the
+     * constructor is internal; KDL has no literal for it and no expression builds one), so where a picture comes from is
+     * carried by the value itself, never read from a string's spelling. `image` looks it up in [source]'s provider alone,
+     * and only for a component that declared and was granted that source. Written into text as nothing.
+     */
+    class Picture internal constructor(val source: String, val id: String, val rev: String) : Value() {
+        override fun equals(other: Any?) = other is Picture && source == other.source && id == other.id && rev == other.rev
+        override fun hashCode() = (source.hashCode() * 31 + id.hashCode()) * 31 + rev.hashCode()
+        override fun toString() = "Picture($source)"
+    }
     object Null : Value()
 }
 
@@ -92,7 +103,7 @@ internal fun show(v: Value): String = when (v) {
     is Value.Str -> v.value
     is Value.Bool -> v.value.toString()
     is Value.Color -> "#%08X".format(v.argb)
-    is Value.List, is Value.Record -> ""
+    is Value.List, is Value.Record, is Value.Picture -> ""
     Value.Null -> ""
 }
 
@@ -103,6 +114,7 @@ internal fun truthy(v: Value): Boolean = when (v) {
     is Value.Color -> true
     is Value.List -> v.items.isNotEmpty()
     is Value.Record -> v.fields.isNotEmpty()
+    is Value.Picture -> true
     Value.Null -> false
 }
 

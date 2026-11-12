@@ -9,12 +9,16 @@ import kotlinx.coroutines.flow.callbackFlow
  * `playing`, `title`, `artist` and `app` now; the art comes as a prepared picture (T-013 slice 2); position and the list
  * of sessions come with E3's player. [NONE] when nothing plays, nothing is paused, or reading is denied.
  */
-data class MediaState(val playing: Boolean, val title: String?, val artist: String?, val app: String?) : SourceValue {
+data class MediaState(val playing: Boolean, val title: String?, val artist: String?, val app: String?,
+                      val art: MediaArt? = null) : SourceValue {
+    private val picture by lazy { art?.let { Value.Picture("media", it.id, it.rev) } ?: Value.Null }
+
     override fun member(name: String): Value = when (name) {
         "playing" -> Value.Bool.of(playing)
         "title" -> title?.let { Value.Str(it) } ?: Value.Null
         "artist" -> artist?.let { Value.Str(it) } ?: Value.Null
         "app" -> app?.let { Value.Str(it) } ?: Value.Null
+        "art" -> picture
         else -> Value.Null
     }
 
@@ -24,8 +28,8 @@ data class MediaState(val playing: Boolean, val title: String?, val artist: Stri
         /** Untrusted text from another app, bounded (D-068). */
         const val MAX_TEXT = 200
 
-        fun of(playing: Boolean, title: String?, artist: String?, app: String?) =
-            MediaState(playing, title?.take(MAX_TEXT), artist?.take(MAX_TEXT), app?.take(MAX_TEXT))
+        fun of(playing: Boolean, title: String?, artist: String?, app: String?, art: MediaArt? = null) =
+            MediaState(playing, title?.take(MAX_TEXT), artist?.take(MAX_TEXT), app?.take(MAX_TEXT), art)
     }
 }
 
@@ -59,6 +63,9 @@ object MediaPick {
 
     fun <K> choose(sessions: List<Session<K>>): Session<K>? = sessions.firstOrNull { playing(it.state) } ?: sessions.firstOrNull()
 }
+
+/** The chosen session's cover, published only once it is ready in the source's picture table: its [id] and [rev]. */
+data class MediaArt(val id: String, val rev: String)
 
 /** Where `media` comes from: the app's session watcher. */
 interface MediaFeed {
