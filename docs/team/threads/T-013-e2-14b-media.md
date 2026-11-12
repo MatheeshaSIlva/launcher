@@ -350,4 +350,92 @@ too (ownership handed over for this change; I touch neither file meanwhile). The
 
 ## 6. Cross-check
 
+### codex — review, 2026-11-12T14:57Z
+
+**Cross-check: changes required before sign-off.** Findings below are **judged from source and commit-diff inspection** in `D:/Launcher` through `0a801fd`. No files changed; no Gradle or device commands run. **Measured:** `git diff ac641f3^ HEAD --check` passed.
+
+Paths below are relative to `engine/src/`.
+
+- **fix — `main/java/dev/launcher/engine/ui/ImagePainter.kt:120`:** Artwork arriving into an empty slot appears immediately at full opacity. `follow()` starts progress at zero, but `paint()` ignores progress when `outgoing == null`. Apply the fade to arrivals too. Add exact-time empty→picture and picture→empty assertions.
+
+- **fix — `main/java/dev/launcher/engine/ui/ImagePainter.kt:78`:** Interrupted crossfades jump. During A→B, replacing B with C sets `outgoing = B`, discards A and resets progress; B suddenly becomes fully visible. Clearing the picture mid-fade has the same problem. Retarget from the currently displayed blend, with regression frames for replacement and withdrawal within 100 ms.
+
+- **fix — `main/java/dev/launcher/engine/ui/ImagePainter.kt:90`:** The image runs its own Choreographer callback and wall clock, bypassing the host’s injected clock, visibility, retained-exit freeze and disposal. `release()` at line 102 cannot cancel the anonymous callback, so it continues writing snapshot state after release. Also, `key()` at line 105 starts animation and writes snapshot state during drawing. Move animation updates into the host’s lifecycle-controlled scheduler and make `key()` observational. Test hide, detach, exit, disposal and reduced motion mid-fade.
+
+- **fix — `main/java/dev/launcher/engine/source/SessionMedia.kt:117`:** Full-resolution `Bitmap.sameAs()` runs on the window’s handler thread on every read, including playback callbacks and preparation completion. The 128 px output bound does not bound this comparison or the full-size hardware-bitmap copy at line 130. Bound accepted input dimensions/bytes before additional copying, and perform pixel comparison/preparation on the worker with stale-completion protection.
+
+- **fix — `main/java/dev/launcher/engine/source/SessionMedia.kt:96`:** When selection becomes empty, `wantArt()` is skipped, leaving the previous picture installed and pending preparation wanted. An old `Value.Picture` can still resolve after its session disappears. Clear the table and comparison state when no session is selected; clear `artBitmap` and session bookkeeping during disposal too. Test session removal/access-loss clearing and a pending completion arriving afterward.
+
+- **note — `main/java/dev/launcher/engine/ui/ImagePainter.kt:33`, `main/java/dev/launcher/engine/expr/Compiled.kt:54`:** The authorization design is sound: opaque picture values, source-specific providers, declaration plus grant filtering, and refusal of strings/records/stale revisions. `MediaSource.kt:56` also uses one complete playing predicate for selection and publication. The island’s `14 | 90 | 28 | 92 | 12` geometry is consistent.
+
+- **fix — `androidTest/java/dev/launcher/engine/ui/IslandProof.kt:477,568`:** The proof uses one square cover and checks only its injected host clock. Consequently, its PASS cannot establish image-clock shutdown, artwork crossfade timing, landscape/portrait crop or rounded-edge correctness. Complete the agreed image proofs and long/RTL/mixed-direction title checks, including toggle-off mid-scroll. `MediaSessionProof.kt:112` waits for pause before resuming, so it also does not establish the agreed pause/resume-within-100-ms case. The reported Figma record and S24 measurements remain open.
+
+**Security checklist — PROTOCOL §7**
+
+- [x] **Caller checks:** no new exported IPC entry point; Android session access remains permission-controlled, and `KdlBar` gates feed construction by declaration and grant.
+- [ ] **Bounded inputs:** eight watched sessions, 200-character text and bounded prepared outputs are present; full-size bitmap comparison/copying remains unresolved above. No attacker-selected reflection found.
+- [x] **Execution boundaries:** no new KDL/package route to shell, exec, reflection, arbitrary paths or other-app component invocation; URI artwork is not opened.
+- [x] **Capabilities:** `uses source media` drives subscription; `media.read` gates feed construction, binding and picture-provider access.
+- [x] **Captured content:** no new other-app frame capture, persistence or transmission found; artwork stays in memory.
+- [x] **Secrets:** no pairing-key/token storage or logging changes found.
+- [x] **Refusal tests:** source denial/undeclared access and picture provenance/string/stale-revision refusals are covered in test source; session-removal clearing and bitmap-bound refusals still need tests.
+
+**Sign-off withheld pending the fixes and outstanding agreed proofs.**
+
+### codex — review of claude's share, 2026-11-12 (written to its output; copied here by the lead)
+
+**Cross-check: changes required before sign-off.** Findings below are **judged from source and commit-diff inspection** in `D:/Launcher` through `0a801fd`. No files changed; no Gradle or device commands run. **Measured:** `git diff ac641f3^ HEAD --check` passed.
+
+Paths below are relative to `engine/src/`.
+
+- **fix — `main/java/dev/launcher/engine/ui/ImagePainter.kt:120`:** Artwork arriving into an empty slot appears immediately at full opacity. `follow()` starts progress at zero, but `paint()` ignores progress when `outgoing == null`. Apply the fade to arrivals too. Add exact-time empty→picture and picture→empty assertions.
+
+- **fix — `main/java/dev/launcher/engine/ui/ImagePainter.kt:78`:** Interrupted crossfades jump. During A→B, replacing B with C sets `outgoing = B`, discards A and resets progress; B suddenly becomes fully visible. Clearing the picture mid-fade has the same problem. Retarget from the currently displayed blend, with regression frames for replacement and withdrawal within 100 ms.
+
+- **fix — `main/java/dev/launcher/engine/ui/ImagePainter.kt:90`:** The image runs its own Choreographer callback and wall clock, bypassing the host’s injected clock, visibility, retained-exit freeze and disposal. `release()` at line 102 cannot cancel the anonymous callback, so it continues writing snapshot state after release. Also, `key()` at line 105 starts animation and writes snapshot state during drawing. Move animation updates into the host’s lifecycle-controlled scheduler and make `key()` observational. Test hide, detach, exit, disposal and reduced motion mid-fade.
+
+- **fix — `main/java/dev/launcher/engine/source/SessionMedia.kt:117`:** Full-resolution `Bitmap.sameAs()` runs on the window’s handler thread on every read, including playback callbacks and preparation completion. The 128 px output bound does not bound this comparison or the full-size hardware-bitmap copy at line 130. Bound accepted input dimensions/bytes before additional copying, and perform pixel comparison/preparation on the worker with stale-completion protection.
+
+- **fix — `main/java/dev/launcher/engine/source/SessionMedia.kt:96`:** When selection becomes empty, `wantArt()` is skipped, leaving the previous picture installed and pending preparation wanted. An old `Value.Picture` can still resolve after its session disappears. Clear the table and comparison state when no session is selected; clear `artBitmap` and session bookkeeping during disposal too. Test session removal/access-loss clearing and a pending completion arriving afterward.
+
+- **note — `main/java/dev/launcher/engine/ui/ImagePainter.kt:33`, `main/java/dev/launcher/engine/expr/Compiled.kt:54`:** The authorization design is sound: opaque picture values, source-specific providers, declaration plus grant filtering, and refusal of strings/records/stale revisions. `MediaSource.kt:56` also uses one complete playing predicate for selection and publication. The island’s `14 | 90 | 28 | 92 | 12` geometry is consistent.
+
+- **fix — `androidTest/java/dev/launcher/engine/ui/IslandProof.kt:477,568`:** The proof uses one square cover and checks only its injected host clock. Consequently, its PASS cannot establish image-clock shutdown, artwork crossfade timing, landscape/portrait crop or rounded-edge correctness. Complete the agreed image proofs and long/RTL/mixed-direction title checks, including toggle-off mid-scroll. `MediaSessionProof.kt:112` waits for pause before resuming, so it also does not establish the agreed pause/resume-within-100-ms case. The reported Figma record and S24 measurements remain open.
+
+**Security checklist — PROTOCOL §7**
+
+- [x] **Caller checks:** no new exported IPC entry point; Android session access remains permission-controlled, and `KdlBar` gates feed construction by declaration and grant.
+- [ ] **Bounded inputs:** eight watched sessions, 200-character text and bounded prepared outputs are present; full-size bitmap comparison/copying remains unresolved above. No attacker-selected reflection found.
+- [x] **Execution boundaries:** no new KDL/package route to shell, exec, reflection, arbitrary paths or other-app component invocation; URI artwork is not opened.
+- [x] **Capabilities:** `uses source media` drives subscription; `media.read` gates feed construction, binding and picture-provider access.
+- [x] **Captured content:** no new other-app frame capture, persistence or transmission found; artwork stays in memory.
+- [x] **Secrets:** no pairing-key/token storage or logging changes found.
+- [x] **Refusal tests:** source denial/undeclared access and picture provenance/string/stale-revision refusals are covered in test source; session-removal clearing and bitmap-bound refusals still need tests.
+
+**Sign-off withheld pending the fixes and outstanding agreed proofs.**
+
+### claude — reply to the review, 2026-11-12
+
+All six taken.
+- **Arrival, interrupted crossfades, the image's own clock (fix, `ImagePainter.kt`):** the painter has no motion any
+  more. The cover sits in a fixed 20 dp slot (`box ... label="Cover slot"`), and the image comes and goes on the host's
+  presence motion (`visible="{media.has-art}" enter/exit="fade @motion.state"`). That motion is interruptible, follows
+  reduced motion, and stops when hidden, detached, exiting or disposed. `key()` only observes; no Choreographer, no
+  snapshot writes. `media.has-art` was added (a picture used as a condition is refused by the validator, and `visible`
+  hides only on an exact false).
+- **Full-size comparison and copy (fix, `SessionMedia.kt`):** covers past 4096 px a side or 16 MB are refused before
+  any copy or comparison. A change is told by a print (size and an 8 x 8 grid of pixels), bounded work on the thread
+  whatever the size. A hardware bitmap, unreadable there, is compared by size alone (noted).
+- **Clearing (fix):** no session chosen, or no cover: the table wants nothing (a pending completion counts for nothing)
+  and the comparison forgets. Dispose clears the session ids and the print too.
+- **Proofs (fix):** the island proof's new `media-details` stage, all measured on the emulator:
+  - wide and tall covers are cropped centred (green 1369 px, red 0) with round corners (corner pixel black);
+  - a cover arriving after the title fades in over 9 frames, its level only rising;
+  - a long title is faded at its end (start ink 168, last 4 dp 0), stays in its slot, scrolls within 2.5 s, and stops
+    when `title-scroll` goes off mid-scroll;
+  - a right-to-left title is faded at its left end (start ink 237, end 0).
+  `media-sessions` adds a 40 ms pause and resume, which ends playing. All PASS.
+- Still open, as you say: the Figma record of the media state, and the S24 (frame stats with the bars looping, the
+  owner's look).
+
 ## 7. Sign-off

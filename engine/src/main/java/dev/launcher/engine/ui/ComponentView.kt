@@ -400,8 +400,7 @@ class ComponentView(
             "text" -> TextPainter(tokens)
             "icon" -> IconPainter(tokens, glyphs)
             "box" -> BoxPainter()
-            "image" -> ImagePainter(fade = { dev.launcher.engine.ui.motion.PresetMotion.curve("motion.state") },
-                reduced = { !android.animation.ValueAnimator.areAnimatorsEnabled() })
+            "image" -> ImagePainter()
             else -> Nothing
         }
 

@@ -24,7 +24,7 @@ class SessionMedia(private val ctx: Context, private val handler: Handler, priva
     /**
      * The chosen session's cover, prepared on a worker at no more than [ART_PX] a side before it is published (T-013):
      * one wanted at a time. Its id is the session's (a number per session token, never its app or title), its rev moves
-     * when the art does (its pixels, compared with the last cover's), so an art-only change counts and a track change
+     * when the art does (its size and a grid of its pixels, compared with the last cover's), so an art-only change counts and a track change
      * withdraws the old cover at once. Given to `image` for the `media` source only.
      */
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "kdl-media-art").apply { isDaemon = true } }
@@ -33,7 +33,7 @@ class SessionMedia(private val ctx: Context, private val handler: Handler, priva
     private var nextSession = 0
     private var artKey: Any? = null
     /** The last cover seen, to tell a real change from a new copy of the same one (one bitmap held). */
-    private var artBitmap: Bitmap? = null
+    private var artPrint: Long = 0L
     private var artRev = 0
     private val versionState = androidx.compose.runtime.mutableIntStateOf(0)
     private val tableChanged = table.subscribe {
@@ -93,7 +93,7 @@ class SessionMedia(private val ctx: Context, private val handler: Handler, priva
         if (disposed) return
         val pick = MediaPick.choose(watched.map { MediaPick.Session(it, it.playbackState?.state) })?.key
         val md = pick?.metadata
-        val art = pick?.let { wantArt(it, md) }
+        val art = if (pick == null) { forgetArt(); null } else wantArt(pick, md)
         val next = if (pick == null) MediaState.NONE else MediaState.of(
             playing = MediaPick.playing(pick.playbackState?.state),
             title = md?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: md?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE),
@@ -111,15 +111,35 @@ class SessionMedia(private val ctx: Context, private val handler: Handler, priva
             ?: md?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
         val id = "s" + sessionIds.getOrPut(c.sessionToken) { ++nextSession }
         if (sessionIds.size > 64) sessionIds.keys.retainAll(watched.map { it.sessionToken }.toSet())
-        if (bmp == null) { artBitmap = null; table.update(emptyList()); return null }
-        // Every read of the metadata hands a new copy of the bitmap: the art changed only if its session or its pixels did.
-        val last = artBitmap
-        if (id != artKey || last == null || !(last.width == bmp.width && last.height == bmp.height && last.sameAs(bmp))) {
-            artKey = id; artBitmap = bmp; artRev++
+        // Another app's picture: refused past [MAX_ART_SIDE] or [MAX_ART_BYTES] before anything copies or compares it.
+        if (bmp == null || bmp.width > MAX_ART_SIDE || bmp.height > MAX_ART_SIDE || bmp.allocationByteCount > MAX_ART_BYTES) {
+            forgetArt(); return null
         }
+        // Every read of the metadata hands a new copy of the bitmap: the art changed only if its session or its print did
+        // (its size and a fixed grid of its pixels: bounded work on this thread, whatever the picture's size).
+        val print = print(bmp)
+        if (id != artKey || print != artPrint) { artKey = id; artPrint = print; artRev++ }
         val rev = artRev.toString()
         table.update(listOf(PreparedPictures.Want(id, rev, bmp)))
         return if (table.picture(id, rev) != null) MediaArt(id, rev) else null
+    }
+
+    /** No cover: the table wants nothing (a pending completion then counts for nothing) and the comparison forgets. */
+    private fun forgetArt() {
+        artKey = null
+        artPrint = 0L
+        table.update(emptyList())
+    }
+
+    /** [b]'s size and an 8 x 8 grid of its pixels; a hardware bitmap (not readable here) by its size alone. */
+    private fun print(b: Bitmap): Long {
+        var h = (b.width.toLong() shl 20) xor b.height.toLong()
+        if (b.config == Bitmap.Config.HARDWARE || b.isRecycled) return h
+        for (j in 0 until 8) for (i in 0 until 8) {
+            val x = (b.width - 1) * i / 7; val y = (b.height - 1) * j / 7
+            h = h * 1_000_003L xor b.getPixel(x, y).toLong()
+        }
+        return h
     }
 
     /** On the worker: [b] scaled to fit [ART_PX] (never up), as a drawable of its own; a URI art is never read (D-095). */
@@ -137,6 +157,10 @@ class SessionMedia(private val ctx: Context, private val handler: Handler, priva
         /** The cover's largest side once prepared: 2x draft 4's 20 dp slot at the S24's density, rounded up. */
         const val ART_PX = 128
 
+        /** Another app's cover is refused past this side (px) or these bytes, before any copy or comparison. */
+        const val MAX_ART_SIDE = 4096
+        const val MAX_ART_BYTES = 16 * 1024 * 1024
+
         /** Sessions followed at once (in the system's order); a phone rarely has more than three. */
         const val MAX_SESSIONS = 8
     }
@@ -150,6 +174,9 @@ class SessionMedia(private val ctx: Context, private val handler: Handler, priva
         watched = emptyList()
         state = MediaState.NONE
         listeners.clear()
+        artKey = null
+        artPrint = 0L
+        sessionIds.clear()
         tableChanged()
         table.dispose()
         worker.shutdownNow()

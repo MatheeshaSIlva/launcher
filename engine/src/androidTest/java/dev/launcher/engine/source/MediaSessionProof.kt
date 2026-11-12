@@ -115,6 +115,15 @@ class MediaSessionProof(private val instrumentation: Instrumentation) {
             s = waitFor(feed, "resume", errors) { it.playing && it.title == "B2" }
             lines += "pause and resume: ok"
 
+            // Paused and resumed within 100 ms: it ends playing, whatever it published between.
+            b.state(PlaybackState.STATE_PAUSED)
+            SystemClock.sleep(40)
+            b.state(PlaybackState.STATE_PLAYING)
+            s = waitFor(feed, "pause and resume within 100 ms", errors) { it.playing && it.title == "B2" }
+            SystemClock.sleep(200)
+            if (!onFeed { feed.state().playing }) errors += "after a 40 ms pause it ended not playing"
+            lines += "40 ms pause: ends playing"
+
             // B ends while A plays: A is chosen.
             a.state(PlaybackState.STATE_PLAYING)
             b.release()

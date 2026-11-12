@@ -97,6 +97,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             stage("rolls") { rolls(d, result, errors) }
             stage("reduced") { reduced(d, result, errors) }
             stage("media") { media(d, result, errors) }
+            stage("media-details") { mediaDetails(d, result, errors) }
         } finally {
             overlay("none")
             sh("settings put system user_rotation ${rotation.ifEmpty { "0" }}")
@@ -474,19 +475,128 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
 
     // ------------------------------------------------------------------------------------------------ media (T-013)
 
-    /** One cover, "s1" at revision "1": a diagonal terracotta to blue, 300 px square (cropped to the slot). */
+    /**
+     * The proof's covers: "s1" a diagonal terracotta to blue square; "wide" 400 x 200 and "tall" 200 x 400, each red in
+     * its outer quarters and green in its middle half along its long side, so a centred crop of the slot shows green
+     * only (a crop that stretched or did not centre shows red).
+     */
     private object ProofArt : PictureSource {
         override val version = androidx.compose.runtime.mutableIntStateOf(0)
-        private val bmp by lazy {
+        private val square by lazy {
             Bitmap.createBitmap(300, 300, Bitmap.Config.ARGB_8888).also { b ->
                 val p = Paint(Paint.ANTI_ALIAS_FLAG)
                 p.shader = android.graphics.LinearGradient(0f, 0f, 300f, 300f, Color.rgb(217, 134, 95), Color.rgb(40, 60, 120), android.graphics.Shader.TileMode.CLAMP)
                 Canvas(b).drawRect(0f, 0f, 300f, 300f, p)
             }
         }
-        override fun has(id: String, rev: String) = id == "s1" && rev == "1"
-        override fun picture(id: String, rev: String): android.graphics.drawable.Drawable? =
-            if (has(id, rev)) android.graphics.drawable.BitmapDrawable(null as android.content.res.Resources?, bmp) else null
+        private fun banded(w: Int, h: Int) = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { b ->
+            b.eraseColor(Color.RED)
+            val c = Canvas(b); val g = Paint().apply { color = Color.GREEN }
+            if (w > h) c.drawRect(w / 4f, 0f, w * 3 / 4f, h.toFloat(), g) else c.drawRect(0f, h / 4f, w.toFloat(), h * 3 / 4f, g)
+        }
+        private val wide by lazy { banded(400, 200) }
+        private val tall by lazy { banded(200, 400) }
+        override fun has(id: String, rev: String) = rev == "1" && id in setOf("s1", "wide", "tall")
+        override fun picture(id: String, rev: String): android.graphics.drawable.Drawable? {
+            if (!has(id, rev)) return null
+            val b = when (id) { "wide" -> wide; "tall" -> tall; else -> square }
+            return android.graphics.drawable.BitmapDrawable(null as android.content.res.Resources?, b)
+        }
+    }
+
+    /**
+     * The media state's details: covers of other shapes cropped centred into the slot with round corners; a cover arriving
+     * after the title fading in on the host's presence motion (no frame of it whole at once); a long title faded at its end
+     * and scrolling, its scroll stopping when `title-scroll` goes off mid-scroll; a right-to-left title.
+     */
+    private fun mediaDetails(d: ComponentDef, result: Bundle, errors: MutableList<String>) {
+        val density = ctx.resources.displayMetrics.density
+        val lines = ArrayList<String>()
+        session(d, at(21, 40), 64, hour24 = true) { s ->
+            val (ex, ey) = s.expected()
+            val cy = ey.toInt()
+            fun settled(): Bitmap { repeat(45) { s.step() }; return s.capture() }
+            // The cover's slot in screen pixels: the pill's left + 14 dp, 20 dp square, centred on the line.
+            fun slot(b: Bitmap): android.graphics.RectF {
+                val e = s.edges(b, cy)
+                val l = e[0] + 14 * density; val t = ey - 10 * density
+                return android.graphics.RectF(l, t, l + 20 * density, t + 20 * density)
+            }
+            for (shape in listOf("wide", "tall")) {
+                s.media(MediaState.of(true, "Halftone", null, "proof", MediaArt(shape, "1")))
+                val b = settled()
+                val r = slot(b)
+                var red = 0; var green = 0
+                for (y in (r.top + 3 * density).toInt() until (r.bottom - 3 * density).toInt())
+                    for (x in (r.left + 3 * density).toInt() until (r.right - 3 * density).toInt()) {
+                        val px = b.getPixel(x, y)
+                        if ((px shr 16 and 255) > 180 && (px shr 8 and 255) < 80) red++
+                        if ((px shr 8 and 255) > 180 && (px shr 16 and 255) < 80) green++
+                    }
+                if (red > 0 || green < 100) errors += "$shape cover: crop shows $red red px, $green green (expected a centred crop: green only)"
+                // A round corner: the slot's very corner pixel is the pill's black, a pixel 2 dp in is the cover.
+                val corner = b.getPixel(r.left.toInt(), r.top.toInt())
+                if ((corner shr 8 and 255) > 60) errors += "$shape cover: its corner is square (corner pixel ${Integer.toHexString(corner)})"
+                val inside = b.getPixel((r.left + 4 * density).toInt(), (r.top + 4 * density).toInt())
+                if ((inside shr 8 and 255) < 120) errors += "$shape cover: nothing drawn 4 dp in from its corner (${Integer.toHexString(inside)})"
+                lines += "$shape: green $green px, red $red px, corner ${Integer.toHexString(corner)}"
+            }
+            // A cover arriving after the title: it fades in on the presence motion.
+            s.media(MediaState.of(true, "Halftone", null, "proof", null))
+            val b0 = settled()
+            val r0 = slot(b0)
+            fun coverLevel(b: Bitmap): Int {
+                var sum = 0L; var n = 0
+                for (y in (r0.top + 4 * density).toInt() until (r0.bottom - 4 * density).toInt())
+                    for (x in (r0.left + 4 * density).toInt() until (r0.right - 4 * density).toInt()) { sum += b.getPixel(x, y) shr 16 and 255; n++ }
+                return (sum / maxOf(n, 1)).toInt()
+            }
+            if (coverLevel(b0) > 8) errors += "no cover yet, yet its slot shows ${coverLevel(b0)}"
+            s.media(MediaState.of(true, "Halftone", null, "proof", MediaArt("s1", "1")))
+            val levels = ArrayList<Int>()
+            repeat(20) { s.step(); levels += coverLevel(s.capture()) }
+            val whole = levels.last()
+            if (levels.first() >= whole - 2) errors += "the cover arrived whole in its first frame: $levels"
+            if (levels.zipWithNext().any { (a, b) -> b < a - 2 }) errors += "the cover's fade went back: $levels"
+            lines += "cover arrives over ${levels.indexOfFirst { it >= whole - 2 } + 1} frames: $levels"
+            // A long title: faded at its end, scrolling while it plays; the toggle off mid-scroll stops it.
+            val long = "A very long song title that cannot fit in sixty-four dp"
+            s.media(MediaState.of(true, long, null, "proof", MediaArt("s1", "1")))
+            val t0 = settled()
+            val e = s.edges(t0, cy)
+            val titleL = e[0] + 40 * density; val titleR = titleL + 64 * density
+            fun ink(b: Bitmap, x0: Float, x1: Float): Int {
+                var n = 0
+                for (y in (ey - 8 * density).toInt()..(ey + 8 * density).toInt()) for (x in x0.toInt() until x1.toInt()) if ((b.getPixel(x, y) shr 16 and 255) > 128) n++
+                return n
+            }
+            val head = ink(t0, titleL, titleL + 12 * density); val tail = ink(t0, titleR - 4 * density, titleR)
+            if (tail * 4 > head) errors += "the long title's end is not faded (ink at its start $head, in its last 4 dp $tail)"
+            if (ink(t0, titleR + 1, titleR + 6 * density) > 0) errors += "the long title draws past its slot"
+            // Scrolling: the picture of the title changes after its pause at the start (2 s).
+            fun titleCrop(b: Bitmap) = Bitmap.createBitmap(b, titleL.toInt(), (ey - 9 * density).toInt(), (64 * density).toInt(), (18 * density).toInt())
+            val before = titleCrop(t0)
+            repeat(300) { s.step() }   // 2.5 s at 120 Hz
+            val moved = titleCrop(s.capture())
+            if (before.sameAs(moved)) errors += "the long title did not scroll in 2.5 s"
+            s.view.let { v -> instrumentation.runOnMainSync { v.setProp("title-scroll", Value.Bool.FALSE) } }
+            repeat(60) { s.step() }
+            val stopped1 = titleCrop(s.capture())
+            repeat(120) { s.step() }
+            val stopped2 = titleCrop(s.capture())
+            if (!stopped1.sameAs(stopped2)) errors += "the title still scrolls after title-scroll went off"
+            lines += "long title: start ink $head, end ink $tail; scrolled; stopped with the toggle off"
+            // Right to left: drawn inside its slot, faded at its end (the left).
+            instrumentation.runOnMainSync { s.view.setProp("title-scroll", Value.Bool.TRUE) }
+            s.media(MediaState.of(true, "שיר ארוך מאוד שלא נכנס במקום", null, "proof", MediaArt("s1", "1")))
+            val r1 = settled()
+            if (ink(r1, titleR + 1, titleR + 6 * density) > 0) errors += "the right-to-left title draws past its slot"
+            val rHead = ink(r1, titleR - 12 * density, titleR); val rTail = ink(r1, titleL, titleL + 4 * density)
+            if (rTail * 4 > rHead) errors += "the right-to-left title's end (left) is not faded (start $rHead, end $rTail)"
+            lines += "right to left: start ink $rHead, end ink $rTail"
+            s.media(MediaState.NONE)
+        }
+        result.putString("media-details", lines.joinToString("; "))
     }
 
     /**

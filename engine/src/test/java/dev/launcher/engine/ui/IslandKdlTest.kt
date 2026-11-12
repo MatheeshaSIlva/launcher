@@ -29,7 +29,7 @@ class IslandKdlTest {
     }
 
     private fun host(hour24: Boolean = true, hour: Int = 13, minute: Int = 5, level: Int = 64,
-        units: Units = Units(1f, 1f), playing: Boolean = false): ComponentHost {
+        units: Units = Units(1f, 1f), playing: Boolean = false, art: Boolean = false): ComponentHost {
         val env = object : Env {
             override fun state(name: String) = Value.Null
             override fun prop(name: String) = when (name) { "hour24" -> Value.Bool.of(hour24); "title-scroll" -> Value.Bool.TRUE; else -> Value.Null }
@@ -38,6 +38,8 @@ class IslandKdlTest {
                 "battery.level" -> Value.Num(level.toDouble())
                 "media.playing" -> Value.Bool.of(playing)
                 "media.title" -> if (playing) Value.Str("Halftone") else Value.Null
+                "media.has-art" -> Value.Bool.of(art)
+                "media.art" -> if (art) dev.launcher.engine.source.MediaState.of(true, "t", null, "p", dev.launcher.engine.source.MediaArt("s1", "1")).member("art") else Value.Null
                 else -> Value.Null
             }
             override fun now() = hour * 3_600_000L + minute * 60_000L
@@ -125,7 +127,9 @@ class IslandKdlTest {
             assertEquals(28f * density, media.children[1].length("size"))
             assertEquals(92f * density, media.children[2].length("width"))
             assertEquals(236f, 14f + 90f + 28f + 92f + 12f)
-            val cover = left.labelled("Cover")
+            assertEquals(20f * density, left.labelled("Cover slot").length("width"))
+            assertEquals(listOf<HostNode>(), left.labelled("Cover slot").children)   // no art yet: the slot stays, empty
+            val cover = host(units = Units(3f, density), playing = true, art = true).root.labelled("Media").children[0].labelled("Cover slot").labelled("Cover")
             assertEquals("image", cover.view.primitive)
             assertEquals(20f * density, cover.length("size"))
             assertEquals(4f * density, cover.length("radius"))

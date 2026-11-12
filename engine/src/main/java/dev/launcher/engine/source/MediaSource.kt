@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.callbackFlow
 
 /**
  * `media` (T-013): the one session the engine chooses ([MediaPick]), as plain data. A partial delivery of the spec's row:
- * `playing`, `title`, `artist` and `app` now; the art comes as a prepared picture (T-013 slice 2); position and the list
+ * `playing`, `title`, `artist` and `app` now; the art (`art`, and `has-art` for a condition) comes as a prepared picture (T-013 slice 2); position and the list
  * of sessions come with E3's player. [NONE] when nothing plays, nothing is paused, or reading is denied.
  */
 data class MediaState(val playing: Boolean, val title: String?, val artist: String?, val app: String?,
@@ -19,6 +19,7 @@ data class MediaState(val playing: Boolean, val title: String?, val artist: Stri
         "artist" -> artist?.let { Value.Str(it) } ?: Value.Null
         "app" -> app?.let { Value.Str(it) } ?: Value.Null
         "art" -> picture
+        "has-art" -> Value.Bool.of(art != null)
         else -> Value.Null
     }
 

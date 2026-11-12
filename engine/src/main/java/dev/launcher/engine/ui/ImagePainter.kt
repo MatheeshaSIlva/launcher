@@ -9,24 +9,12 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import android.view.Choreographer
-import android.view.animation.PathInterpolator
-import androidx.compose.runtime.mutableFloatStateOf
-import dev.launcher.app.design.Curve
 import dev.launcher.engine.expr.Value
 import dev.launcher.engine.layout.Measured
 import dev.launcher.engine.layout.Size
 import kotlin.math.ceil
 import kotlin.math.max
 
-/**
- * `image`'s painter (T-013): a prepared picture ([Value.Picture], only a source makes one) in a `size` square, cropped to
- * fill it (`fit="cover"`, centred) with corners of `radius`. The picture is looked up in its own source's provider alone
- * ([pictures], only the sources this component declared and was granted): a picture from another source, or one that
- * has left, draws nothing. A new picture crossfades in over the one shown on [fade] (`motion.state`), the outgoing one
- * held by this painter for the fade only; motion reduced, it changes at once. Nothing is drawn before a picture is ready
- * (the slot stays, so nothing moves when it arrives).
- */
 /** Who may draw whose pictures (T-013, D-068): pure, so its refusals are tested on the JVM. */
 object ImageAccess {
     /** The providers a component may read: a source it declared, present, whose capability it was granted. */
@@ -40,70 +28,41 @@ object ImageAccess {
     }
 }
 
+/**
+ * `image`'s painter (T-013): a prepared picture ([Value.Picture], only a source makes one) in a `size` square, cropped to
+ * fill it (`fit="cover"`, centred) with corners of `radius`. The picture is looked up in its own source's provider alone
+ * ([pictures], only the sources this component declared and was granted): a picture from another source, or one that
+ * has left, draws nothing. It has no motion of its own: a picture comes and goes on the host's presence motion (the KDL
+ * gives the image `visible`, `enter` and `exit`), which is interruptible, follows reduced motion and stops when hidden,
+ * detached or disposed (Codex's review: a clock of its own did none of that). [key] only observes.
+ */
 class ImagePainter(
     /** Providers by source name; a source missing here may not be read. */
     internal var pictures: Map<String, PictureSource> = emptyMap(),
-    private val fade: () -> Curve? = { null },
-    private val reduced: () -> Boolean = { false },
 ) : Painter {
-    private class Shown(val key: Value.Picture, val drawable: Drawable, val version: Int)
-
-    private var shown: Shown? = null
-    private var outgoing: Shown? = null
-    /** The fade's progress, 0 → 1 (snapshot state: the content is recorded again as it moves). */
-    private val progress = mutableFloatStateOf(1f)
-    private var fadeStart = 0L
-    private var ticking = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val rect = RectF()
     private val matrix = Matrix()
+    /** The drawable of the picture last drawn, kept while that picture and its provider's version stand. */
+    private var kept: Pair<Any, Drawable>? = null
 
     private fun picture(n: HostNode) = n.value("picture") as? Value.Picture
 
-    /** What [k] shows now in its own provider, or null; asked again whenever that provider's version moves. */
-    private fun current(k: Value.Picture?): Shown? {
-        if (k == null) return null
+    private fun drawable(k: Value.Picture?): Drawable? {
         val source = ImageAccess.provider(pictures, k) ?: return null
-        val version = source.version.intValue
-        shown?.let { if (it.key == k && it.version == version) return it }
-        val d = source.picture(k.id, k.rev) ?: return null
-        return Shown(k, d, version)
+        val tag = Pair(k, source.version.intValue)
+        kept?.let { if (it.first == tag) return it.second }
+        val d = source.picture(k!!.id, k.rev) ?: return null
+        kept = tag to d
+        return d
     }
 
-    /** Follows the binding: a different picture starts a crossfade from the one shown. Drawing thread. */
-    private fun follow(n: HostNode) {
-        val next = current(picture(n))
-        val was = shown
-        if (next?.key == was?.key && next?.version == was?.version) return
-        shown = next
-        if (next != null && was != null && next.key == was.key) return     // the same picture, its provider moved
-        if (reduced() || was == null && next == null) { outgoing = null; progress.floatValue = 1f; return }
-        outgoing = was
-        fadeStart = System.nanoTime()
-        progress.floatValue = 0f
-        tick()
-    }
-
-    private fun tick() {
-        if (ticking) return
-        ticking = true
-        Choreographer.getInstance().postFrameCallback(object : Choreographer.FrameCallback {
-            override fun doFrame(now: Long) {
-                val c = fade() as? Curve.Ease
-                val ms = c?.ms ?: 120f
-                val t = ((System.nanoTime() - fadeStart) / 1e6f / ms).coerceIn(0f, 1f)
-                progress.floatValue = if (c == null) t else PathInterpolator(c.x1, c.y1, c.x2, c.y2).getInterpolation(t)
-                if (t < 1f && !reduced()) Choreographer.getInstance().postFrameCallback(this)
-                else { progress.floatValue = 1f; outgoing = null; ticking = false }
-            }
-        })
-    }
-
-    override fun release(node: HostNode) { shown = null; outgoing = null; progress.floatValue = 1f }
+    override fun release(node: HostNode) { kept = null }
 
     override fun key(node: HostNode): Any {
-        follow(node)
-        return Key(shown?.key, shown?.version, outgoing?.key, progress.floatValue, size(node), radius(node))
+        val k = picture(node)
+        val source = k?.let { pictures[it.source] }
+        return Key(k, source?.version?.intValue, source?.has(k.id, k.rev) == true, size(node), radius(node))
     }
 
     override fun measure(node: HostNode, maxWidth: Int, maxHeight: Int): Measured {
@@ -113,11 +72,8 @@ class ImagePainter(
     }
 
     override fun paint(canvas: Canvas, node: HostNode, width: Int, height: Int) {
-        val s = size(node)
-        val r = radius(node)
-        val k = progress.floatValue
-        outgoing?.let { draw(canvas, it.drawable, s, r, 1f - k) }
-        shown?.let { draw(canvas, it.drawable, s, r, if (outgoing == null) 1f else k) }
+        val d = drawable(picture(node)) ?: return
+        draw(canvas, d, size(node), radius(node), 1f)
     }
 
     /** [d] cropped to fill an [s] square (centred), corners [r], at [alpha]: one analytic round rect, GPU or software. */
@@ -137,7 +93,7 @@ class ImagePainter(
         paint.shader = null
     }
 
-    private data class Key(val shown: Value.Picture?, val version: Int?, val out: Value.Picture?, val k: Float, val size: Float, val radius: Float)
+    private data class Key(val picture: Value.Picture?, val version: Int?, val available: Boolean, val size: Float, val radius: Float)
 
     companion object {
         const val DEFAULT_SIZE_PX = 20f

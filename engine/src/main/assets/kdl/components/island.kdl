@@ -29,7 +29,9 @@ component "island" version="0.2.0" {
       }
       row width=(dp)236 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{media.playing}" enter="fade @motion.enter" exit="fade @motion.state" label="Media" {
         row width=(dp)90 gap=(dp)6 align="centre-line" label="Left" {
-          image picture="{media.art}" size=(dp)20 radius=(dp)4 label="Cover"
+          box width=(dp)20 height=(dp)20 align="centre" label="Cover slot" {
+            image picture="{media.art}" size=(dp)20 radius=(dp)4 visible="{media.has-art}" enter="fade @motion.state" exit="fade @motion.state" label="Cover"
+          }
           text "{media.title}" font="plex-sans" size=(dp)13 weight=400 color="#F2F2F2" width=(dp)64 overflow="fade" fade=(dp)12 scroll="{@title-scroll && media.playing}" label="Title"
         }
         spacer size=(dp)28
