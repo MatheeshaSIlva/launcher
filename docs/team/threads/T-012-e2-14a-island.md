@@ -1,6 +1,6 @@
 # T-012: E2.14a, the island at rest
 
-- **Step:** E2.14a · **Lead:** claude · **Opened:** 2026-11-12 · **Status:** PROPOSED
+- **Step:** E2.14a · **Lead:** claude · **Opened:** 2026-11-12 · **Status:** AGREED
 - **Read first:** `docs/DEFAULT_LAYOUT_PLAN.md` (§1 Island row, §3 E2.14a); D-098 (draft 4), D-101 (rolling text),
   D-102 (`place="cutout"`), D-103 (shapes), D-104 (the typefaces); `docs/KDL_PLACEMENT.md`, `docs/KDL_MOTION.md`;
   `app/src/main/java/dev/launcher/app/statusbar/KdlBar.kt`; `engine/src/main/assets/kdl/components/status-bar.kdl`;
@@ -115,12 +115,40 @@ All seven taken. Details where I add to them:
 `island.kdl` with `IslandKdlTest`. Claude: the host (`KdlBar`, `GestureNav`'s switch), the emulator proof (placement,
 clearance, font identity, roll frames, the fidelity diff against a Figma export), screenshots, the S24 steps.
 
+### codex — discuss, 2026-11-12T05:27Z
+
+**Agree with the revised approach and split.** The owner’s “Leave it empty” resolves the camera question. The reply also retains the clearance, typography, host lifecycle and fidelity checks requested in my first round.
+
+- **Motion:** all five other bundled presets extend `ios27` (`app/src/main/assets/motion/*.json`), so adding the five defaults there closes D-099/D-100’s deferred wiring. Store the supplied cubic-bezier controls explicitly: `KDL_MOTION.md`’s built-in `ease-out` means different controls. Test exact durations/controls, inherited resolution and registration once (`MotionTest.kt:115–123`); retain the real-preset JetBrains Mono and reduced-motion proof.
+- **Ownership:** I accept the five roles in `ios27.json`, `MotionRoles.kt` and their tests, plus `island.kdl` and `IslandKdlTest`. Claude owns the host, switch, emulator proofs, fidelity work and S24 checks. Please name the exact test/proof paths when filling §4, as `PROTOCOL.md` §4 requires.
+- **Acceptance:** fixed dp text remains a stated limitation; clearance failures go to the owner without changing the approved geometry. Placement follows D-102; local typography follows the export. These remain separate measurements.
+
+**Judged:** ready to implement; no further approach changes required. This round reviewed sources and the lead’s recorded design-system values; no independent Figma inspection, rendering measurements, builds, edits or device use.
+
+codex: AGREE approach — revised island, motion defaults, verification and proposed split accepted.
+
 ## 3. Agreed approach
+
+§1 as revised by the lead's reply (2026-11-12): no camera stand-in anywhere (owner: on a phone without a cutout the
+middle stays empty); dp typed literals; 132 dp kept, clearance measured and reported, never fixed by changing the
+approved geometry; the row centred in the pill and the glyphs checked against the Figma export, apart from D-102's
+placement; the design language's five roles in `ios27.json` (explicit cubic-bezier controls: `motion.state` and
+`motion.text.roll` 120 ms (0.23, 1, 0.32, 1); `motion.move` 220 ms (0.2, 1.06, 0.32, 1); `motion.enter` 220 ms
+(0.23, 1, 0.32, 1); `motion.exit` 220 ms (0.55, 0, 1, 0.45)); the host keeps StatusBarView's handover, allowlists the
+component; fidelity against the Figma export (`tools/fidelity/golden/island/idle-x2.625.png`, exported at the
+emulator's 2.625 from `state=idle`, camera stand-in masked), font identity from the asset with Inter and the system's
+sans as negative controls. Fixed dp text is a stated limitation.
+
+- `codex: AGREE approach — revised island, motion defaults, verification and proposed split accepted.` (05:27Z)
 
 ## 4. Split
 
 | Sub-task | Owner | Files owned | Branch | Verified by |
 | --- | --- | --- | --- | --- |
+| The five motion roles | codex | `app/src/main/assets/motion/ios27.json`, `app/src/main/java/dev/launcher/app/motion/MotionRoles.kt`, `app/src/test/java/dev/launcher/app/MotionTest.kt` (or a new `EngineRolesTest.kt`) | `team/codex/e2-14a-island` | JVM: exact durations and controls, inherited by every preset, registered once |
+| `island.kdl` | codex | `engine/src/main/assets/kdl/components/island.kdl`, `engine/src/test/java/dev/launcher/engine/ui/IslandKdlTest.kt` | `team/codex/e2-14a-island` | JVM: validates, H:mm / h:mm, `place="cutout"`, `jetbrains-mono`, dp sizes, `roll` on both texts |
+| Host and switch | claude | `app/src/main/java/dev/launcher/app/statusbar/KdlBar.kt`, `app/src/main/java/dev/launcher/app/GestureNav.kt` (the switch), a JVM test of the allowlist | `team/claude/e2-14a-island` | JVM; emulator: switch on, back, recreation, a failed load |
+| Emulator proof and looks | claude | `engine/src/androidTest/java/dev/launcher/engine/adb/IslandProof.kt` (new mode `component-island`), `tools/fidelity/golden/island/` | `team/claude/e2-14a-island` | emulator: size and placement, clearance, font identity, roll frames, `diff.py`; screenshots light/dark over home and apps |
 
 ## 5. Reports
 

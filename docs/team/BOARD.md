@@ -35,7 +35,7 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 | --- | --- | --- | --- | --- | --- |
 | T-008 | The default layout's build plan (`docs/DEFAULT_LAYOUT_PLAN.md`); E2.13-17 re-aimed at the island (owner) | `threads/T-008-default-layout-plan.md` | claude (lead), codex | `engine` | AGREED (plan, updated for draft 4, D-098; next E2.13a) |
 | T-011 | E2.13c: rounded shapes that morph their size and corners | `threads/T-011-e2-13c-shapes.md` | claude (lead), codex | `team/claude/e2-13c-shapes`, `team/codex/e2-13c-shapes` | DONE, merged (D-103); Q-003 open with the owner |
-| T-012 | E2.14a: the island at rest | `threads/T-012-e2-14a-island.md` | claude (lead), codex | `team/claude/e2-14a-island`, `team/codex/e2-14a-island` | PROPOSED (fonts bundled, D-104) |
+| T-012 | E2.14a: the island at rest | `threads/T-012-e2-14a-island.md` | claude (lead), codex | `team/claude/e2-14a-island`, `team/codex/e2-14a-island` | AGREED; building (codex: roles, island.kdl; claude: host, proof) |
 | T-010 | E2.13b: the `device` source and placement on the camera cutout | `threads/T-010-e2-13b-cutout.md` | claude (lead), codex | `team/claude/e2-13b-cutout`, `team/codex/e2-13b-cutout` | SIGNED, merged (D-102); the S24 check outstanding (owner) |
 | T-009 | E2.13a: size and presence motion, place springs, rolling text | `threads/T-009-e2-13a-motion.md` | claude (lead), codex | `team/claude/e2-13a-motion`, `team/codex/e2-13a-motion` | DONE (13a-0 to 13a-3 merged; D-099, D-100, D-101) |
 | T-007 | E2 slice 12: notification icons, `each`, the bar's remaining symbols | `threads/T-007-e2-slice12-notification-icons.md` | claude (lead), codex | merged | DONE (D-095) |
