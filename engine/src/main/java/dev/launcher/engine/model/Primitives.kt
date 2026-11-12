@@ -76,7 +76,9 @@ object Primitives {
             AttrDef("reveal", AttrType.NUMBER, 1.0) + AttrDef("clip", AttrType.BOOL, false), container = true),
         PrimitiveDef("text", lengths("size", "fade") + listOf(
             AttrDef("overflow", AttrType.oneOf("clip", "fade"), "clip", bindable = false),
-            AttrDef("scroll", AttrType.BOOL, false)) + fixed("roll") + listOf(AttrDef("font", AttrType.STRING), AttrDef("weight", AttrType.INT, 400),
+            AttrDef("scroll", AttrType.BOOL, false),
+            // E2.14d: a change decodes over `decode` ms (0: off) through the glyphs of `decode-glyphs`.
+            AttrDef("decode", AttrType.NUMBER, 0.0, bindable = false), AttrDef("decode-glyphs", AttrType.STRING, bindable = false)) + fixed("roll") + listOf(AttrDef("font", AttrType.STRING), AttrDef("weight", AttrType.INT, 400),
             AttrDef("blend", AttrType.oneOf("normal", "knockout"), "normal", bindable = false),
             AttrDef("color", AttrType.COLOR), AttrDef("tnum", AttrType.BOOL, false),
             AttrDef("align", AttrType.oneOf("start", "center", "end"), "start"), AttrDef("max-lines", AttrType.INT, 1)),

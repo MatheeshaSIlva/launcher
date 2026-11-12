@@ -67,6 +67,7 @@ class AdbProofInstrumentation : Instrumentation() {
                 "component-shape" -> dev.launcher.engine.ui.ShapeProof(this).run(result)
                 "component-measure" -> dev.launcher.engine.ui.MeasureProof(this).run(result)
                 "component-blob" -> dev.launcher.engine.ui.BlobProof(this).run(result)
+                "component-decode" -> dev.launcher.engine.ui.DecodeProof(this).run(result)
                 "component-island" -> dev.launcher.engine.ui.IslandProof(this, args.getString("cutout") ?: "emu01").run(result)
                 "media-sessions" -> dev.launcher.engine.source.MediaSessionProof(this).run(result)
                 "media-hold" -> dev.launcher.engine.source.MediaHold(this, args).run(result)

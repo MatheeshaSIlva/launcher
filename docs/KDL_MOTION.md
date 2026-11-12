@@ -46,6 +46,13 @@ including through `fade-up`. `scale` here is a presence effect; other channel na
 `value` belong to `transition`. Each presence declaration takes one clause; commas
 are permitted only inside spring/bezier curves.
 
+`decode` (E2.14d) is accepted only on `text`: a duration in ms (0 to 3000; 0, the default, is off) and `decode-glyphs`,
+the pool scrambled characters are drawn from (default letters, digits and a few signs). When the text changes, every
+character that changed scrambles through the pool, a new glyph each 50 ms, and settles on its new letter, one after
+another from the start (the first at 35 % of the duration, the last at its end). Unchanged characters and spaces stay.
+A change mid-way decodes from what is shown; a text leaving or out of sight lands on its new text; motion reduced
+changes it at once. Its layout is the new text's throughout, so nothing around it moves. Both are literal only.
+
 A presence clause may also take `delay(Nms)` (T-013): 0 to 1000 ms, once, literal. The node holds its start (an
 arrival's `enter` values; a departure where it is) for that long, then moves on its curve. A node shown and hidden again
 inside its arrival's delay never shows: a motion still waiting carries no speed. Motion reduced ignores the delay. Codes:

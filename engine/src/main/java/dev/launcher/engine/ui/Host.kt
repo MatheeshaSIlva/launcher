@@ -163,6 +163,9 @@ class HostNode internal constructor(
     internal val hasScroll = view.primitive == "text" && "scroll" in bindings
     internal val loop by lazy { LoopMotion() }
     internal val scroll by lazy { TitleScroll() }
+    /** E2.14d: a text that decodes its changes. */
+    internal val hasDecode = view.primitive == "text" && ((view.attrs["decode"]?.value as? dev.launcher.engine.model.AttrValue.Literal)?.value as? dev.launcher.engine.kdl.KdlValue.Num)?.double?.let { it > 0.0 } == true
+    internal val decode by lazy { DecodeText() }
     internal var drawingAttached = false
     internal var recurringChanged: () -> Unit = {}
     /** Called by the Compose draw node on attach/detach; recurring work never runs off screen. */
@@ -194,7 +197,9 @@ class HostNode internal constructor(
             eligible, motionContext.reduced(), frozen, motionContext.resolver.curve("motion.state"), now)
         if (hasScroll) scroll.enabled(value("scroll") == Value.Bool.TRUE, eligible, frozen, motionContext.reduced(),
             motionContext.resolver.curve("motion.move"), now)
-        return (hasLoop && loop.busy) || (hasScroll && scroll.busy)
+        // A decode leaving or out of sight lands on its text (nothing scrambles unseen).
+        if (hasDecode && (frozen || !eligible) && decode.busy) decode.step(Long.MAX_VALUE)
+        return (hasLoop && loop.busy) || (hasScroll && scroll.busy) || (hasDecode && decode.busy)
     }
     /** The size its surface draws at now. */
     /** The radius declaration its shown radius last followed: a new one starts a handover (T-011). */
@@ -309,8 +314,9 @@ class HostNode internal constructor(
         val busy = nodeMotion?.step(now) == true
         if (hasLoop) loop.step(now)
         if (hasScroll) scroll.step(now)
+        if (hasDecode) decode.step(now)
         shown()
-        return busy || (hasLoop && loop.busy) || (hasScroll && scroll.busy)
+        return busy || (hasLoop && loop.busy) || (hasScroll && scroll.busy) || (hasDecode && decode.busy)
     }
 
     internal fun snapMotion() { nodeMotion?.let { it.snap(); shown() } }
@@ -480,10 +486,12 @@ class ComponentHost(
         for (n in recurringNodes) {
             val height = if (n.hasLoop) n.loop.height else null
             val offset = if (n.hasScroll) n.scroll.offset else null
+            val decoded = if (n.hasDecode) n.decode.text else null
             val busy = n.recurring(visible, now)
             if (busy) startMoving(n)
             else if (!n.isLeaving && n.nodeMotion?.moving != true) moving.remove(n)
-            if (height != (if (n.hasLoop) n.loop.height else null) || offset != (if (n.hasScroll) n.scroll.offset else null)) n.redraw()
+            if (height != (if (n.hasLoop) n.loop.height else null) || offset != (if (n.hasScroll) n.scroll.offset else null) ||
+                decoded != (if (n.hasDecode) n.decode.text else null)) n.redraw()
         }
     }
     /** At most one data-only error per refresh; invalid repeats disappear whole and may recover. */
@@ -711,7 +719,7 @@ class ComponentHost(
                 node.onMoving = startMoving
                 node.motionContext = motionContext
                 node.recurringChanged = { refreshMotion(); node.redraw() }
-                if ("loop-from" in bindings || "scroll" in bindings) recurringNodes += node
+                if ("loop-from" in bindings || "scroll" in bindings || node.hasDecode) recurringNodes += node
                 node.key = p.key
                 node.arriving = !building
                 Instance(node, p.scope)

@@ -121,7 +121,10 @@ class Validator(private val tokens: TokenCheck) {
                 number("loop-period", 200.0, 10000.0)
                 number("loop-phase", 0.0, 1.0)
             }
-            if (n.primitive == "text") number("fade", 0.0, Double.MAX_VALUE)
+            if (n.primitive == "text") {
+                number("fade", 0.0, Double.MAX_VALUE)
+                number("decode", 0.0, dev.launcher.engine.ui.DecodeText.MAX_MS.toDouble())
+            }
         }
 
         fun value(ad: AttrDef, v: AttrValue, scope: Set<String>) {

@@ -31,7 +31,8 @@ class TextPainter(private val tokens: Tokens) : Painter {
 
     override fun key(node: HostNode): Any {
         scrolling(node, prepared(node), node.drawnWidth)
-        return listOf(node.scroll.offset, node.value("overflow"), node.value("fade"), Key(content(node), node.length("size") ?: DEFAULT_SIZE_PX, weight(node),
+        decoding(node)
+        return listOf(node.scroll.offset, if (node.hasDecode) node.decode.text else null, node.value("overflow"), node.value("fade"), Key(content(node), node.length("size") ?: DEFAULT_SIZE_PX, weight(node),
         font(node), color(node), tnum(node), align(node), knockout(node), tokens.version,
         node.nodeMotion?.roll?.takeIf { it.moving }?.glyphs?.map { Triple(it.text, it.y, it.offset) }))
     }
@@ -53,7 +54,9 @@ class TextPainter(private val tokens: Tokens) : Painter {
     override fun paint(canvas: Canvas, node: HostNode, width: Float, height: Float) {
         if (canvas.isHardwareAccelerated) hardwarePaints++ else softwarePaints++
         val p = prepared(node)
-        val text = content(node)
+        decoding(node)
+        // What it shows now: a decoding text's scramble (its layout keeps the real text's width).
+        val text = if (node.hasDecode) node.decode.text else content(node)
         scrolling(node, p, width)
         val fade = node.value("overflow") == Value.Str("fade") && p.measureText(text) > width
         val rtl = rtl(text)
@@ -107,6 +110,15 @@ class TextPainter(private val tokens: Tokens) : Painter {
         if (directionText != text) { directionText = text; directionRtl = TitleScroll.rtl(text) }
         return directionRtl
     }
+    /** E2.14d: its decode told the content now; a change starts the host's clock for it. */
+    private fun decoding(node: HostNode) {
+        if (!node.hasDecode) return
+        val ms = (node.value("decode") as? Value.Num)?.value?.toFloat() ?: 0f
+        val glyphs = (node.value("decode-glyphs") as? Value.Str)?.value ?: ""
+        if (node.decode.configure(content(node), ms, glyphs, node.motionContext.reduced(), node.motionContext.now()) && node.decode.busy)
+            node.recurringChanged()
+    }
+
     private fun scrolling(node: HostNode, p: Paint, width: Float) {
         if ("scroll" !in node.bindings) return
         val changed = node.scroll.configure(content(node), p.measureText(content(node)), width.coerceAtLeast(0f), rtl(content(node)),
