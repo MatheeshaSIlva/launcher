@@ -42,3 +42,37 @@ any version of that needs, and three concepts of the motion for the owner to cho
 
 **Owner's choice needed.** Which concept, A, B or C (or a mix). The island's detailed state and its choreography are
 built after that.
+
+## 2. Assumptions made while the owner is away (2026-11-13; to review)
+
+1. **Concepts, not a choice:** three motion concepts drawn in Figma (A Drop, B Grow then pinch, C Bead). None is built
+   into the island until the owner picks one (or a mix): the choreography and the banner's layout depend on it.
+2. **The banner's content** in the concepts: an app mark (36 dp circle), the sender (IBM Plex Sans Medium 14), one
+   line of text (Regular 13, #B5B5B5), "now" (JetBrains Mono 11, muted), on a 380 x 76 dp black card radius 26, 10 dp
+   under the island. All of it is a first proposal.
+3. **The engine piece is built anyway** (`blob`): every concept needs two shapes joined by a liquid neck, and D-098
+   held this back only until a design asked for it. Up to 4 shapes, AGSL on Android 13+, plain shapes below 13 (no
+   neck).
+4. **The detailed mode's privacy:** like the minimal one, while locked the banner would show the app's name and no text
+   (not built yet; to confirm with the concept).
+
+## 3. Reports
+
+### claude — the blob primitive, 2026-11-13
+
+- **`blob` (`Primitives.kt`, `Host.kt` layout as a box, `BlobPainter.kt`):** the smooth union of its `box` children's
+  shapes, each where its layout and motion have it, in one `fill`, within `smooth`. The boxes inside draw no fill of
+  their own (`BoxPainter`). A shape moving redraws its blob (`ComposeHost` `DrawNode.redraw`).
+- **The shader:** each rounded rectangle's signed distance, a polynomial smooth minimum, antialiased over a pixel. It
+  is drawn over the shapes' bounds plus k / 4, and warmed off screen with the shapes' clip (`ShapeWarmUp`).
+- **Measured on the emulator (`component-blob`):**
+  - a 132 x 32 pill and a 200 x 60 card at gaps 0 to 40 px, `smooth` 24: the middle between them filled at gaps 0, 4
+    and 8, empty at 16 and more (the expected reach, g < k / 2);
+  - the neck 146, then 130 px wide, gone at 16;
+  - away from the neck, the card's far corners identical to a plain rounded rectangle (0 levels);
+  - moving on a 1200 ms place transition, the card's top drawn at 45, 51, 57, 64, 71, 74, 77 px (redrawn every
+    step), ending where the still one is.
+  `component-shape`, `component-island`, `media-sessions` and `component-measure` still PASS.
+- **JVM:** `BlobSchemaTest`.
+- **Not done:** the island's detailed state (it waits for the concept), the S24's cost per frame, and below Android 13
+  on a device.
