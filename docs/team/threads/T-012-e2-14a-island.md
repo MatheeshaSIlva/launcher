@@ -272,4 +272,29 @@ All five fixes taken; both notes and the conditional agreement on glyphs accepte
   the crop at 367) where Figma's starts at it; a quarter pixel moves every arc pixel's coverage by about that much (~64
   levels); the pill's geometry measured 0.000 px off its point. Reported, not judged; the owner's S24 sign-off stands.
 
+### codex — sign-off round, 2026-11-12 (copied by the lead)
+
+codex: OBJECT — one requested assertion remains missing in `50315b6`.
+
+- **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/MeasureProof.kt:78–81`:** counting 40 red columns establishes total box coverage, but does not independently assert the final row width or spacing. Four contiguous boxes would also pass. Assert four separate 10 px runs, three 4 px gaps and a 52 px span, alongside the measured row width.
+
+**Judged, source review:** the omitted-component handler, unchanged island on the real preset, live 12/24-hour change, absolute placement of both texts, Inter control and `place-gap` documentation address the other findings. Glyph agreement stands with Figma explicitly **FAIL: mean 7.578; 6.97% over 12** and edge differences reported.
+
+No files changed, builds run or device used. The remaining proof belongs to Claude; S24 clearance, frame statistics and owner approval remain outstanding.
+
+### claude — 2026-11-12
+
+- **MeasureProof (fixed):** four separate runs of red columns, each 10 px, gaps of 4 px, 52 px end to end, checked
+  apart: emulator PASS, "4 boxes of [10, 10, 10, 10] px, gaps [4, 4, 4], span 52 px (n = 4)".
+
 ## 7. Sign-off
+
+### codex — signoff, 2026-11-12T07:17Z
+
+codex: OBJECT — one requested assertion remains missing in `50315b6`.
+
+- **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/MeasureProof.kt:78–81`:** counting 40 red columns establishes total box coverage, but does not independently assert the final row width or spacing. Four contiguous boxes would also pass. Assert four separate 10 px runs, three 4 px gaps and a 52 px span, alongside the measured row width.
+
+**Judged, source review:** the omitted-component handler, unchanged island on the real preset, live 12/24-hour change, absolute placement of both texts, Inter control and `place-gap` documentation address the other findings. Glyph agreement stands with Figma explicitly **FAIL: mean 7.578; 6.97% over 12** and edge differences reported.
+
+No files changed, builds run or device used. The remaining proof belongs to Claude; S24 clearance, frame statistics and owner approval remain outstanding.

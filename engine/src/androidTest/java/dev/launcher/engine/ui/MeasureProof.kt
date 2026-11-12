@@ -75,11 +75,20 @@ class MeasureProof(private val instrumentation: Instrumentation) {
             // Drawn at the last state: as many 10 px boxes, 4 px apart, as it shows (red columns of a software draw).
             val shot = android.graphics.Bitmap.createBitmap(400, 40, android.graphics.Bitmap.Config.ARGB_8888)
             instrumentation.runOnMainSync { v!!.view.draw(android.graphics.Canvas(shot)) }
-            var red = 0
-            for (x in 0 until shot.width) if ((0 until shot.height).any { y -> val p = shot.getPixel(x, y); (p shr 16 and 255) > 200 && (p shr 8 and 255) < 60 }) red++
-            val expected = 10 * minOf(last, 4)
-            check(red == expected) { "the view ended with $red red columns, expected $expected (n = $last)" }
-            result.putString("measure", "40 frames whose children changed between composition and measure: no exception; ended drawing $red px of boxes for n = $last")
+            // Each box a run of red columns: n runs of 10 px, 4 px apart, 10 n + 4 (n - 1) px end to end (Codex: a total
+            // alone would pass four boxes drawn touching).
+            fun red(x: Int) = (0 until shot.height).any { y -> val p = shot.getPixel(x, y); (p shr 16 and 255) > 200 && (p shr 8 and 255) < 60 }
+            val runs = ArrayList<IntArray>()   // start, length
+            for (x in 0 until shot.width) if (red(x)) { if (runs.isNotEmpty() && runs.last()[0] + runs.last()[1] == x) runs.last()[1]++ else runs += intArrayOf(x, 1) }
+            val n = minOf(last, 4)
+            val gaps = runs.zipWithNext { p, q -> q[0] - p[0] - p[1] }
+            val span = if (runs.isEmpty()) 0 else runs.last()[0] + runs.last()[1] - runs.first()[0]
+            check(runs.size == n) { "the view ended with ${runs.size} boxes, expected $n" }
+            check(runs.all { it[1] == 10 }) { "box widths ${runs.map { it[1] }}, expected 10 each" }
+            check(gaps.all { it == 4 }) { "gaps $gaps, expected 4 each" }
+            check(span == if (n == 0) 0 else 10 * n + 4 * (n - 1)) { "span $span px for $n boxes" }
+            result.putString("measure", "40 frames whose children changed between composition and measure: no exception; " +
+                "ended with $n boxes of ${runs.map { it[1] }} px, gaps $gaps, span $span px (n = $last)")
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(old)
             instrumentation.runOnMainSync { v?.dispose(); activity.finish() }
