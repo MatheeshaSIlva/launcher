@@ -35,6 +35,7 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 | --- | --- | --- | --- | --- | --- |
 | T-008 | The default layout's build plan (`docs/DEFAULT_LAYOUT_PLAN.md`); E2.13-17 re-aimed at the island (owner) | `threads/T-008-default-layout-plan.md` | claude (lead), codex | `engine` | AGREED (plan, updated for draft 4, D-098; next E2.13a) |
 | T-011 | E2.13c: rounded shapes that morph their size and corners | `threads/T-011-e2-13c-shapes.md` | claude (lead), codex | `team/claude/e2-13c-shapes`, `team/codex/e2-13c-shapes` | DONE, merged (D-103); Q-003 open with the owner |
+| T-017 | E2.14e part 1: the island comes and goes with the bar (full-screen apps, the transient show) | `threads/T-017-e2-14e-surface.md` | claude (solo, D-116) | `team/claude/e2-14c2-blob` | part 1 DONE, merged; the pull waits for E3 |
 | T-016 | E2.14d: decode text (scramble and settle) | `threads/T-016-e2-14d-decode.md` | claude (solo, D-116) | `team/claude/e2-14c2-blob` | DONE, merged |
 | T-015 | E2.14c-2: detailed notifications (a banner growing out of the island as a blob); the `blob` primitive | `threads/T-015-e2-14c2-detailed.md` | claude (solo, D-116) | `team/claude/e2-14c2-blob` | `blob` merged (gate passed); the island's detailed state waits for the owner's concept (A, B or C) |
 | T-014 | E2.14c-1: notification (minimal) and charging on the island, the ranking | `threads/T-014-e2-14c-arrivals.md` | claude (solo, D-116) | `team/claude/e2-14c-arrivals` | DONE, merged; the owner's S24 check and assumption review open |
