@@ -3,7 +3,7 @@
 **Now:** E2.13a, 13b and 13c merged (T-009, T-010, T-011; D-099 to D-103). E2.14a merged and signed off by the owner on the S24 (T-012; D-104 to D-107: pure black, 4 dp from the top). E2.14b, the media state, is agreed with Codex and in progress (T-013). Open with the owner: Q-003 (Android 10 clip fallback) and the S24 check of 13b (the punch hole, upright and turned). Earlier context: direction changed (D-092): iOS and Pixel scrapped, a default theme of our own, settings are what creators offer.
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
-**Device:** claude (none in use)
+**Device:** claude (emulator-5554 running for T-013's proofs)
 **Last milestone review:** none yet (the first is due at the end of E2)
 
 ## E2 progress
