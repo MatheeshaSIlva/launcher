@@ -286,11 +286,12 @@ private fun clipFrame(canvas: android.graphics.Canvas, n: HostNode, x: Float, y:
 private inline fun children(canvas: android.graphics.Canvas, n: HostNode, content: () -> Unit) {
     if (n.view.primitive != "box" || n.value("clip") != Value.Bool.TRUE) { ShapeMask.release(n); return content() }
     val s = n.shape()
-    if (s.isEmpty) return
-    if (s.radius <= 0f) { canvas.clipRect(s.left, s.top, s.right, s.bottom); return content() }
+    // Every route that masks no longer gives its bytes back at once (Codex: a mask turned square kept them).
+    if (s.isEmpty) { ShapeMask.release(n); return }
+    if (s.radius <= 0f) { ShapeMask.release(n); canvas.clipRect(s.left, s.top, s.right, s.bottom); return content() }
     // A software canvas masks too: its path clip's antialiasing is not its fill's (measured on the emulator: mean edge
     // coverage 0.11 off `drawRoundRect`; the GPU's clip matched it exactly).
-    if (!ShapeMask.masks() && canvas.isHardwareAccelerated) { canvas.clipPath(n.roundedPath(s)); return content() }
+    if (!ShapeMask.masks() && canvas.isHardwareAccelerated) { ShapeMask.release(n); canvas.clipPath(n.roundedPath(s)); return content() }
     if (!ShapeMask.take(n, ShapeMask.bytes(n, s))) {
         ShapeMask.refused(n)
         canvas.clipPath(n.roundedPath(s))

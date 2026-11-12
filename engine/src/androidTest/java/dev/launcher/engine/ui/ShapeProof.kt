@@ -200,29 +200,60 @@ class ShapeProof(private val instrumentation: Instrumentation) {
             "worst channel ${score.worst}; the stroke's outer half drawn ($strokeOutside px)"
     }
 
-    /** Android 10's budget: two nested 900 × 700 masks (5.04 MB each, 8 MB allowed): the inner refused, both given back. */
+    /**
+     * Android 10's budget (forced): two nested 900 × 700 masks (5.04 MB each, 8 MiB allowed): the inner refused; the
+     * outer turned square (radius 0) gives its bytes back while still shown; two siblings (a stack): the second refused
+     * though never open with the first (a recording may be replayed nested); a mask under a parent scaled twice counted at
+     * four times its area (refused); everything given back at disposal.
+     */
     private fun budget(): String {
-        val d = def("""
+        fun nest(outer: String, inner: String) = def("""
             component "nest" {
-              view { row align="top" {
-                box width=(px)900 height=(px)700 radius=(px)40 clip=#true {
-                  box width=(px)900 height=(px)700 radius=(px)40 clip=#true { box width=(px)900 height=(px)700 fill="#FF0000" }
+              props { r type=number default=40 }
+              view { $outer {
+                box width=(px)900 height=(px)700 radius="{@r}" clip=#true {
+                  $inner
                 }
               } }
             }""")
+        val clipped = "box width=(px)900 height=(px)700 radius=(px)40 clip=#true { box width=(px)900 height=(px)700 fill=\"#FF0000\" }"
         ShapeMask.force = true
-        val before = ShapeMask.refusals
-        var held = 0L
+        val report = ArrayList<String>()
         try {
-            session(d) { _, capture -> capture(); instrumentation.runOnMainSync { held = ShapeMask.heldBytes() } }
+            fun run(name: String, d: ComponentDef, expectRefused: Boolean, square: Boolean = false) {
+                val before = ShapeMask.refusals
+                var held = 0L; var squareHeld = -1L; var squareRefusals = -1
+                session(d) { v, capture ->
+                    capture(); instrumentation.runOnMainSync { held = ShapeMask.heldBytes() }
+                    if (square) {
+                        instrumentation.runOnMainSync { v.setProp("r", Value.Num(0.0)) }
+                        capture()
+                        // The outer's bytes given back, the inner takes them: refused no more on the frames after.
+                        val r0 = ShapeMask.refusals
+                        capture(); capture()
+                        instrumentation.runOnMainSync { squareHeld = ShapeMask.heldBytes() }
+                        squareRefusals = ShapeMask.refusals - r0
+                    }
+                }
+                var after = -1L
+                instrumentation.runOnMainSync { after = ShapeMask.heldBytes() }
+                val refused = ShapeMask.refusals - before
+                check((refused > 0) == expectRefused) { "$name: $refused refusals, $held bytes held" }
+                check(held <= ShapeMask.BUDGET) { "$name: held $held bytes" }
+                if (square) check(squareRefusals == 0 && squareHeld == held) { "$name: turned square: $squareRefusals refusals after, $squareHeld held" }
+                check(after == 0L) { "$name: $after bytes still held after disposal" }
+                report += "$name: refused ${refused > 0}, held $held${if (square) ", the outer square: its bytes to the inner ($squareHeld held, $squareRefusals refusals after)" else ""}, after $after"
+            }
+            run("nested", nest("row align=\"top\"", clipped), expectRefused = true, square = true)
+            run("siblings", def("""
+                component "siblings" { view { stack { $clipped
+                  $clipped } } }"""), expectRefused = true)
+            run("scaled", def("""
+                component "scaled" { view { row align="top" scale=2 { $clipped } } }"""), expectRefused = true)
+            run("single", def("""
+                component "single" { view { row align="top" { $clipped } } }"""), expectRefused = false)
         } finally { ShapeMask.force = false }
-        var after = -1L
-        instrumentation.runOnMainSync { after = ShapeMask.heldBytes() }
-        val refused = ShapeMask.refusals - before
-        check(refused >= 1) { "the inner mask was not refused ($held bytes held)" }
-        check(held in 1..ShapeMask.BUDGET) { "held $held bytes" }
-        check(after == 0L) { "$after bytes still held after disposal" }
-        return "a nest of two: $refused refusal(s), $held bytes held while shown (budget ${ShapeMask.BUDGET}), $after after"
+        return report.joinToString("; ")
     }
 
     /** An icon renamed while the shape warms up: the component counts as prepared only with the new glyph ready. */
