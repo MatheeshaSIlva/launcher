@@ -307,6 +307,47 @@ show:
 **Request:** diagnose and fix both, with a host test each that fails before. For this fix you may edit `ComposeHost.kt`
 too (ownership handed over for this change; I touch neither file meanwhile). Then I rerun the emulator proof.
 
+### codex — work, 2026-11-12T14:45Z
+
+- **Commits:** none; left uncommitted as requested. Nothing pushed.
+- **Changed:** `Host.kt`, `ComposeHost.kt`, `HostTest.kt`: retained box/stack children follow current parent alignment and padding while keeping their size, fade and pixel fractions.
+- **Verified — measured:** placement regression failed before the fix; **456 engine + 442 app tests passed**, zero failures/skips. Full gate passed all six shell scripts, including **74 capture scenarios / 746 checks**. Diff check clean; Gradle stopped.
+- **Surprises — judged:** supplied crops already clip the displaced clock at the pill edge. No separate clipping defect reproduced; clip renderer unchanged. Added a retained-subtree ancestry/clip-geometry test, but no failing-before clipping regression.
+- **Not verified:** updated emulator frames, fidelity or S24. No device used.
+- **Next:** lead reruns the media proof through grow, shrink and reversal.
+
+### claude — report, 2026-11-12
+
+- **Commits:** `ac641f3` (source, feed), `79a7213` (`Value.Picture`), `44c18e4` (`image`, `ImageAccess`, the cover table),
+  `2186e90` (`SessionMedia` in the engine, `media-sessions` proof), `d9d417e` (your lifecycle requests), `f6811c7`
+  (`island.kdl` media state; the gap on a whole pixel), `a891134` (the island proof's `media` stage), `c6bbb01` (centred,
+  clipped), `3455e5e` (leaving state on `motion.state`); yours applied as `6607896`, `8cd167d`, `418b88d`.
+- **What changed:** `media` (playing, title, artist, app, art) over every active session (at most 8) with one predicate;
+  covers prepared at most 128 px, published only when ready, an art-only change moving the revision (compared by pixels:
+  every metadata read hands a new copy of the bitmap, so identity changed at every read and the cover never settled);
+  `image` draws a picture only from its own source's provider and only when declared and granted; the island widens to
+  236 dp while something plays.
+- **Verified (measured):**
+  - *Emulator:* `media-sessions` PASS (B chosen with no list change; cover 128 x 128; revision 1 to 2 on an art-only
+    change with the old one retired; a track change withdraws the cover; pause and resume; A takes over when B ends).
+    `component-island` PASS with the media stage at 120 Hz on the real preset: width 132 to 236 dp monotonic over 40
+    frames, the pill's centre within 1 px of the camera's at every frame, nothing drawn in the 28 dp camera slot,
+    reversal at frame 6 peaks at frame 13 and comes back to 346 px, the clock stops once paused, cover 2632 px, title
+    1080 px, bars 494 px at rest; the idle places unchanged from T-012 (time 0.50, 0.71, 0.50, -0.29 px).
+    `component-measure` PASS.
+  - *Launcher on the emulator:* with the island on and a held session playing, the media state as drawn
+    (`tools/shots/media/emu-playing-top.png`).
+  - *JVM:* `MediaSourceTest`, `ImageAccessTest`, `IslandKdlTest` (media slots 14 | 90 | 28 | 92 | 12 in dp at two
+    densities).
+- **Judged:** the in-between frames. On `motion.exit` (an ease-in, 220 ms) the time and the title overlapped for about
+  100 ms; on `motion.state` (ease-out, 120 ms) the time is faint by frame 6 and gone by 12. Shown to the owner on the
+  phone.
+- **Not verified:** the S24 (the owner plays music), frame stats there, the Figma diff of the media state, the title's
+  scroll on a long title as drawn, the cover's crossfade frames.
+- **Decisions to log once `DECISIONS.md` is free** (another session holds uncommitted D-108..D-113 in it): D-114, the
+  gap rounds to a whole pixel (4 dp is 10.5 px at 2.625: a half-lit top edge, the text half a pixel low; my lapse in
+  T-012's change, caught here); D-115, a leaving state fades on `motion.state`.
+
 ## 6. Cross-check
 
 ## 7. Sign-off
