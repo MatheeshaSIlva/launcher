@@ -88,10 +88,22 @@ class ComponentView(
         if (disposed) return@Watch
         if (on) host.snapMotion() else host.refreshMotion()
     }
-    /** Shown ([show]) and in a window: recurring work (loops, scrolls) runs only while both hold (T-013, Codex). */
-    private var shown = false     // the view starts at alpha 0 until [show]
+    /**
+     * Seen (its view's alpha above 0, however it got there: [show], or a window fading it in with `animate()`, as the
+     * shade does after its handover) and in a window: recurring work (loops, scrolls) runs only while both hold (T-013,
+     * Codex). Read again before each draw, so a fade by another owner is followed (S24: the bars never moved while the
+     * shade's fade-in left [show] unsaid).
+     */
+    private var shown = false
     private var attached = false
-    private fun visibility() { if (!disposed) host.setVisible(shown && attached) }
+    private fun visibility() {
+        if (disposed) return
+        shown = view.alpha > 0f
+        val on = shown && attached
+        if (on != lastVisible) { lastVisible = on; host.setVisible(on) }
+    }
+    private var lastVisible: Boolean? = null
+    private val seen = android.view.ViewTreeObserver.OnPreDrawListener { visibility(); true }
     /** Its nodes' motion clock: registered only while some node moves, nothing at rest (13a-0's [MotionTicker]). */
     private val ticker = dev.launcher.engine.ui.motion.MotionTicker(frames) { nanos ->
         !disposed && host.step(nanos)
@@ -141,8 +153,8 @@ class ComponentView(
         view.setParentCompositionContext(recomposer)
         view.alpha = 0f
         view.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: android.view.View) { attached = true; visibility() }
-            override fun onViewDetachedFromWindow(v: android.view.View) { attached = false; visibility() }
+            override fun onViewAttachedToWindow(v: android.view.View) { attached = true; v.viewTreeObserver.addOnPreDrawListener(seen); visibility() }
+            override fun onViewDetachedFromWindow(v: android.view.View) { attached = false; v.viewTreeObserver.removeOnPreDrawListener(seen); visibility() }
         })
         view.setViewTreeLifecycleOwner(owner)
         view.setViewTreeSavedStateRegistryOwner(owner)
@@ -354,7 +366,6 @@ class ComponentView(
     fun show(on: Boolean) {
         if (disposed) return
         view.alpha = if (on) 1f else 0f
-        shown = on
         visibility()
     }
 
