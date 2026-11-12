@@ -210,7 +210,56 @@ codex: OBJECT approach — resolve older-version clip antialiasing, equal-target
 4. **Order and wording.** The surface is drawn before the children's shape clip (reveal and a centred stroke untouched);
    "no added engine mask layer" on 30+, as you put it.
 
+### codex — discuss, 2026-11-12T00:35Z
+
+**Judged: one blocker remains.** I accept round four’s corrected two-layer `DST_IN` sequence, release-specific clipping route, residual-radius handover, observable worker-thread warm-up, and surface-before-child-clip order.
+
+**The API 29 mask restores the unresolved aggregate allocation problem from round two.** Intersecting each envelope with the canvas clip bounds limits individual dimensions, but does not bound simultaneous nested layers. At 1080 × 2400, two RGBA8 buffers alone require **19.8 MiB**, before nesting or other component resources. That does not establish the bounded drawing-area contract (`DEFAULT_LAYOUT_PLAN.md:30–32`) or fit the component’s 16 MB steady-state budget (`ENGINE_SPEC.md:348`, D-067).
+
+Specify a concrete aggregate live mask-byte limit, accounting for device-space bounds and both layers, checked **before allocation**, with explicit refusal behavior and a nested-mask refusal test. Keep rounded clipping intact; the previously rejected square-corner fallback remains unacceptable. This is the earlier budget objection returning with the mask, not a new requirement.
+
+No files changed, tests run or device measurements taken.
+
+codex: OBJECT approach — API 29 needs an aggregate mask-allocation bound and defined refusal behavior.
+
+### claude — 2026-11-12, round five: the lead's decision (protocol §5)
+
+**API 29's mask budget.** At most **8 MiB of mask layers open at once per component**, counted before allocation as
+`2 layers × 4 bytes × device area` (the bounds mapped through the canvas's matrix), nested masks summed. A clip that
+would pass it is **refused the mask**: it falls back to Android 10's own `clipPath` of the same rounded rectangle
+(rounded, aliased), logged once per node; nothing square, nothing dropped. That bounds the drawing area at 8 MiB extra on
+Android 10 (well inside D-067's 16 MB a component), costs nothing on 30+, and changes what a user sees only on Android 10,
+only for a clipping box over about 1 million px (two-thirds of a 1080 x 2400 screen) or a nest of them: its corners'
+antialiasing. Decided by the lead and logged (D-103 when merged); the owner sees it in the report. Test: a nest of two
+screen-sized masks with the switch on, the second refused (its corner pixels aliased: fully in or out), the budget
+returned at `restore`.
+
 ## 3. Agreed approach
+
+After four rounds and the lead's decision in round five:
+- **Grammar (codex):** a `radius` motion channel (in `value` too); `radius` takes a length or `full`; refusals with spans;
+  docs; §7 by both.
+- **Radius (claude):** shown radius = `to(drawn)` + a residual track (`to`: `full` is half the drawn shorter side, else the
+  length), the residual continued toward 0 on the radius curve from the value and speed shown at each change (13a-0);
+  without a radius curve it jumps; clamped to `[0, min(drawnW, drawnH) / 2]`; invalid or empty geometry is an empty shape
+  before any Canvas call. One function reads literal and bound radii. Painter, clip and hit region share it.
+- **Clip (claude):** the surface drawn first, unclipped; then the children inside the drawn rounded rectangle: API 30+
+  `clipPath` (antialiased since android11-release; one reused `Path` per node), API 29 a two-layer `DST_IN` mask bounded by
+  the envelope ∩ the canvas clip, under an 8 MiB per-component budget of open masks, a refused mask falling back to the
+  same rounded `clipPath` (aliased on Android 10). Reveal and a centred stroke untouched.
+- **Hit region (claude):** `HostNode.shape()` in node px from the layout box's top-left: the anchored drawn rectangle and
+  the shown radius, boundary inclusive, empty when a side is ≤ 0 or not finite, strokes, reveal, translation and scale
+  excluded.
+- **Warm-up (claude):** `ShapeWarmUp` on a worker draws an oversized rectangle across a rounded clip (the API's route)
+  through a `HardwareRenderer`, waits for `SYNC_OK` and the image, posts success or failure to the component's thread,
+  which counts preparation complete only then (a failure logged, never blocking).
+- **Verification:** independent geometry from the movers; 16 × 16 supersampled expected coverage; on edge pixels mean
+  coverage error ≤ 0.02, every channel ≤ 24 everywhere, no child colour beyond one pixel outside the shape; at rest equal
+  to `drawRoundRect`; cases as round two (fractional bounds and anchors, both `full` handovers, axis crossing and reversal,
+  equal and nearly equal targets with speed, unequal curves, radius-only, `clip` toggled, fractional centred stroke,
+  oversized child, reduced motion), both paths, and the API 29 route forced on the emulator; warm-up cold against warmed.
+  Unverified: a real Android 10 device; E3's glass under a clip.
+
 
 ## 4. Split
 
