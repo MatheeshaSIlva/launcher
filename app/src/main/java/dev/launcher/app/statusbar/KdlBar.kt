@@ -17,13 +17,25 @@ import dev.launcher.engine.ui.TextPainter
 
 /**
  * The engine's status bar (E2 slice 6), shown in StatusBarView's place only while a developer switch is on:
- * `adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do kdl --ez on true|false`
- * (the shade is made again for it). StatusBarView stays the bar for everyone else and keeps all its state.
+ * `adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do kdl --ez on true|false
+ * [--es component status-bar|island]` (the shade is made again for it). StatusBarView stays the bar for everyone else
+ * and keeps all its state. The component is one of [COMPONENTS] (T-012): the KDL status bar, or draft 4's island.
  */
 object KdlBar {
     private const val PREFS = "dev"
     private const val KEY = "kdl-bar"
-    private const val FILE = "kdl/components/status-bar.kdl"
+    private const val COMPONENT = "kdl-component"
+    const val STATUS_BAR = "status-bar"
+    const val ISLAND = "island"
+    /** The components the switch may show, by name, and their files. */
+    val COMPONENTS = mapOf(STATUS_BAR to "kdl/components/status-bar.kdl", ISLAND to "kdl/components/island.kdl")
+
+    /** The component [name] asks for: none named is the status bar; a name not in [COMPONENTS] is refused (null). */
+    fun choose(name: String?): String? = when {
+        name.isNullOrBlank() -> STATUS_BAR
+        name in COMPONENTS -> name
+        else -> null
+    }
 
     /** One per process: its listeners outlive any one bar (each removes its own on detach). */
     private val tokens by lazy { DesignTokens() }
@@ -33,6 +45,14 @@ object KdlBar {
 
     fun on(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
     fun set(ctx: Context, on: Boolean) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, on).apply()
+    /** The component shown while the switch is on (a stored name no longer allowed reads as the status bar). */
+    fun component(ctx: Context): String = choose(ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(COMPONENT, null)) ?: STATUS_BAR
+    /** Chooses the component by [name]; false (nothing changed) when [name] is not one of [COMPONENTS]. */
+    fun setComponent(ctx: Context, name: String?): Boolean {
+        val c = choose(name) ?: return false
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(COMPONENT, c).apply()
+        return true
+    }
 
     /**
      * The KDL bar over [bar], on the calling (the shade's) thread, composed and drawn unseen until its first frame is on
@@ -40,6 +60,9 @@ object KdlBar {
      * caller disposes it ([ComponentView.dispose]) when the window goes or fails to come.
      */
     fun make(ctx: Context, handler: Handler, bar: StatusBarView, reveal: () -> Unit): ComponentView? {
+        val name = component(ctx)
+        val island = name == ISLAND
+        val FILE = COMPONENTS.getValue(name)
         val doc = try { ctx.assets.open(FILE).bufferedReader().use { KdlParser.parse(it.readText()) } }
             catch (t: Throwable) { AppLog.log("[kdl] $FILE: ${t.message}"); return null }
         val def = when (val r = Validator(tokens).load(doc)) {
@@ -56,7 +79,8 @@ object KdlBar {
             granted = GRANTED, pictures = icons)
         display.bind(view.view)
         view.addOnDispose { icons?.dispose(); display.unbind() }
-        view.derive = {
+        // The island takes nothing of StatusBarView's (its colours are its own, it has no notification icons).
+        if (!island) view.derive = {
             view.textWidth("Time")?.let { w ->
                 val moon = view.read("dnd.on") == Value.Bool.TRUE
                 view.setDerived("max-icons", Value.Num(BarFit.count(bar.cameraLeftForFit(), w, moon, dev.launcher.app.design.Scale.unitPx(ctx)).toDouble()))
@@ -68,7 +92,7 @@ object KdlBar {
         val timeSet = object : android.database.ContentObserver(handler) { override fun onChange(self: Boolean) = hour24() }
         ctx.contentResolver.registerContentObserver(android.provider.Settings.System.getUriFor(android.provider.Settings.System.TIME_12_24), false, timeSet)
         // Its first recording already in the bar's tone (StatusBarView hands it over each frame once it gives way).
-        view.setProp("color", Value.Color(bar.contentColor()))
+        if (!island) view.setProp("color", Value.Color(bar.contentColor()))
         // StatusBarView's unit and centre line, read again at each of its layouts (a turn changes both).
         fun place() {
             if (view.isDisposed) return
@@ -89,7 +113,7 @@ object KdlBar {
                     if (view.isDisposed) return
                     AppLog.log("[kdl] warm: ${view.counters()}")
                     // StatusBarView gives way in the same frame the KDL bar shows (its colour from then on).
-                    bar.kdlInPlace = { c -> view.setProp("color", Value.Color(c)) }
+                    bar.kdlInPlace = if (island) { _ -> } else { c -> view.setProp("color", Value.Color(c)) }
                     reveal()
                 }
                 v.viewTreeObserver.registerFrameCommitCallback {
@@ -110,7 +134,7 @@ object KdlBar {
             bar.removeOnLayoutChangeListener(layout)
             bar.kdlInPlace = null
         }
-        AppLog.log("[kdl] status bar from $FILE")
+        AppLog.log("[kdl] $name from $FILE")
         return view
     }
 }
