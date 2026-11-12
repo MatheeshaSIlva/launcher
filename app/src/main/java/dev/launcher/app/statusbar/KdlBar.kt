@@ -74,7 +74,7 @@ object KdlBar {
         val icons = dev.launcher.engine.source.Access.ifAllowed(def.uses.sources.map { it.name }, "notifications", "notifications.read", GRANTED) { KdlNotifIcons(ctx, handler) }
         // The `device` source (T-010) follows the display of the bar's own view, bound once the view exists.
         val display = dev.launcher.engine.source.DeviceDisplayInfo(ctx, handler)
-        val media = dev.launcher.engine.source.Access.ifAllowed(def.uses.sources.map { it.name }, "media", "media.read", GRANTED) { KdlMedia(ctx, handler) }
+        val media = dev.launcher.engine.source.Access.ifAllowed(def.uses.sources.map { it.name }, "media", "media.read", GRANTED) { dev.launcher.engine.source.SessionMedia(ctx, handler, android.content.ComponentName(ctx, dev.launcher.app.BadgeListener::class.java)) }
         var sources = SystemSources.all(ctx, handler, display)
         icons?.let { sources += dev.launcher.engine.source.NotificationSource.of(it.feed) }
         media?.let { sources += dev.launcher.engine.source.MediaSource.of(it) }

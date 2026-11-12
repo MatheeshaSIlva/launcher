@@ -1,4 +1,4 @@
-package dev.launcher.app.statusbar
+package dev.launcher.engine.source
 
 import android.content.ComponentName
 import android.content.Context
@@ -8,29 +8,23 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import dev.launcher.app.AppLog
-import dev.launcher.app.BadgeListener
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import dev.launcher.engine.source.MediaArt
-import dev.launcher.engine.source.MediaFeed
-import dev.launcher.engine.source.MediaPick
-import dev.launcher.engine.source.MediaState
-import dev.launcher.engine.source.PreparedPictures
 import dev.launcher.engine.ui.PictureSource
 import java.util.concurrent.Executors
 
 /**
  * The `media` source's feed for a KDL component (T-013): the system's sessions, read through the notification listener's
- * access, chosen by [MediaPick] again at every change of any of them (a second app starting while the chosen one pauses
- * takes over). Its own watcher, not the shade's [dev.launcher.app.shade.Media], whose choice and ten-minute linger belong
+ * access ([component]: the app's notification listener; null where the caller holds MEDIA_CONTENT_CONTROL, as a proof does), chosen by [MediaPick] again at every change of any of them (a second app starting while the chosen one pauses
+ * takes over). Its own watcher, not the shade's `dev.launcher.app.shade.Media`, whose choice and ten-minute linger belong
  * to the old shade. Made only for a component that declared `media` and was granted `media.read`; everything on [handler].
  */
-class KdlMedia(private val ctx: Context, private val handler: Handler) : MediaFeed {
+class SessionMedia(private val ctx: Context, private val handler: Handler, private val component: ComponentName?) : MediaFeed {
     /**
      * The chosen session's cover, prepared on a worker at no more than [ART_PX] a side before it is published (T-013):
      * one wanted at a time. Its id is the session's (a number per session token, never its app or title), its rev moves
-     * when the art does (the bitmap's identity, generation and size), so an art-only change counts and a track change
+     * when the art does (its pixels, compared with the last cover's), so an art-only change counts and a track change
      * withdraws the old cover at once. Given to `image` for the `media` source only.
      */
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "kdl-media-art").apply { isDaemon = true } }
@@ -38,6 +32,8 @@ class KdlMedia(private val ctx: Context, private val handler: Handler) : MediaFe
     private val sessionIds = HashMap<android.media.session.MediaSession.Token, Int>()
     private var nextSession = 0
     private var artKey: Any? = null
+    /** The last cover seen, to tell a real change from a new copy of the same one (one bitmap held). */
+    private var artBitmap: Bitmap? = null
     private var artRev = 0
     private val versionState = androidx.compose.runtime.mutableIntStateOf(0)
     private val tableChanged = table.subscribe {
@@ -54,7 +50,6 @@ class KdlMedia(private val ctx: Context, private val handler: Handler) : MediaFe
     }
 
     private val msm = ctx.getSystemService(MediaSessionManager::class.java)
-    private val component = ComponentName(ctx, BadgeListener::class.java)
     private val listeners = ArrayList<() -> Unit>()
     private var watched: List<MediaController> = emptyList()
     private var state = MediaState.NONE
@@ -116,9 +111,12 @@ class KdlMedia(private val ctx: Context, private val handler: Handler) : MediaFe
             ?: md?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
         val id = "s" + sessionIds.getOrPut(c.sessionToken) { ++nextSession }
         if (sessionIds.size > 64) sessionIds.keys.retainAll(watched.map { it.sessionToken }.toSet())
-        if (bmp == null) { table.update(emptyList()); return null }
-        val key = Triple(id, System.identityHashCode(bmp), Triple(bmp.generationId, bmp.width, bmp.height))
-        if (key != artKey) { artKey = key; artRev++ }
+        if (bmp == null) { artBitmap = null; table.update(emptyList()); return null }
+        // Every read of the metadata hands a new copy of the bitmap: the art changed only if its session or its pixels did.
+        val last = artBitmap
+        if (id != artKey || last == null || !(last.width == bmp.width && last.height == bmp.height && last.sameAs(bmp))) {
+            artKey = id; artBitmap = bmp; artRev++
+        }
         val rev = artRev.toString()
         table.update(listOf(PreparedPictures.Want(id, rev, bmp)))
         return if (table.picture(id, rev) != null) MediaArt(id, rev) else null
