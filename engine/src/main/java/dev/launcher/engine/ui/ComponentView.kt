@@ -51,10 +51,16 @@ class ComponentView(
     granted: Set<String> = emptySet(),
     /** Pictures for `icon picture`, given only to a component that declares `notifications` and was granted its capability. */
     pictures: PictureSource? = null,
+    /**
+     * Pictures for `image` by the source that makes them ([Value.Picture.source]), e.g. `media`'s covers (T-013). Each is
+     * given only if the component declares that source and was granted its capability; one never answers for another.
+     */
+    imagePictures: Map<String, PictureSource> = emptyMap(),
     /** Its motion's frames and time (ns): the display's by default; a proof steps them at exact times (13a-1b). */
     frames: dev.launcher.engine.ui.motion.FrameSource = dev.launcher.engine.ui.motion.ChoreographerSource(),
     private val clock: () -> Long = System::nanoTime,
 ) {
+    private val allowedImages = ImageAccess.allowed(imagePictures, def.uses.sources.map { it.name }, sources, granted)
     private val allowedPictures = pictures?.takeIf { dev.launcher.engine.source.Access.allowed(def.uses.sources.map { it.name }, "notifications", "notifications.read", granted) }
     private val handler = Handler(Looper.myLooper() ?: error("ComponentView needs a Looper thread"))
     private val owner = ThreadOwner()
@@ -119,7 +125,7 @@ class ComponentView(
             if (onCutout && reads(DEVICE)) placeTick.intValue++
             built?.let { h -> h.settled(reads, ::settle); applied() }
         }
-        host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it; if (it is IconPainter) it.pictures = allowedPictures } }, { view.invalidate() }, { n -> textPainters.remove(n.painter); ShapeMask.release(n) },
+        host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it; if (it is IconPainter) it.pictures = allowedPictures; if (it is ImagePainter) it.pictures = allowedImages } }, { view.invalidate() }, { n -> textPainters.remove(n.painter); ShapeMask.release(n) },
             dev.launcher.engine.ui.motion.MotionContext(dev.launcher.engine.ui.motion.PresetMotion, { reduced.on }, clock), { ticker.wake() })
         built = host
         prepareGlyphs()
@@ -380,6 +386,8 @@ class ComponentView(
             "text" -> TextPainter(tokens)
             "icon" -> IconPainter(tokens, glyphs)
             "box" -> BoxPainter()
+            "image" -> ImagePainter(fade = { dev.launcher.engine.ui.motion.PresetMotion.curve("motion.state") },
+                reduced = { !android.animation.ValueAnimator.areAnimatorsEnabled() })
             else -> Nothing
         }
 

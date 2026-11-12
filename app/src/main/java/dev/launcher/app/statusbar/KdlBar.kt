@@ -78,7 +78,8 @@ object KdlBar {
         var sources = SystemSources.all(ctx, handler, display)
         icons?.let { sources += dev.launcher.engine.source.NotificationSource.of(it.feed) }
         media?.let { sources += dev.launcher.engine.source.MediaSource.of(it) }
-        val view = ComponentView(ctx, def, tokens, sources, units, granted = GRANTED, pictures = icons)
+        val view = ComponentView(ctx, def, tokens, sources, units, granted = GRANTED, pictures = icons,
+            imagePictures = media?.let { mapOf("media" to it.pictures) } ?: emptyMap())
         display.bind(view.view)
         view.addOnDispose { icons?.dispose(); media?.dispose(); display.unbind() }
         // The island takes nothing of StatusBarView's (its colours are its own, it has no notification icons).
