@@ -337,7 +337,7 @@ class ComponentView(
     // A function, not a property: the constructor's preparation reads it before the body's properties exist (a lazy
     // delegate too: measured, every component crashed at construction).
     private fun clips() = generateSequence(listOf(def.view)) { level -> level.flatMap { it.children }.takeIf { it.isNotEmpty() } }
-        .flatten().any { it.primitive == "box" && "clip" in it.attrs }
+        .flatten().any { it.primitive == "box" && "clip" in it.attrs || it.primitive == "blob" }
     private var shapesWarmed = false
 
     /** [then] once a clipping shape has been drawn off screen ([ShapeWarmUp]), at once for a component with none. */

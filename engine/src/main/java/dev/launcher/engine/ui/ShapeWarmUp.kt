@@ -52,6 +52,16 @@ object ShapeWarmUp {
                     c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), fill)
                     c.restoreToCount(save)
                 }
+                // A blob's shader (T-015), compiled here and its GPU pipeline made in this frame, not in a shown one.
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    val rs = android.graphics.RuntimeShader(BlobPainter.SKSL)
+                    rs.setFloatUniform("rects", floatArrayOf(4f, 4f, 30f, 20f, 20f, 26f, 60f, 60f) + FloatArray(8))
+                    rs.setFloatUniform("radii", floatArrayOf(8f, 10f, 0f, 0f))
+                    rs.setFloatUniform("count", 2f)
+                    rs.setFloatUniform("k", 12f)
+                    rs.setColorUniform("color", 0xFF000000.toInt())
+                    c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), Paint().apply { shader = rs })
+                }
                 node.endRecording()
                 renderer = HardwareRenderer()
                 renderer.setSurface(reader.surface)

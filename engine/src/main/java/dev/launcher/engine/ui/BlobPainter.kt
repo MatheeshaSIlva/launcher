@@ -93,7 +93,7 @@ class BlobPainter : Painter {
          * minimum over k; covered where the distance is under half a pixel, antialiased across one. Uniform arrays indexed
          * by the loop's own index only (AGSL, CLAUDE.md).
          */
-        private const val SKSL = """
+        internal const val SKSL = """
 uniform float4 rects[4];
 uniform float radii[4];
 uniform float count;
