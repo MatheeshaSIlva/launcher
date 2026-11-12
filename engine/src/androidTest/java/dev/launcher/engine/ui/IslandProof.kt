@@ -98,6 +98,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             stage("reduced") { reduced(d, result, errors) }
             stage("media") { media(d, result, errors) }
             stage("media-details") { mediaDetails(d, result, errors) }
+            stage("arrivals") { arrivals(d, result, errors) }
         } finally {
             overlay("none")
             sh("settings put system user_rotation ${rotation.ifEmpty { "0" }}")
@@ -262,8 +263,9 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
     private class Geometry(val width: Float, val height: Float, val cx: Float, val cy: Float)
 
     private inner class Session(val activity: ProofActivity, val view: ComponentView, val frames: Frames,
-        private val timeFlow: MutableStateFlow<Time>, private val batteryFlow: MutableStateFlow<Battery>,
-        private val mediaFlow: MutableStateFlow<MediaState>) {
+        private val timeFlow: MutableStateFlow<Time>, val batteryFlow: MutableStateFlow<Battery>,
+        private val mediaFlow: MutableStateFlow<MediaState>,
+        private val notifFlow: MutableStateFlow<dev.launcher.engine.source.NotifIcons>) {
         var now = 1_000_000_000L
         private val origin = IntArray(2)
 
@@ -276,6 +278,20 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             SystemClock.sleep(300)
             instrumentation.waitForIdleSync()
             drawn()
+        }
+
+        /** A notification arriving or gone (T-014), as the arrival tracker would publish it. */
+        fun arrive(a: dev.launcher.engine.source.NotifArrival?) {
+            instrumentation.runOnMainSync { notifFlow.value = dev.launcher.engine.source.NotifIcons(emptyList(), a) }
+            SystemClock.sleep(150)
+            instrumentation.waitForIdleSync()
+        }
+
+        /** The plug-in moment on or off (T-014). */
+        fun plug(on: Boolean) {
+            instrumentation.runOnMainSync { batteryFlow.value = batteryFlow.value.copy(charging = on, plugged = on) }
+            SystemClock.sleep(150)
+            instrumentation.waitForIdleSync()
         }
 
         /** What plays (T-013): delivered as the session watcher would, then drawn. */
@@ -436,6 +452,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
         val timeFlow = MutableStateFlow(Time(epoch, TimeZone.getDefault().id))
         val batteryFlow = MutableStateFlow(Battery(level, false, false))
         val mediaFlow = MutableStateFlow(MediaState.NONE)
+        val notifFlow = MutableStateFlow(dev.launcher.engine.source.NotifIcons(emptyList()))
         val frames = Frames()
         var made: ComponentView? = null
         var s: Session? = null
@@ -451,12 +468,13 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
                 val info = DeviceDisplayInfo(activity, Handler(Looper.getMainLooper()))
                 val sources = Sources(listOf(DeviceSource.of(info),
                     Source("time", "none", { timeFlow.value }, timeFlow), Source("battery", "none", { batteryFlow.value }, batteryFlow),
-                    Source("media", "media.read", { mediaFlow.value }, mediaFlow)))
+                    Source("media", "media.read", { mediaFlow.value }, mediaFlow),
+                    Source("notifications", "notifications.read", { notifFlow.value }, notifFlow)))
                 lateinit var session: Session
                 val v = ComponentView(activity, d, FontTokens, sources, Units(1f, ctx.resources.displayMetrics.density),
-                    granted = setOf("media.read"), imagePictures = mapOf("media" to ProofArt),
+                    granted = setOf("media.read", "notifications.read"), imagePictures = mapOf("media" to ProofArt),
                     frames = frames, clock = { session.now }).also { made = it }
-                session = Session(activity, v, frames, timeFlow, batteryFlow, mediaFlow).also { s = it }
+                session = Session(activity, v, frames, timeFlow, batteryFlow, mediaFlow, notifFlow).also { s = it }
                 info.bind(v.view)
                 v.setProp("hour24", Value.Bool.of(hour24))
                 activity.setContentView(v.view)
@@ -687,6 +705,78 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             lines += "paused: the clock stopped after $settle frames"
         }
         result.putString("media", lines.joinToString("; "))
+    }
+
+    // ------------------------------------------------------------------------------------------------ arrivals (T-014)
+
+    /**
+     * A notification arriving (minimal mode), then charging under it, then idle, frame by frame on the real preset: at every
+     * frame the pill's centre is on the camera's (within 1 px) and the 28 dp camera slot holds nothing but black; each
+     * state ends at draft 4's width (200, 164, 132 dp); the sender, the count and the level are drawn where draft 4 puts
+     * them (ink right of the dot, left of the camera slot; the count and the level right of it).
+     */
+    private fun arrivals(d: ComponentDef, result: Bundle, errors: MutableList<String>) {
+        val density = ctx.resources.displayMetrics.density
+        val lines = ArrayList<String>()
+        session(d, at(21, 40), 64, hour24 = true) { s ->
+            val (ex, ey) = s.expected()
+            val cy = ey.toInt()
+            fun frames(label: String, n: Int): Float {
+                var w = 0f
+                var hits = 0
+                repeat(n) { k ->
+                    s.step()
+                    val b = s.capture()
+                    val e = s.edges(b, cy)
+                    val c = (e[0] + e[1]) / 2f
+                    if (abs(c - ex) > 1f) errors += "$label ${k + 1}: centre ${"%.2f".format(c)}, the camera's $ex"
+                    val half = 14 * density
+                    loop@ for (y in (ey - half).toInt()..(ey + half).toInt()) for (x in (ex - half).toInt()..(ex + half).toInt()) {
+                        val px = b.getPixel(x, y)
+                        if ((px shr 16 and 255) > 40 || (px shr 8 and 255) > 40) { if (hits++ < 2) errors += "$label ${k + 1}: drawn in the camera slot at ($x, $y)"; break@loop }
+                    }
+                    w = e[1] - e[0]
+                }
+                return w
+            }
+            fun ink(b: Bitmap, x0: Float, x1: Float): Int {
+                var n = 0
+                for (y in (ey - 9 * density).toInt()..(ey + 9 * density).toInt()) for (x in x0.toInt() until x1.toInt()) {
+                    val px = b.getPixel(x, y); if ((px shr 16 and 255) > 100 || (px shr 8 and 255) > 100) n++
+                }
+                return n
+            }
+            s.arrive(dev.launcher.engine.source.NotifArrival("k", "Kasun", 3))
+            val wn = frames("notification", 90)
+            if (abs(wn - 200 * density) > 1f) errors += "notification: ${wn} px wide, expected ${200 * density}"
+            run {
+                val b = s.capture(); val e = s.edges(b, cy)
+                val sender = ink(b, e[0] + 26 * density, e[0] + 86 * density)
+                val count = ink(b, ex + 14 * density, e[1] - 12 * density)
+                if (sender < 40) errors += "notification: no sender ink ($sender)"
+                if (count < 20) errors += "notification: no count ink ($count)"
+                save("notification.png", Bitmap.createBitmap(b, e[0].toInt(), (ey - 16 * density).toInt(), (e[1] - e[0]).toInt(), (32 * density).toInt()))
+                lines += "notification: ${wn.toInt()} px, sender ink $sender, count ink $count"
+            }
+            // Plugged in while it shows: the notification stays (it ranks higher); when it goes, charging shows.
+            s.plug(true)
+            frames("notification over charging", 20)
+            s.arrive(null)
+            val wc = frames("charging", 90)
+            if (abs(wc - 164 * density) > 1f) errors += "charging: ${wc} px wide, expected ${164 * density}"
+            run {
+                val b = s.capture(); val e = s.edges(b, cy)
+                val level = ink(b, ex + 14 * density, e[1] - 12 * density)
+                if (level < 40) errors += "charging: no level ink ($level)"
+                save("charging.png", Bitmap.createBitmap(b, e[0].toInt(), (ey - 16 * density).toInt(), (e[1] - e[0]).toInt(), (32 * density).toInt()))
+                lines += "charging: ${wc.toInt()} px, level ink $level"
+            }
+            s.plug(false)
+            val wi = frames("back to idle", 90)
+            if (abs(wi - 132 * density) > 1f) errors += "idle: ${wi} px wide, expected ${132 * density}"
+            lines += "idle again: ${wi.toInt()} px"
+        }
+        result.putString("arrivals", lines.joinToString("; "))
     }
 
     private fun overlay(name: String) {
