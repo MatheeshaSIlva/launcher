@@ -119,7 +119,7 @@ class ComponentView(
             if (onCutout && reads(DEVICE)) placeTick.intValue++
             built?.let { h -> h.settled(reads, ::settle); applied() }
         }
-        host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it; if (it is IconPainter) it.pictures = allowedPictures } }, { view.invalidate() }, { n -> textPainters.remove(n.painter) },
+        host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it; if (it is IconPainter) it.pictures = allowedPictures } }, { view.invalidate() }, { n -> textPainters.remove(n.painter); ShapeMask.release(n) },
             dev.launcher.engine.ui.motion.MotionContext(dev.launcher.engine.ui.motion.PresetMotion, { reduced.on }, clock), { ticker.wake() })
         built = host
         prepareGlyphs()
@@ -292,7 +292,8 @@ class ComponentView(
     private fun prepareGlyphs() {
         glyphs.prepare(iconKeys(), wanted = { !disposed }, by = this) {
             if (!glyphsReady()) return@prepare prepareGlyphs()
-            warmShapes { finishPreparing() }
+            // A prop or source may have named another glyph while the shape warmed up: looked at again first (Codex).
+            warmShapes { if (!disposed) { if (glyphsReady()) finishPreparing() else prepareGlyphs() } }
         }
     }
 

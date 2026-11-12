@@ -37,8 +37,10 @@ import kotlin.math.min
  *   green stroke: the child cut to the rounded shape (corner pixels the background), the stroke not cut; on the release's
  *   route and on Android 10's mask route (forced);
  * - the shape clip's warm-up time ([ShapeWarmUp]).
- * Pass: on edge pixels (expected coverage strictly between 0 and 1) mean coverage error ≤ 0.02; every channel within 24 of
- * 255 everywhere in the shape's neighbourhood.
+ * Pass (revised in T-011 §6, from ideal coverage): each path against its own renderer's `drawRoundRect` of the expected
+ * geometry (the GPU's through a HardwareRenderer, the software's on a Canvas): on edge pixels mean coverage error ≤ 0.02,
+ * every channel within 24 of 255 near the shape. The error against ideal 16 × 16 coverage is reported, not judged.
+ * Also: a nest of masks past Android 10's budget refused and released; an icon renamed while the shape warms up.
  *   adb shell am instrument -w -e mode component-shape dev.launcher.engine.test/dev.launcher.engine.adb.AdbProofInstrumentation
  */
 class ShapeProof(private val instrumentation: Instrumentation) {
@@ -61,7 +63,7 @@ class ShapeProof(private val instrumentation: Instrumentation) {
     fun run(result: Bundle) {
         val errors = ArrayList<String>()
         for ((name, proof) in listOf<Pair<String, () -> String>>("pill" to ::pill, "handover" to ::handover,
-            "clip" to { clip(false) }, "clip-mask" to { clip(true) })) {
+            "clip" to { clip(false) }, "clip-mask" to { clip(true) }, "budget" to ::budget, "prepare" to ::prepare)) {
             try { result.putString(name, proof()) } catch (e: IllegalStateException) { result.putString(name, "FAIL: ${e.message}"); errors += name }
         }
         result.putString("warm-up", "the shape clip's warm-up frame took ${ShapeWarmUp.lastMs} ms (emulator)")
@@ -198,6 +200,56 @@ class ShapeProof(private val instrumentation: Instrumentation) {
             "worst channel ${score.worst}; the stroke's outer half drawn ($strokeOutside px)"
     }
 
+    /** Android 10's budget: two nested 900 × 700 masks (5.04 MB each, 8 MB allowed): the inner refused, both given back. */
+    private fun budget(): String {
+        val d = def("""
+            component "nest" {
+              view { row align="top" {
+                box width=(px)900 height=(px)700 radius=(px)40 clip=#true {
+                  box width=(px)900 height=(px)700 radius=(px)40 clip=#true { box width=(px)900 height=(px)700 fill="#FF0000" }
+                }
+              } }
+            }""")
+        ShapeMask.force = true
+        val before = ShapeMask.refusals
+        var held = 0L
+        try {
+            session(d) { _, capture -> capture(); instrumentation.runOnMainSync { held = ShapeMask.heldBytes() } }
+        } finally { ShapeMask.force = false }
+        var after = -1L
+        instrumentation.runOnMainSync { after = ShapeMask.heldBytes() }
+        val refused = ShapeMask.refusals - before
+        check(refused >= 1) { "the inner mask was not refused ($held bytes held)" }
+        check(held in 1..ShapeMask.BUDGET) { "held $held bytes" }
+        check(after == 0L) { "$after bytes still held after disposal" }
+        return "a nest of two: $refused refusal(s), $held bytes held while shown (budget ${ShapeMask.BUDGET}), $after after"
+    }
+
+    /** An icon renamed while the shape warms up: the component counts as prepared only with the new glyph ready. */
+    private fun prepare(): String {
+        val d = def("""
+            component "ready" {
+              props { s type=string default="wifi.3" }
+              view { row align="top" { box width=(px)40 height=(px)40 radius=(px)8 clip=#true { icon "{@s}" set="statusbar" size=12 } } }
+            }""")
+        var readyAtPrepared: Boolean? = null
+        val context = instrumentation.targetContext
+        val activity = instrumentation.startActivitySync(Intent(context, ProofActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as ProofActivity
+        val done = CountDownLatch(1)
+        var v: ComponentView? = null
+        try {
+            instrumentation.runOnMainSync {
+                v = ComponentView(activity, d, NoTokens, Sources.fixture(emptyMap()), Units(1f, 1f), frames = frames, clock = { now })
+                v!!.setProp("s", Value.Str("wifi.1"))   // renamed while its first glyph and the shape warm up
+                v!!.whenPrepared { readyAtPrepared = v!!.glyphsReady(); done.countDown() }
+            }
+            check(done.await(10, TimeUnit.SECONDS)) { "never prepared" }
+        } finally { instrumentation.runOnMainSync { v?.dispose(); activity.finish() } }
+        check(readyAtPrepared == true) { "prepared with a glyph still pending" }
+        return "renamed while warming: prepared with its new glyph ready"
+    }
+
     /** A rounded rectangle in the view's px. */
     private class RectShape(val l: Float, val t: Float, val r: Float, val b: Float, val radius: Float) {
         /** Its coverage of pixel (x, y), 16 × 16 samples. */
@@ -229,20 +281,11 @@ class ShapeProof(private val instrumentation: Instrumentation) {
         // the software's on a Canvas): the geometry checked exactly, each path's antialiasing its own.
         val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = fill }
         // A clipped child (a rectangle the shape's size) under the expected shape, by the route that path takes.
-        fun draw(mask: Boolean): (android.graphics.Canvas) -> Unit = { c ->
+        // An independent rounded fill: for a clipped child too (judged only where the child covers fully, below).
+        fun draw(@Suppress("UNUSED_PARAMETER") mask: Boolean): (android.graphics.Canvas) -> Unit = { c ->
             c.drawColor(Color.BLUE)
             c.translate(-x0.toFloat(), -y0.toFloat())
-            if (!clipped) c.drawRoundRect(shape.l, shape.t, shape.r, shape.b, shape.radius, shape.radius, paint)
-            else if (mask) {
-                val o = c.saveLayer(kotlin.math.floor(shape.l), kotlin.math.floor(shape.t), kotlin.math.ceil(shape.r), kotlin.math.ceil(shape.b), null)
-                c.drawRect(shape.l, shape.t, shape.r, shape.b, paint)
-                c.saveLayer(kotlin.math.floor(shape.l), kotlin.math.floor(shape.t), kotlin.math.ceil(shape.r), kotlin.math.ceil(shape.b), ShapeMask.dstIn)
-                c.drawRoundRect(shape.l, shape.t, shape.r, shape.b, shape.radius, shape.radius, ShapeMask.opaque)
-                c.restoreToCount(o)
-            } else {
-                c.clipPath(android.graphics.Path().apply { addRoundRect(shape.l, shape.t, shape.r, shape.b, shape.radius, shape.radius, android.graphics.Path.Direction.CW) })
-                c.drawRect(shape.l, shape.t, shape.r, shape.b, paint)
-            }
+            c.drawRoundRect(shape.l, shape.t, shape.r, shape.b, shape.radius, shape.radius, paint)
         }
         val softRef = Bitmap.createBitmap(x1 - x0 + 1, y1 - y0 + 1, Bitmap.Config.ARGB_8888).also { draw(true)(Canvas(it)) }
         val gpuRef = gpu(x1 - x0 + 1, y1 - y0 + 1, draw(ShapeMask.masks()))
@@ -254,6 +297,8 @@ class ShapeProof(private val instrumentation: Instrumentation) {
                 if (x + ox >= b.width || y + oy >= b.height) continue
                 val p = b.getPixel(x + ox, y + oy)
                 if (ignoreGreen && (p shr 8 and 255) > 8) continue
+                // A clipped child the shape's size: its own edges lie on the shape's straight sides; judged a pixel in.
+                if (clipped && (x < shape.l + 1 || x + 1 > shape.r - 1 || y < shape.t + 1 || y + 1 > shape.b - 1)) continue
                 // Skia's own antialiased rounded rectangle at the expected geometry (what `drawRoundRect` gives):
                 // geometry checked exactly, whichever antialiasing each path uses.
                 val c = (ref.getPixel(x - x0, y - y0) shr 16 and 255) / 255.0

@@ -124,4 +124,22 @@ class ShapeTest {
         assertFalse(hst.isMoving)
         reduced = false
     }
+
+    @Test fun aHandoverFromAClampedRadiusStartsFromTheShownSpeed() {
+        // Height 100: the radius heads for 500 and is held at 50; retargeted to 20 there, it starts from rest (Codex).
+        w = 200.0; h = 100.0; r = Value.Num(8.0, "px")
+        val hst = host("size radius 400ms")
+        hst.place()
+        assertEquals("drawn once at 8 (the painter reads it)", 8f, hst.root.shownRadius(), 0f)
+        r = Value.Num(500.0, "px"); hst.refresh(); hst.place()
+        var t = 0L
+        while (hst.root.shownRadius() < 50f && t < 400_000_000) { t += 8_000_000; hst.at(t) }
+        t += 40_000_000; hst.at(t)
+        assertEquals("held by the clamp", 50f, hst.root.shownRadius(), 0f)
+        r = Value.Num(20.0, "px"); hst.refresh(); hst.place()
+        assertEquals(50f, hst.root.shownRadius(), 1e-3f)
+        hst.at(t + 16_000_000)
+        val after = hst.root.shownRadius()
+        assertTrue("it leaves the clamp at once, slowly, not pushed further by the hidden speed ($after)", after < 50f && after > 45f)
+    }
 }

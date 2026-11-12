@@ -284,20 +284,19 @@ private fun clipFrame(canvas: android.graphics.Canvas, n: HostNode, x: Float, y:
  * no children.
  */
 private inline fun children(canvas: android.graphics.Canvas, n: HostNode, content: () -> Unit) {
-    if (n.view.primitive != "box" || n.value("clip") != Value.Bool.TRUE) return content()
+    if (n.view.primitive != "box" || n.value("clip") != Value.Bool.TRUE) { ShapeMask.release(n); return content() }
     val s = n.shape()
     if (s.isEmpty) return
     if (s.radius <= 0f) { canvas.clipRect(s.left, s.top, s.right, s.bottom); return content() }
     // A software canvas masks too: its path clip's antialiasing is not its fill's (measured on the emulator: mean edge
     // coverage 0.11 off `drawRoundRect`; the GPU's clip matched it exactly).
     if (!ShapeMask.masks() && canvas.isHardwareAccelerated) { canvas.clipPath(n.roundedPath(s)); return content() }
-    val bytes = ShapeMask.bytes(canvas, s)
-    if (!ShapeMask.take(bytes)) {
+    if (!ShapeMask.take(n, ShapeMask.bytes(n, s))) {
         ShapeMask.refused(n)
         canvas.clipPath(n.roundedPath(s))
         return content()
     }
-    try {
+    run {
         // Whole pixels round the shape: a layer cut at a fractional bound cuts the edge's antialiased pixels.
         val l = kotlin.math.floor(s.left); val t = kotlin.math.floor(s.top)
         val r = kotlin.math.ceil(s.right); val b = kotlin.math.ceil(s.bottom)
@@ -306,7 +305,7 @@ private inline fun children(canvas: android.graphics.Canvas, n: HostNode, conten
         canvas.saveLayer(l, t, r, b, ShapeMask.dstIn)
         canvas.drawRoundRect(s.left, s.top, s.right, s.bottom, s.radius, s.radius, ShapeMask.opaque)
         canvas.restoreToCount(outer)
-    } finally { ShapeMask.give(bytes) }
+    }
 }
 
 /** The path of [s], kept on the node and made again only when the shape changes. */
@@ -319,41 +318,53 @@ private fun HostNode.roundedPath(s: NodeShape): android.graphics.Path {
 }
 
 /**
- * Android 10's masks (T-011, D-103): at most [BUDGET] bytes of mask layers open at once on a thread (two layers of four
- * bytes a pixel over the shape's area on the device), counted before anything is allocated; a mask past it is refused.
+ * Android 10's masks (T-011, D-103): at most [BUDGET] bytes of mask layers for every masking node drawn on a thread
+ * together, whether open at once or not (a node's recording can be replayed later, nested in another's: the sum of all
+ * of them bounds any set open at once). A node's bytes: two layers of four bytes a pixel over its shape's whole-pixel
+ * bounds at device size (its own and its ancestors' scale), capped at the display. Counted before anything is allocated;
+ * a node past it is refused; a node that stops masking, or goes, gives its bytes back.
  */
 internal object ShapeMask {
     const val BUDGET = 8L * 1024 * 1024
     /** Proofs only: take Android 10's route on any release. */
     @Volatile internal var force = false
-    private val open = ThreadLocal.withInitial { longArrayOf(0L) }
+    private val held = ThreadLocal.withInitial { java.util.WeakHashMap<HostNode, Long>() }
+    @Volatile var refusals = 0; private set
     private val logged = java.util.Collections.newSetFromMap(java.util.WeakHashMap<HostNode, Boolean>())
     val dstIn = android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN) }
     val opaque = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF000000.toInt() }
 
     fun masks() = force || android.os.Build.VERSION.SDK_INT < 30
 
-    @Suppress("DEPRECATION")
-    fun bytes(canvas: android.graphics.Canvas, s: NodeShape): Long {
-        val r = android.graphics.RectF(kotlin.math.floor(s.left), kotlin.math.floor(s.top), kotlin.math.ceil(s.right), kotlin.math.ceil(s.bottom))
-        canvas.matrix.mapRect(r)
-        val area = r.width().toDouble() * r.height().toDouble()
+    fun bytes(n: HostNode, s: NodeShape): Long {
+        var scale = 1.0
+        var p: HostNode? = n
+        while (p != null) { scale *= kotlin.math.abs(p.motion.scale.toDouble()); p = p.parent }
+        val d = android.content.res.Resources.getSystem().displayMetrics
+        val most = kotlin.math.max(d.widthPixels, d.heightPixels).toDouble()
+        val w = minOf((kotlin.math.ceil(s.right) - kotlin.math.floor(s.left)) * scale, most)
+        val h = minOf((kotlin.math.ceil(s.bottom) - kotlin.math.floor(s.top)) * scale, most)
+        val area = w * h
         return if (area.isFinite() && area > 0) (2 * 4 * area).toLong() else Long.MAX_VALUE
     }
 
-    fun take(bytes: Long): Boolean {
-        val o = open.get()
-        if (bytes > BUDGET - o[0]) return false
-        o[0] += bytes
+    /** [n] masking with [bytes]: whether the thread's masks, its new bytes included, stay within [BUDGET]. */
+    fun take(n: HostNode, bytes: Long): Boolean {
+        val m = held.get()
+        val others = m.entries.sumOf { (k, v) -> if (k === n) 0L else v }
+        if (bytes > BUDGET - others) { m.remove(n); return false }
+        m[n] = bytes
         return true
     }
 
-    fun give(bytes: Long) { open.get()[0] -= bytes }
+    /** [n] masks no longer. */
+    fun release(n: HostNode) { held.get().remove(n) }
 
-    /** Bytes of masks open now on this thread (proofs). */
-    fun openBytes() = open.get()[0]
+    /** Bytes held by masking nodes on this thread now (proofs). */
+    fun heldBytes() = held.get().values.sum()
 
     fun refused(n: HostNode) {
+        refusals++
         if (logged.add(n)) android.util.Log.w("Launcher", "[kdl] a clipping box past Android 10's mask budget: its rounded clip is aliased")
     }
 }

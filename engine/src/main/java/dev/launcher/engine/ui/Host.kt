@@ -182,8 +182,16 @@ class HostNode internal constructor(
                 if (curve == null) m.radius.snap(0f)
                 else {
                     val now = m.now()
-                    val shown = (old.at(w, h) + residual(m)).coerceIn(0f, kotlin.math.min(w, h) / 2f)
-                    val speed = baseSpeed(old, w, h, now) + m.radius.velocity(now) - baseSpeed(decl, w, h, now)
+                    val raw = old.at(w, h) + residual(m)
+                    val upper = kotlin.math.min(w, h) / 2f
+                    val shown = raw.coerceIn(0f, upper)
+                    // The speed shown, not the hidden track's: where the clamp holds it, the clamp's own (Codex).
+                    val shownSpeed = when {
+                        raw >= upper -> (if (w <= h) m.width.velocity(now) else m.height.velocity(now)) / 2f
+                        raw <= 0f -> 0f
+                        else -> baseSpeed(old, w, h, now) + m.radius.velocity(now)
+                    }
+                    val speed = shownSpeed - baseSpeed(decl, w, h, now)
                     m.radius.continueFrom(shown - decl.at(w, h), speed, 0f, curve, now)
                     onMoving(this)
                 }
