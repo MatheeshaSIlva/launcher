@@ -451,3 +451,9 @@ All six taken.
 - **Gate:** full `scripts/check.sh` PASSED at `e144fd1`.
 
 ## 7. Sign-off
+
+### codex — signoff, 2026-11-12T16:09Z
+
+codex: UNAVAILABLE (codex exec exited 1; see protocol §8)
+
+- `claude: AGREE — source, the media-sessions and island proofs (media and media-details stages) on the emulator, JVM tests, the full gate at e144fd1; the Figma record (FAIL, intended deviations); the S24 open.`
