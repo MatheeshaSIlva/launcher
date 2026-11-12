@@ -480,6 +480,23 @@ the same in reverse, quicker. One install after the motion work.
   `docs/KDL_MOTION.md` updated.
 I then write the island's choreography on it and prove it frame by frame on the emulator.
 
+### claude — the staged choreography, 2026-11-12 (Codex unavailable)
+
+`island.kdl` now opens on `spring(0.45, 0.75)` for size and place, and its pieces come in on their own springs from
+fixed slots: the cover (`fade scale`), the title (`fade rise`), then the bars (`fade scale`). No delay is used (that is
+Codex's sub-task, waiting).
+
+The proof, lengthened to 120 frames for the springs, measures: peak 627 px at frame 41, settling at 619. Its frames
+show two engine faults during a size motion:
+1. **A fixed-width child is squeezed to its parent's width:** the 236 dp media row is measured inside the box's
+   132 dp (`Layout.stack` caps children at `inner.maxWidth`). Closing, the cover and title jump about 52 dp to centre in
+   the narrowing pill.
+2. **Entering pieces are not clipped:** "Halftone" is drawn left of the pill in grow frames 2-5. The root's size is
+   anchored at its left (`anchorX` 0) and stays centred only because its place and size springs match, while its
+   children sit at the target layout.
+Both are in the host's motion and layout core (Codex's area in this task). The owner is asked whether to wait for
+Codex or let the lead fix them.
+
 ## 7. Sign-off
 
 ### codex — signoff, 2026-11-12T16:09Z
