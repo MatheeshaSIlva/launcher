@@ -389,7 +389,11 @@ class HostNode internal constructor(
         "row" -> Layout.row(frame(), c, length("gap") ?: 0f, Justify.valueOf(word("justify").enumName("START")),
             Align.valueOf(word("align").enumName("CENTER")), kids)
         "stack" -> Layout.stackAlign(word("align") ?: "center").let { (x, y) -> Layout.stack(frame(), c, x, y, kids, word("align") == "centre-line") }
-        "box" -> if (word("align") == "centre-line") Layout.stack(frame(), c, 0f, 0.5f, kids, centreLine = true) else Layout.box(frame(), c, kids)
+        "box" -> when (word("align")) {
+            "centre" -> Layout.stack(frame(), c, 0.5f, 0.5f, kids, centreLine = true)
+            "centre-line" -> Layout.stack(frame(), c, 0f, 0.5f, kids, centreLine = true)
+            else -> Layout.box(frame(), c, kids)
+        }
         "spacer" -> Arranged(Layout.spacer(length("size") ?: 0f, c), emptyList(), emptyList())
         else -> Layout.leaf(frame(), c, Measurer { w, h -> painter.measure(this, w, h) ?: Measured(dev.launcher.engine.layout.Size(0, 0)) })
     }
@@ -398,7 +402,11 @@ class HostNode internal constructor(
     internal fun childAnchor(): Pair<Float, Float> = when (view.primitive) {
         "row" -> 0f to when (word("align")) { "top" -> 0f; "bottom" -> 1f; else -> 0.5f }
         "stack" -> (word("align") ?: "center").let { if (it == "centre-line") 0.5f to 0.5f else Layout.stackAlign(it) }
-        "box" -> 0f to if (word("align") == "centre-line") 0.5f else 0f
+        "box" -> when (word("align")) {
+            "centre" -> 0.5f to 0.5f
+            "centre-line" -> 0f to 0.5f
+            else -> 0f to 0f
+        }
         else -> 0f to 0f
     }
 

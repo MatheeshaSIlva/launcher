@@ -23,6 +23,24 @@ import org.junit.Test
  * is slice 6's to check there.
  */
 class HostTest {
+    @Test fun centredBoxAlignsChildrenOnBothAxesUsingTheirCentreLines() {
+        val d = (ComponentReader.read(KdlParser.parse("""
+            component "centred" {
+              view { box width=(px)236 height=(px)32 align="centre" { text x; box } }
+            }
+        """.trimIndent())) as ReadResult.Ok).component
+        val node = ComponentHost(d, env, Units(1f, 1f), { painter }).root
+        val measures = listOf(Measured(Size(132, 20), 12f), Measured(Size(20, 10)))
+        val kids = measures.map { m -> object : Child { override fun measure(c: Constraints) = m } }
+        val arranged = node.arrange(Constraints(0, 300, 0, 100), kids)
+        assertEquals(Size(236, 32), arranged.measured.size)
+        for ((i, m) in measures.withIndex()) {
+            assertEquals(118f, arranged.placements[i].exactX + m.exactWidth / 2f, 0f)
+            assertEquals(16f, arranged.placements[i].exactY + m.centre, 0f)
+        }
+        assertEquals(0.5f to 0.5f, node.childAnchor())
+    }
+
     /** T-007: a notification arriving and a prop worked out from it reach readers together, or neither. */
     @org.junit.Test fun aSettledPropArrivesInOneSnapshotWithWhatCausedIt() {
         var max = 1.0

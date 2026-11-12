@@ -10,6 +10,13 @@ import org.junit.Test
 
 /** E2 slice 3b: the validator against the primitives' schemas; every code with its place and hint. */
 class ValidatorTest {
+    @Test fun boxAcceptsCentreAlignmentAndRejectsUnknownAlignment() {
+        for (align in listOf("top-start", "centre-line", "centre")) {
+            assertEquals(emptyList<Diagnostic>(), findings(view("""box align="$align" { text x }""")))
+        }
+        assertEquals(listOf("wrong-type"), findings(view("box align=middle")).map { it.code })
+    }
+
     @Test fun repeatsCheckOuterInputAndInnerArgumentsAndRefuseAmbiguousAliases() {
         assertEquals(emptyList<Diagnostic>(), findings(view("""
             row { text "{n.title}" each="{battery.icons}" as=n { }

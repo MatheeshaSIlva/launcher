@@ -72,7 +72,7 @@ object Primitives {
             "bottom-start", "bottom", "bottom-end", "centre-line"), "center")), container = true),
         PrimitiveDef("box", lengths("loop-from", "loop-to", "stroke") + listOf(
             AttrDef("loop-period", AttrType.NUMBER, 1000.0), AttrDef("loop-phase", AttrType.NUMBER, 0.0),
-            AttrDef("loop-run", AttrType.BOOL, false)) + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("stroke-align", AttrType.oneOf("inside", "center"), "inside") + AttrDef("align", AttrType.oneOf("top-start", "centre-line"), "top-start") + AttrDef("fill", AttrType.COLOR) +
+            AttrDef("loop-run", AttrType.BOOL, false)) + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("stroke-align", AttrType.oneOf("inside", "center"), "inside") + AttrDef("align", AttrType.oneOf("top-start", "centre-line", "centre"), "top-start") + AttrDef("fill", AttrType.COLOR) +
             AttrDef("reveal", AttrType.NUMBER, 1.0) + AttrDef("clip", AttrType.BOOL, false), container = true),
         PrimitiveDef("text", lengths("size", "fade") + listOf(
             AttrDef("overflow", AttrType.oneOf("clip", "fade"), "clip", bindable = false),
