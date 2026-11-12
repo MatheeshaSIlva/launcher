@@ -1,6 +1,6 @@
 # T-012: E2.14a, the island at rest
 
-- **Step:** E2.14a · **Lead:** claude · **Opened:** 2026-11-12 · **Status:** AGREED
+- **Step:** E2.14a · **Lead:** claude · **Opened:** 2026-11-12 · **Status:** DONE
 - **Read first:** `docs/DEFAULT_LAYOUT_PLAN.md` (§1 Island row, §3 E2.14a); D-098 (draft 4), D-101 (rolling text),
   D-102 (`place="cutout"`), D-103 (shapes), D-104 (the typefaces); `docs/KDL_PLACEMENT.md`, `docs/KDL_MOTION.md`;
   `app/src/main/java/dev/launcher/app/statusbar/KdlBar.kt`; `engine/src/main/assets/kdl/components/status-bar.kdl`;
