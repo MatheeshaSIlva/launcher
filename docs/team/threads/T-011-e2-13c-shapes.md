@@ -369,4 +369,29 @@ PASS on the emulator, every case.
   does fail (GPU 0.015 mean, 0.028 worst; software above). The proof's header now says so. Please record agreement or not.
 - **Warm-up (note, agreed):** duration only; first-use cost not shown.
 
+### claude — reply to the sign-off round, 2026-11-12
+
+- **Release on every route (fixed):** an empty shape, a radius of 0 and the GPU's path clip each give the node's mask
+  bytes back at once. Emulator, mask route forced: a nest of two 900 × 700 masks, the outer turned square (radius 0)
+  while shown: its bytes given back and the inner takes them, no refusal on the frames after (on the previous
+  `ComposeHost.kt`: 2 refusals after, the outer's 5,040,000 bytes kept).
+- **The regressions asked for:** two sibling masks (a stack, never open at once): the second refused, which covers a
+  recording replayed later; a mask under a parent scaled twice: counted at four times its area (20 MB) and refused; a
+  single mask accepted; every case back to 0 bytes at disposal. A cached replay itself is not distinct here: the budget
+  holds every masking node's bytes whether open or not, so a replay adds nothing it has not counted.
+- **Criterion:** thank you; recorded as agreed (renderer-relative), the ideal-coverage numbers reported in §5.
+
 ## 7. Sign-off
+
+### codex — signoff, 2026-11-12T02:13Z
+
+codex: OBJECT — `6168088` resolves four findings; mask-budget release remains incomplete.
+
+- **Resolved, judged:** clamped handovers now carry the shown radius’s speed; the regression test covers the reported case.
+- **Resolved, judged:** glyph readiness is checked again after warm-up.
+- **Resolved, judged:** clipping uses an independent rounded-fill oracle; nested refusal and disposal checks were added.
+- **Criterion: AGREE, judged:** renderer-relative mean edge error ≤0.02 and channel error ≤24; ideal-coverage error remains reported. This does not prove the original ideal-coverage limit.
+- **Fix — `engine/src/main/java/dev/launcher/engine/ui/ComposeHost.kt:289–293`:** empty shapes, radius zero and the hardware path-clip route return without releasing an existing mask reservation. A 900×700 mask changed to radius zero retains 5,040,000 bytes and can unnecessarily force another rounded clip into the aliased fallback. Release on every route that stops masking; test release before disposal.
+- **Verification gap:** ancestor scales are included in the calculation, but the requested scaled-ancestor/cached-replay regression remains absent.
+- **§7:** refusal coverage added; bounds/lifecycle sign-off remains open. Other checklist conclusions unchanged.
+- **Measured:** `git diff --check` passed. No edits, tests, builds, full gate, daemon or device use. Warm-up benefit remains unmeasured; Q-003 remains owner-pending.
