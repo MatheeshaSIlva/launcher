@@ -23,6 +23,84 @@ import org.junit.Test
  * is slice 6's to check there.
  */
 class HostTest {
+    @Test fun retainedSubtreeRemainsInsideItsClippingParentsDrawingTree() {
+        var on = true
+        val e = object : Env by env { override fun state(name: String) = Value.Bool.of(on) }
+        val d = (ComponentReader.read(KdlParser.parse("""
+            component "clipped" {
+              state { on #true }
+              view { box width=236 height=32 radius="full" clip=#true {
+                box width=132 height=20 visible="${'$'}on" exit="fade 220ms" { box }
+              } }
+            }
+        """.trimIndent())) as ReadResult.Ok).component
+        val host = ComponentHost(d, e, Units(1f, 1f), { painter })
+        val parent = host.root
+        parent.measured = Measured(Size(236, 32))
+        val child = parent.children.single()
+        child.measured = Measured(Size(132, 20)); child.placed(0f, 0f, 0f, 0f)
+        on = false; host.refresh()
+        assertEquals(emptyList<HostNode>(), parent.children)
+        assertEquals(listOf(child), parent.drawn)
+        assertSame(parent, child.parent)
+        assertEquals(true, child.isLeaving)
+        assertEquals(1, child.drawn.size)
+        assertSame(Value.Bool.TRUE, parent.value("clip"))
+        // The parent's clip remains the moving pill, not the retained child's wider recording.
+        parent.motion.drawnWidth = 132f; parent.motion.anchorX = 0.5f
+        val shape = parent.shape()
+        assertEquals(52f, shape.left, 0f)
+        assertEquals(16f, shape.radius, 0f)
+        assertEquals(false, shape.contains(53f, 1f))
+        assertEquals(true, shape.contains(118f, 16f))
+    }
+
+    @Test fun realigningAnExitKeepsItsFadeAndDoesNotStartAPlaceAnimation() {
+        val d = (ComponentReader.read(KdlParser.parse("""
+            component "exit" {
+              view { box { box width=132 height=20 transition="place 200ms" exit="fade 220ms" } }
+            }
+        """.trimIndent())) as ReadResult.Ok).component
+        var now = 0L
+        val host = ComponentHost(d, env, Units(1f, 1f), { painter },
+            motionContext = dev.launcher.engine.ui.motion.MotionContext(now = { now }))
+        val child = host.root.children.single()
+        child.measured = Measured(Size(132, 20))
+        child.placed(0.25f, 6f, 0.5f, 0.5f)
+        val motion = child.nodeMotion!!
+        motion.exit(8f, false); child.leaving(true)
+        now = 50_000_000; child.step(now)
+        val alpha = child.motion.alpha
+        child.retainedPlaced(52.75f, 6.5f, 0.5f, 0.5f)
+        assertEquals(0f, child.motion.placeX, 0f)
+        assertEquals(0f, child.motion.placeY, 0f)
+        assertEquals(alpha, child.motion.alpha, 0f)
+        assertEquals(0f, motion.alpha.target, 0f)
+        now = 220_000_000; child.step(now)
+        assertEquals(0f, child.motion.alpha, 0f)
+    }
+
+    @Test fun retainedOverlayFollowsCurrentParentLayoutWithoutResizing() {
+        val d = (ComponentReader.read(KdlParser.parse("""
+            component "centred" {
+              view { box align="centre" padding-start=3 padding-end=5 padding-top=2 padding-bottom=4 { box } }
+            }
+        """.trimIndent())) as ReadResult.Ok).component
+        val parent = ComponentHost(d, env, Units(1f, 1f), { painter }).root
+        val child = parent.children.single()
+        child.measured = Measured(Size(132, 20), 12.25f, 131.5f, 19.5f)
+        child.leaving(true)
+        child.placedX = 0; child.placedY = 0
+        for (width in listOf(236f, 132f, 180.5f)) {
+            parent.measured = Measured(Size(kotlin.math.ceil(width).toInt(), 32), 16f, width, 32f)
+            val before = child.measured
+            val p = parent.retainedPlacement(child)
+            assertEquals((width - 8f - 131.5f) / 2f + 3f, p.exactX, 0.0001f)
+            assertEquals(2f + (32f - 6f) / 2f - 12.25f, p.exactY, 0.0001f)
+            assertEquals(before, child.measured)
+        }
+    }
+
     @Test fun centredBoxAlignsChildrenOnBothAxesUsingTheirCentreLines() {
         val d = (ComponentReader.read(KdlParser.parse("""
             component "centred" {

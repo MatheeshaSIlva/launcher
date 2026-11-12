@@ -85,11 +85,14 @@ private class Policy(val n: HostNode, val composed: List<HostNode>) : MeasurePol
             val fx = n.parentFractionX + n.motion.restDrawX
             val fy = n.parentFractionY + n.motion.restDrawY
             val (ax, ay) = n.childAnchor()
-            a.placements.forEachIndexed { j, p ->
-                val k = active[j]
+            val placements = active.indices.associate { active[it] to a.placements[it] }
+            for (k in drawn.indices) {
                 val child = drawn[k]
+                if (child.isLeaving && n.view.primitive != "box" && n.view.primitive != "stack") continue
+                val p = placements[k] ?: n.retainedPlacement(child)
                 child.placedX = p.x; child.placedY = p.y
-                child.placed(p.x + p.residualX, p.y + p.residualY, ax, ay)
+                if (child.isLeaving) child.retainedPlaced(p.exactX, p.exactY, ax, ay)
+                else child.placed(p.exactX, p.exactY, ax, ay)
                 child.parentFractionX = fx
                 child.parentFractionY = fy
                 if (child.painter.wholePixels(child)) {
@@ -102,8 +105,7 @@ private class Policy(val n: HostNode, val composed: List<HostNode>) : MeasurePol
                     child.motion.place(ox, oy)
                 } else child.motion.place(p.residualX, p.residualY)
             }
-            // Placed in drawing order (Compose draws children as they are placed): a leaving child stays at its old index
-            // and where it was last placed, its motion and fractions as they were.
+            // Placed in drawing order, including exits under this parent's drawing and clip.
             for (k in drawn.indices) placeables[k]?.place(drawn[k].placedX, drawn[k].placedY)
         }
     }

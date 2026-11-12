@@ -120,23 +120,25 @@ class HostNode internal constructor(
     internal fun children(value: List<HostNode>) { if (childState.value != value) childState.value = value }
     private val drawnState = mutableStateOf(children)
     /**
-     * Its children that draw, in order: the laid-out ones and those leaving at their old places (13a-2: an `exit` keeps a
-     * node drawing at its last geometry, out of layout, until it settles).
+     * Its children that draw, in order: active and leaving. Exits retain their measure out of layout; overlay parents
+     * still align them within their current layout until they settle.
      */
     val drawn: List<HostNode> get() = drawnState.value
     internal fun drawn(value: List<HostNode>) { if (drawnState.value != value) drawnState.value = value }
     private val leavingState = mutableStateOf(false)
-    /** On its way out: drawn at its frozen place, never laid out. */
+    /** On its way out: measured with frozen constraints, excluded from the parent's layout size. */
     val isLeaving: Boolean get() = leavingState.value
     internal fun leaving(on: Boolean) { if (leavingState.value != on) leavingState.value = on }
     internal var parent: HostNode? = null
     /** Its plan key (template path and item ids). */
     internal var key: List<String> = emptyList()
-    /** Where its parent last placed it, in whole px: where it stays while it leaves. */
     /** The constraints its parent last measured it with (min/max width, min/max height): a leaving node keeps them. */
     internal var measuredWith: IntArray? = null
+    /** Where its parent last placed it, in whole px (overlay parents realign exits). */
     internal var placedX = 0
     internal var placedY = 0
+    private var lastPlaceX = 0f
+    private var lastPlaceY = 0f
     internal fun release() {
         painter.release(this)
         if (ownLazy.isInitialized()) own.discardDisplayList()
@@ -269,6 +271,7 @@ class HostNode internal constructor(
      * change of them places it again and never measures.
      */
     internal fun placed(x: Float, y: Float, anchorX: Float, anchorY: Float) {
+        lastPlaceX = x; lastPlaceY = y
         val tx = length("translate-x") ?: 0f
         val ty = length("translate-y") ?: 0f
         val opacity = (number("opacity") ?: 1f).takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
@@ -408,6 +411,24 @@ class HostNode internal constructor(
             else -> 0f to 0f
         }
         else -> 0f to 0f
+    }
+
+    /** Overlay exits keep their measure, but follow the parent's current alignment and padding. */
+    internal fun retainedPlacement(child: HostNode): dev.launcher.engine.layout.Placement {
+        if (view.primitive != "box" && view.primitive != "stack")
+            return dev.launcher.engine.layout.Placement(child.placedX, child.placedY)
+        val frozen = object : Child { override fun measure(c: Constraints) = child.measured }
+        // Fix the parent to its active layout: an exit must never contribute to its size.
+        val fixed = frame().copy(width = exactWidth, height = exactHeight)
+        val (ax, ay) = childAnchor()
+        return Layout.stack(fixed, Constraints(0, measured.size.width, 0, measured.size.height), ax, ay,
+            listOf(frozen), word("align") == "centre-line" || (view.primitive == "box" && word("align") == "centre")).placements.single()
+    }
+
+    /** Re-align an exit without starting a new place transition or replacing its presence tracks. */
+    internal fun retainedPlaced(x: Float, y: Float, anchorX: Float, anchorY: Float) {
+        nodeMotion?.rebase(x - lastPlaceX, y - lastPlaceY)
+        placed(x, y, anchorX, anchorY)
     }
 
     private fun String?.enumName(default: String) = this?.uppercase()?.replace('-', '_') ?: default
@@ -765,7 +786,7 @@ class ComponentHost(
             val before = (i - 1 downTo 0).map { old[it] }.firstOrNull { it in out }
             out.add(if (before == null) 0 else out.indexOf(before) + 1, c)
         }
-        // A node that just started leaving is in its parent's laid-out list no longer, but at its old place in drawn.
+        // A node that just started leaving is in its parent's laid-out list no longer, but at its old drawing index.
         return out
     }
 
