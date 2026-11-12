@@ -202,11 +202,16 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     private var shownNow = true
 
+    /** Told whenever the bar comes or goes (E2.14e: the KDL island follows it, as a full-screen app hides it). */
+    var onShown: ((Boolean) -> Unit)? = null
+    val shownForApps get() = shownNow
+
     /** Fades (and slides a touch upward) like the stock bar does, instead of vanishing or appearing in one frame. */
     private fun sync() {
         val want = dev.launcher.engine.shell.StockHandover.drawn(showing, waitingForStock, panelOpen)
         if (want == shownNow) return
         shownNow = want
+        onShown?.invoke(want)
         animate().cancel()
         if (!want) {
             animate().alpha(0f).translationY(-barHeight * 0.25f).timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_HIDE)).withEndAction { visibility = INVISIBLE }.start()

@@ -61,7 +61,7 @@ class IslandKdlTest {
         val c = component()
         assertEquals("island", c.name)
         assertEquals(listOf("device", "time", "battery", "media", "notifications"), c.uses.sources.map { it.name })
-        assertEquals(listOf("hour24", "title-scroll", "mode"), c.props.map { it.name })
+        assertEquals(listOf("hour24", "title-scroll", "mode", "shown"), c.props.map { it.name })
         val root = host().root
         assertEquals("box", root.view.primitive)
         assertEquals(Value.Str("cutout"), root.value("place"))

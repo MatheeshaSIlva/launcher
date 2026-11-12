@@ -91,6 +91,12 @@ object KdlBar {
                 view.setDerived("max-icons", Value.Num(BarFit.count(bar.cameraLeftForFit(), w, moon, dev.launcher.app.design.Scale.unitPx(ctx)).toDouble()))
             }
         }
+        // E2.14e: the island comes and goes with the bar (an app full screen hides it; a swipe from the top shows it).
+        if (island) {
+            view.setProp("shown", Value.Bool.of(bar.shownForApps))
+            bar.onShown = { s -> if (!view.isDisposed) view.setProp("shown", Value.Bool.of(s)) }
+            view.addOnDispose { bar.onShown = null }
+        }
         fun hour24() { if (!view.isDisposed) view.setProp("hour24", Value.Bool.of(DateFormat.is24HourFormat(ctx))) }
         hour24()
         // The 12/24-hour setting, however it changes (the Settings app also sends TIME_CHANGED; adb and others do not).

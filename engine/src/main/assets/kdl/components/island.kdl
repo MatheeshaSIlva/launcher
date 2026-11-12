@@ -14,11 +14,14 @@
 // the plug-in moment (`battery.plugged`, 3 s). A notification (Figma 8:203, the minimal mode): 200 dp, a terracotta dot and
 // the sender left, "+N" in `muted` grey right, for 4 s (`notifications.arrival`; the app's name instead of the sender
 // while locked). `mode` "detailed" (a banner that grows out of the island) comes with E2.14c-2 and shows as minimal now.
-component "island" version="0.3.0" {
+// The island comes and goes with the bar (E2.14e): an app that goes full screen hides it (a quick fade and shrink), a
+// swipe from the top shows it for a moment (a soft spring back), as the stock bar does.
+component "island" version="0.4.0" {
   props {
     hour24 type=bool default=#true
     title-scroll type=bool default=#true
     mode type=string default="minimal"
+    shown type=bool default=#true
   }
   uses {
     source device
@@ -32,7 +35,7 @@ component "island" version="0.3.0" {
     // the cover, the title, then the bars. Closing, the pieces go together and the time comes back once they have gone
     // (owner, 2026-11-12: "springy and staged").
     // Every piece has a fixed slot that stays, so nothing shifts while the others come and go.
-    box place="cutout" place-gap=(dp)4 width="{notifications.arriving ? 200dp : (battery.plugged ? 164dp : (media.playing ? 236dp : 132dp))}" height=(dp)32 radius="full" fill="#000000" align="centre" clip=#true transition="size spring(0.45, 0.75)" label="Island" {
+    box place="cutout" place-gap=(dp)4 width="{notifications.arriving ? 200dp : (battery.plugged ? 164dp : (media.playing ? 236dp : 132dp))}" height=(dp)32 radius="full" fill="#000000" align="centre" clip=#true transition="size spring(0.45, 0.75)" visible="{@shown}" enter="fade scale spring(0.4, 0.8)" exit="fade scale 160ms" label="Island" {
       row width=(dp)132 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{!notifications.arriving && !battery.plugged && !media.playing}" enter="fade spring(0.45, 1) delay(110ms)" exit="fade 90ms" label="Idle" {
         text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true label="Time"
         spacer flex=1
