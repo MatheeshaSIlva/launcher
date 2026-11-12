@@ -12,6 +12,18 @@ Format:
   on Android 10; C allow more memory there. Context: Android 11 and later are unaffected; Codex asked for your decision
   (T-011, D-103).
 
+- [Q-005] (blocks: the island's detailed notifications, T-015) Which motion for the banner that grows out of the island
+  as a blob? Options (Figma, page "Concepts: detailed notification", node 55:167, four keyframes each): A "Drop" (a drop
+  swells under the island, stretches on a neck, falls away as the banner); B "Grow, then pinch" (the island grows into
+  the banner, then pinches its top back off); C "Bead" (a bead buds off and widens into the banner); or a mix. The
+  engine part (`blob`, two shapes joined by a liquid neck) is built and proven; the island's state waits for this.
+- [Q-006] (not blocking) A short moment on the island when the charger comes out too? Options: A (recommended) no, only
+  at plug-in, as built; B ~1.5 s showing the level, without the bolt. Context: your choice mentioned "a short moment
+  when it comes out" (T-014, assumption 6).
+- [Q-007] (not blocking) Review the assumptions made while you were away (2026-11-13), listed in each thread's
+  "Assumptions" section: T-014 (notifications and charging: 10), T-015 (detailed concepts: 4), T-016 (decode text: 3),
+  T-017 (full-screen apps: 2).
+
 ## Answered
 - [Q-004] (blocks: E2.14a) Draft 4's island at rest shows the time and battery in a monospaced typeface; the app only
   bundles Inter. Which font should the island (and draft 4's clock and labels) use? Options: A name the font your Figma
