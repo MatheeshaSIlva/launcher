@@ -629,17 +629,20 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
                     }
                 }
                 widths += e[1] - e[0]
-                if (label.startsWith("grow") && label.removePrefix("grow ").toInt() in listOf(1, 3, 6, 12))
+                if ((label.startsWith("grow") || label.startsWith("back")) && label.substringAfter(' ').toInt() in listOf(1, 2, 3, 5, 9, 14, 20, 28, 40))
                     save("${label.replace(' ', '-')}.png", Bitmap.createBitmap(b, (ex - 130 * density).toInt(), (ey - 18 * density).toInt(), (260 * density).toInt(), (36 * density).toInt()))
             }
             // Idle to playing.
             s.media(playing)
             val grow = ArrayList<Float>()
-            repeat(40) { frame("grow ${it + 1}", grow) }
+            repeat(120) { frame("grow ${it + 1}", grow) }
             val w0 = 132 * density; val w1 = 236 * density
             if (abs(grow.last() - w1) > 1f) errors += "grown to ${grow.last()} px, expected $w1"
-            if (grow.zipWithNext().any { (a, b) -> b < a - 0.5f }) errors += "the width went back while growing: $grow"
-            lines += "grow: ${grow.first().roundToInt()} .. ${grow.last().roundToInt()} px in ${grow.size} frames"
+            // A spring with a slight overshoot (owner: "springy"): rising to its peak, never past 6 dp over, then settling.
+            val gPeak = grow.indexOf(grow.max())
+            if (grow.take(gPeak + 1).zipWithNext().any { (a, b) -> b < a - 0.5f }) errors += "the width went back before its peak: $grow"
+            if (grow.max() > w1 + 6 * density) errors += "overshoot ${grow.max() - w1} px past 6 dp"
+            lines += "grow: ${grow.first().roundToInt()} .. peak ${grow.max().roundToInt()} at frame ${gPeak + 1} .. ${grow.last().roundToInt()} px in ${grow.size} frames"
             // At rest playing: the slots.
             val b = s.capture()
             val e = s.edges(b, cy)
@@ -663,16 +666,18 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             // Back to idle.
             s.media(MediaState.NONE)
             val shrink = ArrayList<Float>()
-            repeat(40) { frame("back ${it + 1}", shrink) }
+            repeat(120) { frame("back ${it + 1}", shrink) }
             if (abs(shrink.last() - w0) > 1f) errors += "back to ${shrink.last()} px, expected $w0"
             // A reversal: playing again, turned back at frame 6.
             s.media(playing)
             val rev = ArrayList<Float>()
             repeat(6) { frame("reversal out ${it + 1}", rev) }
             s.media(MediaState.NONE)
-            repeat(40) { frame("reversal back ${it + 1}", rev) }
+            repeat(120) { frame("reversal back ${it + 1}", rev) }
             val peak = rev.indexOf(rev.max())
-            if (rev.drop(peak).zipWithNext().any { (a, b) -> b > a + 0.5f }) errors += "after the reversal the width grew again: $rev"
+            // After the reversal it closes on the spring: down to its lowest (a slight undershoot allowed), then settling.
+            val low = peak + rev.drop(peak).indexOf(rev.drop(peak).min())
+            if (rev.subList(peak, low + 1).zipWithNext().any { (a, b) -> b > a + 0.5f }) errors += "after the reversal the width grew again before settling: $rev"
             if (abs(rev.last() - w0) > 1f) errors += "after the reversal ${rev.last()} px, expected $w0"
             lines += "reversal at frame 6: peak ${rev.max().roundToInt()} px at frame ${peak + 1}, back to ${rev.last().roundToInt()} px"
             // Paused: the clock stops once everything has landed.

@@ -64,8 +64,8 @@ class IslandKdlTest {
         assertEquals(Value.Str("#000000"), root.value("fill"))
         assertEquals(Value.Str("centre"), root.value("align"))
         assertEquals(Value.Bool.TRUE, root.value("clip"))
-        // Only one state is present at a time (the other leaves on presence motion).
-        assertEquals(listOf("Idle"), root.children.map { (it.value("label") as Value.Str).value })
+        // The idle row is there only while nothing plays; the media row always holds its slots (its pieces come and go).
+        assertEquals(listOf("Idle", "Media"), root.children.map { (it.value("label") as Value.Str).value })
         assertEquals(listOf("Media"), host(playing = true).root.children.map { (it.value("label") as Value.Str).value })
         val row = idle(root)
         assertEquals("row", row.view.primitive)
@@ -129,11 +129,12 @@ class IslandKdlTest {
             assertEquals(236f, 14f + 90f + 28f + 92f + 12f)
             assertEquals(20f * density, left.labelled("Cover slot").length("width"))
             assertEquals(listOf<HostNode>(), left.labelled("Cover slot").children)   // no art yet: the slot stays, empty
-            val cover = host(units = Units(3f, density), playing = true, art = true).root.labelled("Media").children[0].labelled("Cover slot").labelled("Cover")
+            val cover = host(units = Units(3f, density), playing = true, art = true).root.labelled("Media").labelled("Left").labelled("Cover slot").labelled("Cover")
             assertEquals("image", cover.view.primitive)
             assertEquals(20f * density, cover.length("size"))
             assertEquals(4f * density, cover.length("radius"))
-            val title = left.labelled("Title")
+            assertEquals(64f * density, left.labelled("Title slot").length("width"))
+            val title = left.labelled("Title slot").labelled("Title")
             assertEquals(Value.Str("Halftone"), title.value("content"))
             assertEquals(Value.Str("plex-sans"), title.value("font"))
             assertEquals(13f * density, title.length("size"))
@@ -152,6 +153,9 @@ class IslandKdlTest {
         }
         val paused = host(playing = false).root
         assertEquals(132f, paused.length("width"))
-        assertEquals(listOf("Idle"), paused.children.map { (it.value("label") as Value.Str).value })
+        assertEquals(listOf("Idle", "Media"), paused.children.map { (it.value("label") as Value.Str).value })
+        val still = paused.labelled("Media")
+        assertEquals(listOf<HostNode>(), still.labelled("Left").labelled("Title slot").children)   // nothing shown, slots kept
+        assertEquals(listOf("Left", "Right"), still.children.filter { it.value("label") is Value.Str }.map { (it.value("label") as Value.Str).value })
     }
 }
