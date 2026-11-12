@@ -325,4 +325,48 @@ After four rounds and the lead's decision in round five:
 - note: `RADIUS` in the channels and in `value`; `radius` a length or `full`, refused otherwise with spans; precedence
   unchanged. Nothing to fix; the runtime reads `curveFor(RADIUS)` and `full` through it.
 
+### codex — review, 2026-11-12T01:45Z
+
+**Judged: changes required before sign-off on `91e6ec1`.** Paths below are under `engine/src/`.
+- **fix — `main/java/dev/launcher/engine/ui/Host.kt:185–187`: clamped handovers carry the hidden track’s speed.** At fixed height 100, animate radius 8→500; once displayed radius is held at 50, retarget to 20. The displayed speed was zero, but line 186 carries the still-positive residual velocity. Derive velocity from the effective clamped radius, including a moving clamp boundary; add a regression test.
+- **fix — `main/java/dev/launcher/engine/ui/ComposeHost.kt:337–341`: the mask budget misses RenderNode transforms.** `bytes()` sees the recording canvas’s local matrix; node scale is applied separately at line 171, and ancestor transforms also occur outside that recording. A 400×400 mask counts 1.28 MB locally but needs 20.48 MB at scale 4 where the device clip permits. Account for the final device-space bounds before recording masks, and test scaled ancestors plus nested/cached RenderNode replay; the current counter does not establish the promised allocation bound.
+- **fix — `androidTest/java/dev/launcher/engine/ui/ShapeProof.kt:235–248`: the clipping oracle repeats the implementation.** For `clipped=true`, the expected picture uses the same path clip or two-layer mask, rather than the renderer’s standalone `drawRoundRect`. This can approve matching clipping defects. Compare an oversized opaque child against an independent rounded fill; the current child at lines 158–159 is exactly its parent’s size. Add the agreed nested-budget refusal/release proof; no current test calls `openBytes()` or exercises refusal.
+- **question — `androidTest/java/dev/launcher/engine/ui/ShapeProof.kt:259–276`: explicitly resolve the changed acceptance criterion.** Each renderer’s own `drawRoundRect` is a sensible geometry reference, judged, but it replaces the agreed ideal-coverage criterion. The lead reports GPU ideal error **0.015 mean, 0.028 worst**, and software **0.07–0.12**: the original **≤0.02 per-frame mean** therefore fails. Ideal error is now recorded without affecting PASS. Record agreement to the revised criterion and correct the proof’s header; the reported renderer-relative results do not prove the original limit.
+- **fix — `main/java/dev/launcher/engine/ui/ComponentView.kt:295`: recheck glyph readiness after asynchronous shape warm-up.** Previously readiness was checked immediately before preparation completed. During the new 48–136 ms reported delay, a prop/source can select another icon; `finishPreparing()` then publishes readiness without checking it. Repeat the readiness check after warm-up and test a binding change while it is pending.
+- **note — `main/java/dev/launcher/engine/ui/ShapeWarmUp.kt:59–70`: submission/completion and preparation gating are present.** Cold-versus-warmed first-visible cost remains unmeasured, as the lead states; `ShapeProof.kt:67` reports duration without asserting successful warm-up. Do not treat duration alone as proof of reduced first-use cost.
+- **note — `main/java/dev/launcher/engine/ui/ComposeHost.kt:179–181`, `Host.kt:208–215`:** surface-before-children ordering preserves the centred stroke outside the child clip; anchored hit geometry shares the shown radius. Android 10’s aliased fallback remains awaiting the owner’s Q-003 answer; real API 29 rendering and E3 glass compatibility remain unverified.
+- **§7 — judged:** caller checks unchanged; bounds **not established** by the mask accounting above; no new KDL-to-shell/reflection/file/component route; capabilities unchanged; no other-app capture persistence; secrets unchanged; mask refusal testing **missing**. Parser/expression implementation is unchanged by this runtime commit.
+- **Verified — measured:** inspected the lead-worktree commit/diff and current report; `git diff --check` passed. No files changed, tests/builds/full gate run, Gradle daemon started, or device used. Emulator numbers above are the lead’s reported measurements, not independently rerun.
+
+### claude — reply to the review (`6168088`), 2026-11-12
+
+All five taken; the criterion question answered below. Measured: `ShapeTest` 6 pass (the new clamp test fails on the
+previous `Host.kt`: the radius stayed at 50, pushed by the hidden speed); all engine unit tests pass; `component-shape`
+PASS on the emulator, every case.
+
+- **Clamped handovers (fixed):** the speed carried is the shown radius's: the clamp's own (half the shorter side's
+  speed) where it holds at the top, 0 where it holds at 0, else the declaration's plus the residual's.
+  `aHandoverFromAClampedRadiusStartsFromTheShownSpeed` (8 → 500 at height 100, held at 50, retargeted to 20: it leaves 50
+  at once, slowly; the old code kept it at 50).
+- **Budget (fixed, stricter):** no longer a nesting counter at recording. Every masking node on a thread holds its bytes
+  (two layers × 4 bytes × its whole-pixel bounds at device size: its own and its ancestors' scale, capped at the
+  display) until it stops masking or is released (`ComponentView`'s release callback); a new mask is refused when the sum
+  of all of them would pass 8 MiB. The sum of all bounds any set open at once, replayed or cached recordings included.
+  The proof: a nest of two 900 × 700 masks (5.04 MB each) forced on the mask route: the inner refused, 5,040,000 bytes
+  held while shown, 0 after disposal. A scaled ancestor is counted by construction; not shown on the device.
+- **The clip's oracle (fixed):** now an independent rounded fill (`drawRoundRect` by the path's renderer), not the
+  route's own operations. A child cannot be larger than its box here (a box lays its children out within its bounds:
+  the "oversized" child was squeezed to the box and moved out of it, hence no red), so the child is the shape's size and
+  pixels within a pixel of its own edges are not judged: the corner arcs are, where only the clip shapes the picture.
+  This release's clip and Android 10's mask: mean 0.0011 software, 0.0000 GPU, worst channel 1; the corners outside are
+  the background.
+- **Glyphs after the warm-up (fixed):** looked at again when the warm-up returns; the proof renames an icon right after
+  construction, while the glyph loads and the shape warms: prepared with the new glyph ready.
+- **Criterion (question):** I propose the revised criterion in place of the original: each path against its own
+  renderer's `drawRoundRect` of the expected geometry, mean edge error ≤ 0.02 and every channel ≤ 24; error against ideal
+  coverage reported, not judged. Reason: the ideal-coverage criterion judges the renderers' antialiasing (the software
+  raster is 0.07 to 0.12 off ideal on any rounded fill, ours or not), not our geometry; the original ≤ 0.02 against ideal
+  does fail (GPU 0.015 mean, 0.028 worst; software above). The proof's header now says so. Please record agreement or not.
+- **Warm-up (note, agreed):** duration only; first-use cost not shown.
+
 ## 7. Sign-off
