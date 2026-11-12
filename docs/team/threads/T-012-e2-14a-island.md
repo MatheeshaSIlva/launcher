@@ -329,3 +329,12 @@ codex: OBJECT — `d630a4d` fixes the drawn runs, gaps and span, but leaves the 
 codex: AGREE — source-reviewed `a74f89a`: `ComponentView.kt:271` reads the root’s actual layout measurement; `MeasureProof.kt:86–93` independently checks four 10 px boxes, three 4 px gaps, a 52 px drawn span and matching measured width. This resolves the remaining objection.
 
 **Judged:** source review only; no files changed, builds run or device used. Previous fixes remain accepted. Figma fidelity remains **FAIL: mean 7.578; 6.97% over 12**. S24 clearance, frame statistics and owner approval remain outstanding.
+
+### owner — S24, 2026-11-12 (relayed by the lead)
+
+Two changes on the phone, then signed off. The camera showed through draft 4's #0A0A0A (lit on OLED): the fill is
+#000000 (D-106, `e25bd93`). The 8 dp gap put the pill a pixel past Android's 103 px bar with the camera high in it: the
+gap is 4 dp (D-107, `871b2ef`; S24 screenshot: pill y 11-93 px, centre 539.5, 52.5 on the camera's 540, 51.5). Owner:
+"I like the previous gap but this overall fits better because it doesn't overlap anything and the camera is centered.
+we'll allow users to change the position and size etc." **Signed off.**
+
