@@ -270,6 +270,59 @@ After four rounds and the lead's decision in round five:
 
 ## 5. Reports
 
+### codex — work, 2026-11-12T00:41Z
+
+- **Commits:** none; left five assigned files modified as specifically requested. No push.
+- **Changed:** `RADIUS` channel, included in `value`; length-or-`full` schema; unchanged `NodeMotionSpec` API and curve precedence; docs and five new tests.
+- **Verified — measured:** standalone Kotlin/JUnit runner passed **42/42 model tests**, including refusal spans, bindings, duplicates and precedence; `git diff --check` passed.
+- **Not verified:** Gradle tests (wrapper lock attempted under unwritable `C:\.gradle`); full gate intentionally omitted; runtime, pixels and devices remain the lead’s checks.
+- **Surprises:** expressions already preserve strings and lengths; no evaluator change needed. No Gradle daemon started.
+- **Round-five dissent — judged:** aggregate bounding addresses allocation growth, but the aliased fallback changes the promised antialiasing; owner approval remains needed under protocol §5.3.
+- **§7 — judged:** [x] Caller checks: no new external entry point. [x] Bounds: existing parser/expression limits retained; no reflection.
+- **§7 — judged:** [x] No new shell/exec/file/component path. [x] Capability derivation unchanged. [x] No capture persistence. [x] Secret handling unchanged.
+- **§7 — measured:** [x] Refusal paths exercised by passing tests, including exact source spans.
+
+### claude — report (`91e6ec1`; Codex's grammar `fc9c38f`)
+
+- **Changed:** `NodeShape` (the shape and its `contains`), `RadiusDecl` (a length or `full`, literal or bound, read by
+  one function); `HostNode.shownRadius()` (the declaration at the drawn size plus a residual track continued toward 0 on
+  the radius curve from the value and speed shown at a change; clamped; empty or non-finite 0) and `shape()` (the hit
+  region); `BoxPainter` at the shown radius; `ComposeHost` draws the surface first, then the children: `clipPath` of the
+  drawn shape on a GPU canvas from Android 11 (one reused path per node), a two-layer `DST_IN` mask on Android 10 and on
+  any software canvas, within `ShapeMask`'s 8 MiB budget of open masks (past it the same rounded `clipPath`, aliased on
+  Android 10), layers on whole pixels round the shape; `ShapeWarmUp` (an oversized rectangle across a rounded clip
+  through a `HardwareRenderer`, success or failure posted back) gating `ComponentView`'s preparation for components that
+  clip.
+- **Changed from §3, with the reason:** software canvases mask too. Measured: the software renderer's path clip is
+  antialiased differently from its `drawRoundRect` (mean edge coverage 0.11 apart), the GPU's path clip exactly like it
+  (0.0000). Software canvases only draw pictures off screen.
+- **A bug the proof found:** `ComponentView` read whether it clips from its constructor before the property existed (a
+  lazy delegate too): every component crashed at construction. Now a function.
+- **Measured, JVM:** `ShapeTest` 5 (`full` through an axis crossing 40 × 120 to 120 × 40, 40 when square; a numeric-to-
+  `full` handover continuous, then interrupted to a length equal to where it is with its speed carried; clamped,
+  negative and nonsense to 0; the hit region; reduced motion lands at once); all engine unit tests pass.
+- **Measured, emulator (`component-shape`, both paths):** each frame against **its own renderer's** drawing of the
+  expected geometry (the GPU's through a `HardwareRenderer`, the software's on a `Canvas`), geometry from the movers:
+  pill 120 × 40 to 300 × 80 on a spring, turned back at frame 12, 73 frames: mean edge error 0.0017 at worst, worst
+  channel 8; handover 8 px to `full`, 25 frames: 0.0005, 8; the clipped child (this release's route and Android 10's
+  forced): 0.0000, 1, corners the background, a fractional centred stroke's outer half drawn (240 px). Against **ideal**
+  supersampled coverage (my first criterion): the GPU path 0.015 mean, 0.028 at worst (over the proposed 0.02 on a few
+  frames); the software renderer 0.07 to 0.12 (Skia's raster antialiasing). I changed the reference to each renderer's
+  own `drawRoundRect` because that checks the geometry exactly and the antialiasing is the renderer's, not ours; said
+  plainly here for your judgement. `component-motion` and `component-placement` unchanged (PASS).
+- **Warm-up:** its frame takes 48 to 136 ms on the emulator's worker. Cold against warmed first use: not measured (the
+  GPU's pipeline cache persists across runs on the device; a fair cold run needs a fresh install each time). Recorded
+  as not shown.
+- **Not verified:** a real Android 10 device; unequal size and radius curves and `clip` toggled on the device (JVM and
+  code paths only); E3's glass under a clip; the S24 (not needed until E2.14a).
+- **Open with the owner:** Codex's dissent on the Android 10 over-budget fallback (aliased rounded clip) is written to
+  `docs/QUESTIONS.md` (Q-003).
+
 ## 6. Cross-check
+
+### claude — review of Codex's share (`fc9c38f`), 2026-11-12
+
+- note: `RADIUS` in the channels and in `value`; `radius` a length or `full`, refused otherwise with spans; precedence
+  unchanged. Nothing to fix; the runtime reads `curveFor(RADIUS)` and `full` through it.
 
 ## 7. Sign-off
