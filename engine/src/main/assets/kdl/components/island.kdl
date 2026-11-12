@@ -1,7 +1,7 @@
 // Draft 4's island at rest (T-012). Literal design values until the default theme supplies tokens.
 // Fixed dp text does not follow system font size in this slice. The real camera needs no artwork;
-// without a cutout the centre stays empty too (owner, 2026-11-12). Never nearer the screen's top than draft 4's 8 dp: a
-// camera high on the screen leaves the camera in the pill's upper half (owner, 2026-11-12).
+// without a cutout the centre stays empty too (owner, 2026-11-12). Never nearer the screen's top than 4 dp (draft 4 said 8;
+// the owner moved it up to centre the S24's camera and fit Android's 103 px bar, 2026-11-12).
 // Pure black, not the design language's #0A0A0A: on an OLED screen a lit #0A0A0A shows the camera through it (owner, S24,
 // 2026-11-12).
 component "island" version="0.1.0" {
@@ -14,7 +14,7 @@ component "island" version="0.1.0" {
     source battery
   }
   view {
-    box place="cutout" place-gap=(dp)8 width=(dp)132 height=(dp)32 radius="full" fill="#000000" align="centre-line" label="Island" {
+    box place="cutout" place-gap=(dp)4 width=(dp)132 height=(dp)32 radius="full" fill="#000000" align="centre-line" label="Island" {
       row padding-start=(dp)14 padding-end=(dp)12 align="centre-line" {
         text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true label="Time"
         spacer flex=1

@@ -120,7 +120,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             val hole = s.activity.window.decorView.display.cutout?.boundingRectTop
             if (g.cy - g.height / 2f < -0.5f) errors += "the pill's top is ${-(g.cy - g.height / 2f)} px above the screen (hole $hole)"
             result.putString("rest", "cutout $cutout, hole $hole; pill ${"%.2f".format(g.width)} x ${"%.2f".format(g.height)} px (132 x 32 dp at $density: " +
-                "${"%.1f".format(w)} x ${"%.1f".format(h)}), centre off D-102's point with the 8 dp gap by (${"%.3f".format(g.cx - ex)}, ${"%.3f".format(g.cy - ey)}) px; " +
+                "${"%.1f".format(w)} x ${"%.1f".format(h)}), centre off D-102's point with the 4 dp gap by (${"%.3f".format(g.cx - ex)}, ${"%.3f".format(g.cy - ey)}) px; " +
                 "clearance ${s.clearance(shot)}")
             s.clearanceErrors(shot, "21:40 64", errors)
             result.putString("places", s.places(shot, g, errors))
@@ -304,9 +304,9 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             val status = decor.rootWindowInsets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top.toFloat()
             val cy = cut.exactCenterY()
             val line = if (cy > 0.2f * status && cy < 0.8f * status) cy else 0.52f * status
-            // `place-gap=(dp)8`: the pill's top never nearer the screen's top than 8 dp (owner, 2026-11-12).
+            // `place-gap=(dp)4`: the pill's top never nearer the screen's top than 4 dp (owner, 2026-11-12).
             val d = ctx.resources.displayMetrics.density
-            val ey = maxOf(line, 8 * d + 16 * d)
+            val ey = maxOf(line, 4 * d + 16 * d)
             return (cut.exactCenterX() - origin[0]) to (ey - origin[1])
         }
 

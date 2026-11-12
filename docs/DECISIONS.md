@@ -1245,3 +1245,11 @@ On the S24 the pill covered the camera but its #0A0A0A, the design language's ba
 the camera showed through it (owner: "the background is not fully black, therefore the camera is visible"). The island's
 fill is #000000 (pixels off), the one place the design language's near-black gives way; everything else keeps #0A0A0A.
 When the default theme supplies the island's tokens, its fill stays true black. Figma's draft 4 still says #0A0A0A.
+
+## D-107: The island sits 4 dp from the top (2026-11-12, owner) [owner]
+
+Draft 4's 8 dp gap put the pill's bottom at 104 px on the S24, a pixel past the 103 px Android reserves for the status
+bar, and the camera (centre 51.5 px down) in the pill's upper half. The owner set `place-gap` to 4 dp: the pill spans
+about 4-36 dp, its centre at 20 dp on the camera's 19.6 dp, its bottom about 94.5 px, inside the bar. The owner judges it
+on the phone. Making Android's bar taller in other apps was looked at: without root only the developer option's fake
+cutouts change it (Tall: 48 dp), each drawing a black cutout of its own and moving what Android reports as the camera.
