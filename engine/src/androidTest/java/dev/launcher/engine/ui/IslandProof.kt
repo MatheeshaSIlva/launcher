@@ -325,7 +325,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             val line = if (cy > 0.2f * status && cy < 0.8f * status) cy else 0.52f * status
             // `place-gap=(dp)4`: the pill's top never nearer the screen's top than 4 dp (owner, 2026-11-12).
             val d = ctx.resources.displayMetrics.density
-            val ey = maxOf(line, kotlin.math.floor(4 * d + 0.5f) + 16 * d)   // the gap on a whole pixel (D-113)
+            val ey = maxOf(line, kotlin.math.floor(4 * d + 0.5f) + 16 * d)   // the gap on a whole pixel (D-114)
             return (cut.exactCenterX() - origin[0]) to (ey - origin[1])
         }
 
