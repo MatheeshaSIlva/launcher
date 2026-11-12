@@ -29,7 +29,8 @@ class IslandKdlTest {
     }
 
     private fun host(hour24: Boolean = true, hour: Int = 13, minute: Int = 5, level: Int = 64,
-        units: Units = Units(1f, 1f), playing: Boolean = false, art: Boolean = false): ComponentHost {
+        units: Units = Units(1f, 1f), playing: Boolean = false, art: Boolean = false, plugged: Boolean = false,
+        arriving: Boolean = false, others: Int = 3): ComponentHost {
         val env = object : Env {
             override fun state(name: String) = Value.Null
             override fun prop(name: String) = when (name) { "hour24" -> Value.Bool.of(hour24); "title-scroll" -> Value.Bool.TRUE; else -> Value.Null }
@@ -39,6 +40,10 @@ class IslandKdlTest {
                 "media.playing" -> Value.Bool.of(playing)
                 "media.title" -> if (playing) Value.Str("Halftone") else Value.Null
                 "media.has-art" -> Value.Bool.of(art)
+                "battery.plugged" -> Value.Bool.of(plugged)
+                "notifications.arriving" -> Value.Bool.of(arriving)
+                "notifications.arrival.name" -> if (arriving) Value.Str("Kasun") else Value.Null
+                "notifications.arrival.others" -> if (arriving) Value.Num(others.toDouble()) else Value.Null
                 "media.art" -> if (art) dev.launcher.engine.source.MediaState.of(true, "t", null, "p", dev.launcher.engine.source.MediaArt("s1", "1")).member("art") else Value.Null
                 else -> Value.Null
             }
@@ -55,8 +60,8 @@ class IslandKdlTest {
     @Test fun validAsShippedWithOnlyTheDeclaredSourcesAndNoCameraArtwork() {
         val c = component()
         assertEquals("island", c.name)
-        assertEquals(listOf("device", "time", "battery", "media"), c.uses.sources.map { it.name })
-        assertEquals(listOf("hour24", "title-scroll"), c.props.map { it.name })
+        assertEquals(listOf("device", "time", "battery", "media", "notifications"), c.uses.sources.map { it.name })
+        assertEquals(listOf("hour24", "title-scroll", "mode"), c.props.map { it.name })
         val root = host().root
         assertEquals("box", root.view.primitive)
         assertEquals(Value.Str("cutout"), root.value("place"))
@@ -65,8 +70,8 @@ class IslandKdlTest {
         assertEquals(Value.Str("centre"), root.value("align"))
         assertEquals(Value.Bool.TRUE, root.value("clip"))
         // The idle row is there only while nothing plays; the media row always holds its slots (its pieces come and go).
-        assertEquals(listOf("Idle", "Media"), root.children.map { (it.value("label") as Value.Str).value })
-        assertEquals(listOf("Media"), host(playing = true).root.children.map { (it.value("label") as Value.Str).value })
+        assertEquals(listOf("Idle", "Media", "Charging", "Notification"), root.children.map { (it.value("label") as Value.Str).value })
+        assertEquals(listOf("Media", "Charging", "Notification"), host(playing = true).root.children.map { (it.value("label") as Value.Str).value })
         val row = idle(root)
         assertEquals("row", row.view.primitive)
         assertEquals(Value.Str("centre-line"), row.value("align"))
@@ -153,9 +158,62 @@ class IslandKdlTest {
         }
         val paused = host(playing = false).root
         assertEquals(132f, paused.length("width"))
-        assertEquals(listOf("Idle", "Media"), paused.children.map { (it.value("label") as Value.Str).value })
+        assertEquals(listOf("Idle", "Media", "Charging", "Notification"), paused.children.map { (it.value("label") as Value.Str).value })
         val still = paused.labelled("Media")
         assertEquals(listOf<HostNode>(), still.labelled("Left").labelled("Title slot").children)   // nothing shown, slots kept
         assertEquals(listOf("Left", "Right"), still.children.filter { it.value("label") is Value.Str }.map { (it.value("label") as Value.Str).value })
+    }
+
+    private fun HostNode.shown(): List<String> = generateSequence(listOf(this)) { l -> l.flatMap { it.children }.takeIf { it.isNotEmpty() } }
+        .flatten().mapNotNull { (it.value("label") as? Value.Str)?.value }.toList()
+
+    /** T-014: one state at a time by rank (a notification, charging, media, idle), each at draft 4's width. */
+    @Test fun theRankingPicksOneStateAtATime() {
+        fun state(playing: Boolean = false, plugged: Boolean = false, arriving: Boolean = false): Pair<Float?, List<String>> {
+            val root = host(playing = playing, plugged = plugged, arriving = arriving).root
+            return root.length("width") to root.shown()
+        }
+        val idle = state()
+        assertEquals(132f, idle.first)
+        assertTrue("Time" in idle.second && "Charging time" !in idle.second && "Sender" !in idle.second && "Title" !in idle.second)
+        val media = state(playing = true)
+        assertEquals(236f, media.first)
+        assertTrue("Title" in media.second && "Time" !in media.second)
+        val charging = state(playing = true, plugged = true)
+        assertEquals("charging over media", 164f, charging.first)
+        assertTrue("Charging time" in charging.second && "Charging level" in charging.second && "Title" !in charging.second)
+        val notif = state(playing = true, plugged = true, arriving = true)
+        assertEquals("a notification over everything", 200f, notif.first)
+        assertTrue("Sender" in notif.second && "Dot" in notif.second && "Others" in notif.second)
+        assertTrue("Charging time" !in notif.second && "Title" !in notif.second && "Time" !in notif.second)
+        assertTrue("no count without others", "Others" !in host(arriving = true, others = 0).root.shown())
+    }
+
+    /** T-014: the charging and notification states in draft 4's dp, the camera slot on the pill's centre. */
+    @Test fun chargingAndNotificationAreDraft4sInFixedSlots() {
+        val density = 2.625f
+        val c = host(units = Units(3f, density), plugged = true).root.labelled("Charging")
+        assertEquals(164f * density, c.length("width"))
+        assertEquals(14f + 54f + 28f + 56f + 12f, 164f)
+        assertEquals(54f * density, c.labelled("Charging left").length("width"))
+        assertEquals(56f * density, c.labelled("Charging right").length("width"))
+        val level = c.labelled("Charging right").labelled("Level")
+        assertEquals(6f * density, level.length("gap"))
+        assertEquals(Value.Str("#7DBE93"), level.labelled("Charging level").value("color"))
+        assertEquals(Value.Str("64%"), level.labelled("Charging level").value("content"))
+        val n = host(units = Units(3f, density), arriving = true).root.labelled("Notification")
+        assertEquals(200f * density, n.length("width"))
+        assertEquals(14f + 72f + 28f + 74f + 12f, 200f)
+        val left = n.labelled("Notification left")
+        assertEquals(72f * density, left.length("width"))
+        assertEquals(6f * density, left.labelled("Dot slot").labelled("Dot").length("width"))
+        assertEquals(Value.Str("#D9865F"), left.labelled("Dot slot").labelled("Dot").value("fill"))
+        val sender = left.labelled("Sender slot").labelled("Sender")
+        assertEquals(Value.Str("Kasun"), sender.value("content"))
+        assertEquals(Value.Str("plex-sans"), sender.value("font"))
+        assertEquals(Value.Str("fade"), sender.value("overflow"))
+        val others = n.labelled("Notification right").labelled("Others")
+        assertEquals(Value.Str("+3"), others.value("content"))
+        assertEquals(Value.Str("#8A8A8A"), others.value("color"))
     }
 }

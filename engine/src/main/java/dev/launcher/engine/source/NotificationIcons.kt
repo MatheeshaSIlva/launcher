@@ -7,10 +7,18 @@ import kotlinx.coroutines.flow.callbackFlow
 /** An app in the bar: [rev] changes when its picture does. Plain data; the picture itself stays with [PreparedPictures]. */
 data class NotifIcon(val id: String, val rev: String)
 
-/** `notifications`: `icons`, a list of records `{id, rev}`, most important first; every one has its picture ready. */
-data class NotifIcons(val list: List<NotifIcon>) : SourceValue {
+/**
+ * `notifications`: `icons`, a list of records `{id, rev}`, most important first, every one with its picture ready; and
+ * `arrival`, the notification that just arrived (`{id, name, others}`, T-014) or null, and `arriving` for a condition.
+ */
+data class NotifIcons(val list: List<NotifIcon>, val arrival: NotifArrival? = null) : SourceValue {
     private val icons by lazy { Value.List(list.map { Value.Record(mapOf("id" to Value.Str(it.id), "rev" to Value.Str(it.rev))) }) }
-    override fun member(name: String): Value = if (name == "icons") icons else Value.Null
+    override fun member(name: String): Value = when (name) {
+        "icons" -> icons
+        "arrival" -> arrival?.value ?: Value.Null
+        "arriving" -> Value.Bool.of(arrival != null)
+        else -> Value.Null
+    }
 }
 
 /** Where the source's list comes from: [PreparedPictures] in the app. */
@@ -21,11 +29,15 @@ interface NotifIconFeed {
 }
 
 object NotificationSource {
-    fun of(feed: NotifIconFeed) = Source("notifications", "notifications.read", { NotifIcons(feed.icons()) }, callbackFlow {
-        val stop = feed.subscribe { trySend(NotifIcons(feed.icons())) }
-        trySend(NotifIcons(feed.icons()))
-        awaitClose(stop)
-    })
+    fun of(feed: NotifIconFeed, arrivals: ArrivalFeed? = null): Source<NotifIcons> {
+        fun now() = NotifIcons(feed.icons(), arrivals?.arrival())
+        return Source("notifications", "notifications.read", ::now, callbackFlow {
+            val stop = feed.subscribe { trySend(now()) }
+            val stopArrivals = arrivals?.subscribe { trySend(now()) }
+            trySend(now())
+            awaitClose { stop(); stopArrivals?.invoke() }
+        })
+    }
 }
 
 /**

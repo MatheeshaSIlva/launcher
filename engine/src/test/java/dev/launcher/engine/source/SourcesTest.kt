@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -128,12 +129,39 @@ class SourcesTest {
         receivers.send(Intent.ACTION_BATTERY_CHANGED, battery(50, scale = 200))
         powerSave = true
         receivers.send(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
-        assertEquals(listOf(Battery(40, true, false), Battery(41, false, false), Battery(41, true, false),
+        // Full on the charger again is a plug-in (T-014): `plugged` while it lasts (this source has no timer: it stays).
+        assertEquals(listOf(Battery(40, true, false), Battery(41, false, false), Battery(41, true, false, plugged = true),
             Battery(25, false, false), Battery(25, false, true)), seen)
         job.cancel()
         assertEquals(0, receivers.registered.size)   // and cancelling unregisters
         assertEquals(Value.Num(25.0), Battery(25, false, true).member("level"))
         assertSame(Value.Bool.TRUE, Battery(25, false, true).member("power-save"))
+    }
+
+    /** T-014: `plugged` is the plug-in moment: on when charging starts, off after PLUGGED_MS or when it stops. */
+    @Test fun pluggedIsThePlugInMoment() {
+        val timers = ArrayList<Pair<Long, () -> Unit>>()
+        var cancelled = 0
+        val r = FakeReceivers().apply { stickies[Intent.ACTION_BATTERY_CHANGED] = battery(40) }
+        val b = SystemSources.battery(r, { ms, f -> timers += ms to f; { cancelled++ } }) { false }
+        val seen = ArrayList<Battery>()
+        val job = scope.launch { b.values.collect { seen += it } }
+        r.send(Intent.ACTION_BATTERY_CHANGED, battery(40, BatteryManager.BATTERY_STATUS_CHARGING))
+        assertEquals(Battery(40, true, false, plugged = true), seen.last())
+        assertEquals(SystemSources.PLUGGED_MS, timers.single().first)
+        r.send(Intent.ACTION_BATTERY_CHANGED, battery(41, BatteryManager.BATTERY_STATUS_CHARGING))
+        assertEquals("still the moment", Battery(41, true, false, plugged = true), seen.last())
+        timers.single().second()
+        assertEquals(Battery(41, true, false, plugged = false), seen.last())
+        // Out and in again: off at once, then a new moment.
+        r.send(Intent.ACTION_BATTERY_CHANGED, battery(41))
+        assertEquals(Battery(41, false, false), seen.last())
+        r.send(Intent.ACTION_BATTERY_CHANGED, battery(41, BatteryManager.BATTERY_STATUS_CHARGING))
+        assertTrue(seen.last().plugged)
+        r.send(Intent.ACTION_BATTERY_CHANGED, battery(41))
+        assertFalse("unplugged inside the moment ends it", seen.last().plugged)
+        job.cancel()
+        assertEquals(Value.Bool.TRUE, Battery(1, true, false, true).member("plugged"))
     }
 
     @Test fun timeTicksWithTheMinute() {

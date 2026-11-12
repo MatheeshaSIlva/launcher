@@ -76,12 +76,14 @@ object KdlBar {
         val display = dev.launcher.engine.source.DeviceDisplayInfo(ctx, handler)
         val media = dev.launcher.engine.source.Access.ifAllowed(def.uses.sources.map { it.name }, "media", "media.read", GRANTED) { dev.launcher.engine.source.SessionMedia(ctx, handler, android.content.ComponentName(ctx, dev.launcher.app.BadgeListener::class.java)) }
         var sources = SystemSources.all(ctx, handler, display)
-        icons?.let { sources += dev.launcher.engine.source.NotificationSource.of(it.feed) }
+        // What just arrived (T-014), for a component that reads notifications: the island.
+        val arrivals = icons?.let { KdlArrivals(ctx, handler) }
+        icons?.let { sources += dev.launcher.engine.source.NotificationSource.of(it.feed, arrivals?.tracker) }
         media?.let { sources += dev.launcher.engine.source.MediaSource.of(it) }
         val view = ComponentView(ctx, def, tokens, sources, units, granted = GRANTED, pictures = icons,
             imagePictures = media?.let { mapOf("media" to it.pictures) } ?: emptyMap())
         display.bind(view.view)
-        view.addOnDispose { icons?.dispose(); media?.dispose(); display.unbind() }
+        view.addOnDispose { icons?.dispose(); arrivals?.dispose(); media?.dispose(); display.unbind() }
         // The island takes nothing of StatusBarView's (its colours are its own, it has no notification icons).
         if (!island) view.derive = {
             view.textWidth("Time")?.let { w ->

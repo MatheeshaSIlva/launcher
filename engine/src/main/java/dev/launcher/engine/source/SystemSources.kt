@@ -8,6 +8,7 @@ import android.os.BatteryManager
 import android.os.Handler
 import android.os.PowerManager
 import dev.launcher.engine.expr.Value
+import kotlinx.coroutines.channels.awaitClose
 import java.util.TimeZone
 
 /** `time`: the clock at the last minute tick, and the zone (`time.now`, `time.zone`; the `now` of expressions). */
@@ -19,12 +20,16 @@ data class Time(val epochMs: Long, val zoneId: String) : SourceValue {
     }
 }
 
-/** `battery`: the level in percent, whether it charges (or is full on the charger), and Low Power mode. */
-data class Battery(val level: Int, val charging: Boolean, val powerSave: Boolean) : SourceValue {
+/**
+ * `battery`: the level in percent, whether it charges (or is full on the charger), and Low Power mode; `plugged`, the
+ * moment charging starts (true for [SystemSources.PLUGGED_MS], T-014: the island shows a plug-in, not the whole charge).
+ */
+data class Battery(val level: Int, val charging: Boolean, val powerSave: Boolean, val plugged: Boolean = false) : SourceValue {
     override fun member(name: String) = when (name) {
         "level" -> Value.Num(level.toDouble())
         "charging" -> Value.Bool.of(charging)
         "power-save" -> Value.Bool.of(powerSave)
+        "plugged" -> Value.Bool.of(plugged)
         else -> Value.Null
     }
 
@@ -48,16 +53,34 @@ object SystemSources {
     fun time(r: Receivers, clock: () -> Long = System::currentTimeMillis, zone: () -> String = { TimeZone.getDefault().id }) =
         Source("time", "none", { Time(clock(), zone()) }, r.flow(TIME) { Time(clock(), zone()) })
 
-    /** [powerSaveNow]: `PowerManager.isPowerSaveMode` (false where it cannot be read, as StatusBarView does). */
-    fun battery(r: Receivers, powerSaveNow: () -> Boolean): Source<Battery> {
+    /** How long `battery.plugged` stays true after charging starts (owner, 2026-11-13: "a few seconds at plug-in"). */
+    const val PLUGGED_MS = 3000L
+
+    /**
+     * [powerSaveNow]: `PowerManager.isPowerSaveMode` (false where it cannot be read, as StatusBarView does). [after] runs
+     * a function after a delay on the source's thread and returns its cancel (the handler's `postDelayed` on a device;
+     * tests step it by hand); without one, `plugged` never clears by time (it still clears when charging stops).
+     */
+    fun battery(r: Receivers, after: (Long, () -> Unit) -> () -> Unit = { _, _ -> {} }, powerSaveNow: () -> Boolean): Source<Battery> {
         fun now(): Battery {
             val start = Battery(100, false, powerSaveNow())   // StatusBarView's starting values
             return r.sticky(Intent.ACTION_BATTERY_CHANGED)?.let { start.after(it, powerSaveNow) } ?: start
         }
-        return Source("battery", "none", ::now, kotlinx.coroutines.flow.flow {
+        return Source("battery", "none", ::now, kotlinx.coroutines.flow.callbackFlow {
             var last = now()
-            emit(last)
-            r.flow(BATTERY) { it }.collect { b -> last = last.after(b, powerSaveNow); emit(last) }
+            var clear: (() -> Unit)? = null
+            trySend(last)
+            val off = r.register(BATTERY) { b ->
+                val next = last.after(b, powerSaveNow)
+                if (next.charging && !last.charging) {
+                    // The plug-in moment: on now, off after PLUGGED_MS (a new plug-in starts it again).
+                    clear?.invoke()
+                    last = next.copy(plugged = true)
+                    clear = after(PLUGGED_MS) { last = last.copy(plugged = false); trySend(last) }
+                } else last = next.copy(plugged = last.plugged && next.charging)
+                trySend(last)
+            }
+            awaitClose { clear?.invoke(); off() }
         })
     }
 
@@ -65,7 +88,8 @@ object SystemSources {
         val r = AndroidReceivers(context, handler)
         val power = context.getSystemService(PowerManager::class.java)
         val nm = context.getSystemService(android.app.NotificationManager::class.java)
-        return Sources(listOf(time(r), battery(r) { try { power.isPowerSaveMode } catch (_: Throwable) { false } },
+        val after: (Long, () -> Unit) -> () -> Unit = { ms, f -> val run = Runnable(f); handler.postDelayed(run, ms); { handler.removeCallbacks(run) } }
+        return Sources(listOf(time(r), battery(r, after) { try { power.isPowerSaveMode } catch (_: Throwable) { false } },
             NetworkSources.network(r, AndroidNetwork(context, handler)),
             NetworkSources.dnd(r) { try { nm.currentInterruptionFilter } catch (_: Throwable) { android.app.NotificationManager.INTERRUPTION_FILTER_ALL } }) +
             listOfNotNull(display?.let(DeviceSource::of)))

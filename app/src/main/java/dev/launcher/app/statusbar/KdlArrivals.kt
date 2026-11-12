@@ -1,0 +1,46 @@
+package dev.launcher.app.statusbar
+
+import android.app.KeyguardManager
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Handler
+import dev.launcher.app.shade.AppInfo
+import dev.launcher.app.shade.Notifs
+import dev.launcher.engine.source.ArrivalTracker
+
+/**
+ * `notifications.arrival`'s feed for the KDL island (T-014): [Notifs]' list as [ArrivalTracker] candidates, on [handler].
+ * A notification alerts (owner, 2026-11-13: "only ones that alert") when its importance makes a sound or a vibration
+ * (DEFAULT or more), Do Not Disturb does not hold it, it is not ongoing nor a group summary, and it says something; our own
+ * only on the test channel (adb's `TEST_NOTIFY`). Its name is the sender (the title), or its app's name while the phone
+ * is locked (owner: "hide the name when locked"), read from [AppInfo]'s cache (filled off the drawing threads).
+ */
+class KdlArrivals(private val ctx: Context, private val handler: Handler) {
+    val tracker = ArrivalTracker { ms, f -> val r = Runnable(f); handler.postDelayed(r, ms); { handler.removeCallbacks(r) } }
+    private val keyguard = ctx.getSystemService(KeyguardManager::class.java)
+    private val own = ctx.packageName
+    private val changed: () -> Unit = ::read
+
+    init {
+        Notifs.addListener(handler, changed)
+        read()
+    }
+
+    private fun alerts(i: Notifs.Item) =
+        i.importance >= NotificationManager.IMPORTANCE_DEFAULT && !i.suppressPeek && !i.ongoing && !i.summary && !i.media &&
+            (i.title != null || i.text != null) &&
+            (i.pkg != own || i.sbn.notification.channelId == dev.launcher.app.Badges.TEST_CHANNEL)
+
+    private fun read() {
+        val locked = try { keyguard.isKeyguardLocked } catch (_: Throwable) { true }
+        tracker.update(Notifs.items.map { i ->
+            val name = if (locked) AppInfo.labelIfRead(i.pkg) ?: "" else (i.title ?: i.text)?.toString().orEmpty()
+            ArrivalTracker.Candidate(i.key, i.postTime, alerts(i), i.onlyAlertOnce, name)
+        })
+    }
+
+    fun dispose() {
+        Notifs.removeListener(changed)
+        tracker.dispose()
+    }
+}

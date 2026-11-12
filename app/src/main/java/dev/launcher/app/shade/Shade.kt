@@ -1972,6 +1972,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // Over the lock screen no banners (the lock screen shows what arrives, as its settings allow); a ringing call or
         // alarm opens its own screen there.
         if (locked) return
+        // The KDL island shows what arrives (T-014); what rings keeps its banner until the island carries calls and alarms.
+        if (!newest.urgent && kdlBar != null && dev.launcher.app.statusbar.KdlBar.component(ctx) == dev.launcher.app.statusbar.KdlBar.ISLAND) return
         banner.show(newest)
         if (bannerLogs < 5 || newest.urgent) { bannerLogs++; AppLog.log("[shade] banner: ${newest.pkg}${if (newest.urgent) " (ringing${if (newest.call) ", a call" else ""})" else ""}") }
     }
