@@ -1167,3 +1167,21 @@ declares presence).
   an ancestor's, scaled or mirrored).
 - **13a-3 went over the slice size** (eligibility, roll and bounds about 450 production lines): the bounds and the
   review rounds could not land apart from the roll they hold.
+
+## D-102: E2.13b's placement on the camera (2026-11-12, lead and Codex) [team]
+
+Made without the owner (T-010); nothing on screen changes today (the bar keeps `place="window"`; the island, E2.14a, is
+the first to use it).
+- **StatusBarView's rule is the engine's:** horizontally on a top cutout's centre whatever its band (else the window's
+  centre); the line on the cutout's centre strictly inside 20-80 % of the status bar's height (visibility ignored), else
+  52 % of it; worked out on the screen, then in the view's px by its resting origin (the untransformed window's place
+  plus integer layout places, translations and scales left out).
+- **A host moving is no motion:** a change of the resting origin (the host's first layout, an ancestor, a scroll, the
+  window) rebases the root's motion so it stays on its anchor and a motion already running goes on; only a change of the
+  device (or of the window's width, the fallback's centre) moves it on its place transition.
+- **The `device` source** (Codex): screen px of the display's own logical space, the cutout's safe insets and top-edge
+  rectangle, density, rotation, status height, model; fold state and dpi later. Its Android adapter reads each
+  display's real metrics (the window manager's maximum window metrics gave a second display the main one's size) and
+  tells everything on its handler's thread.
+- **Not proven:** the S24 (the owner's exit check), live display changes on Android (shown with a simulated display:
+  the proof's activity is made again by an overlay or a turn), multi-window, a spring's interruption here (13a-0's).
