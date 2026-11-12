@@ -3,7 +3,7 @@
 **Now:** E2.13a, 13b and 13c merged (T-009, T-010, T-011; D-099 to D-103). Now E2.14a, the island at rest (T-012; its typefaces bundled, D-104); open with the owner: Q-003 (Android 10 clip fallback) and the S24 check of 13b (the punch hole, upright and turned). Earlier context: direction changed (D-092): iOS and Pixel scrapped, a default theme of our own, settings are what creators offer.
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
-**Device:** claude (lead)
+**Device:** claude (emulator-5554, T-012 proof)
 **Last milestone review:** none yet (the first is due at the end of E2)
 
 ## E2 progress

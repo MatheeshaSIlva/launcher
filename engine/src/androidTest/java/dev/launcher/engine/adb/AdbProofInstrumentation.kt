@@ -65,6 +65,7 @@ class AdbProofInstrumentation : Instrumentation() {
                 "component-placement" -> dev.launcher.engine.ui.PlacementProof(this).run(result)
                 "device-display" -> dev.launcher.engine.ui.DeviceDisplayProof(this).run(result)
                 "component-shape" -> dev.launcher.engine.ui.ShapeProof(this).run(result)
+                "component-measure" -> dev.launcher.engine.ui.MeasureProof(this).run(result)
                 "component-island" -> dev.launcher.engine.ui.IslandProof(this, args.getString("cutout") ?: "emu01").run(result)
                 else -> error("Unknown proof mode")
             }

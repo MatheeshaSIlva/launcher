@@ -44,16 +44,19 @@ fun ComponentHost.Content(modifier: Modifier = Modifier) {
 
 @Composable
 private fun Primitive(n: HostNode, modifier: Modifier = Modifier) {
-    Layout(content = { n.drawn.forEach { key(it) { Primitive(it) } } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n))
+    // The children measured are the ones composed: [HostNode.drawn] can change between a composition and its measure (a
+    // source's delivery settled during a layout), and a measure that read it again found children not composed yet (T-012).
+    val kids = n.drawn
+    Layout(content = { kids.forEach { key(it) { Primitive(it) } } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n, kids))
 }
 
 /** Measures through 5a's maths; the bound values it reads make Compose measure again, never compose. */
-private class Policy(val n: HostNode) : MeasurePolicy {
+private class Policy(val n: HostNode, val composed: List<HostNode>) : MeasurePolicy {
     override fun MeasureScope.measure(measurables: List<Measurable>, constraints: ComposeConstraints): MeasureResult {
         n.epoch.intValue
         val placeables = arrayOfNulls<Placeable>(measurables.size)
         // Measurables follow the drawn children; layout sees only those not leaving (13a-2).
-        val drawn = n.drawn
+        val drawn = composed
         val active = drawn.indices.filter { !drawn[it].isLeaving }
         val kids = active.map { k ->
             val m = measurables[k]
