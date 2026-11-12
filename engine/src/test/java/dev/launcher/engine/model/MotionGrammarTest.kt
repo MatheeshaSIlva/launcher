@@ -382,6 +382,8 @@ class MotionGrammarTest {
             Triple("stagger", "motion-not-supported", "stagger"),
             Triple("fade delay", "motion-not-supported", "delay"),
             Triple("fade 200ms delay", "motion-not-supported", "delay"),
+            Triple("fade delay(1200ms)", "motion-bad-delay", "delay(1200ms)"),
+            Triple("fade delay(10ms) delay(20ms)", "motion-duplicate-delay", "delay(20ms)"),
             Triple("fade 0ms", "motion-bad-duration", "0ms"),
             Triple("fade spring(0,1)", "motion-bad-spring", "spring(0,1)"),
             Triple("fade cubic-bezier(2,0,1,1) 200ms", "motion-bad-bezier", "cubic-bezier(2,0,1,1) 200ms"),
@@ -428,4 +430,17 @@ class MotionGrammarTest {
         }
     }
 
+
+    /** T-013: a presence holds its start for `delay(Nms)` (0..1000), the curve read as before around it. */
+    @Test fun presenceTakesADelay() {
+        for (key in listOf("enter", "exit")) {
+            val p = spec("fade scale spring(0.5, 0.8) delay(80ms)", key).let { if (key == "enter") it.enter else it.exit }!!
+            assertEquals(80f, p.delayMs)
+            assertEquals(setOf(PresenceEffect.FADE, PresenceEffect.SCALE), p.effects)
+            assertEquals(CurveSpec.Literal(Curve.Spring(0.5f, 0.8f)), p.curve)
+            assertEquals(120f, spec("fade delay(120ms) 200ms", key).let { if (key == "enter") it.enter else it.exit }!!.delayMs)
+            assertEquals(0f, spec("fade", key).let { if (key == "enter") it.enter else it.exit }!!.delayMs)
+        }
+        assertNull(parse("place 200ms delay(80ms)").spec)   // a transition takes no delay
+    }
 }

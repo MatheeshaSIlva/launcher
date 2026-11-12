@@ -10,7 +10,10 @@ sealed class CurveSpec {
 }
 data class Transition(val channels: Set<MotionChannel>, val curve: CurveSpec?, val span: Span)
 enum class PresenceEffect { FADE, GROW, SCALE, RISE }
-data class Presence(val effects: Set<PresenceEffect>, val curve: CurveSpec?, val span: Span)
+/** [delayMs]: how long it holds its start before moving (`delay(80ms)`, 0..[MAX_DELAY_MS]; T-013). */
+data class Presence(val effects: Set<PresenceEffect>, val curve: CurveSpec?, val span: Span, val delayMs: Float = 0f) {
+    companion object { const val MAX_DELAY_MS = 1000f }
+}
 
 /** Internal sentinel, outside the authored role grammar: #true inherits the node default. */
 internal const val ROLL_DEFAULT_MARKER = "<roll-default>"

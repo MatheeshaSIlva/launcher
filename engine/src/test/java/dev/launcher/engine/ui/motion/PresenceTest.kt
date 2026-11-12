@@ -272,4 +272,40 @@ class PresenceTest {
         val m = leaving.motion
         assertTrue(m.scale in 0.86f..0.99f); assertTrue(m.placeY in 0.5f..7.5f); assertTrue(leaving.drawnWidth in 0.5f..9.5f)
     }
+
+    /** T-013: an arrival holds its start for its delay, then moves; a node that leaves inside its delay never shows. */
+    @Test fun aDelayedArrivalHoldsItsStartThenMoves() {
+        val h = host("row visible=\"{@on}\" exit=\"fade 100ms\" enter=\"fade 120ms delay(80ms)\" { box width=10 height=10 }"); h.place()
+        shown = false; h.refresh(); h.settle()
+        val t0 = clock
+        shown = true; h.refresh(); h.place()
+        assertEquals("starts from its enter value", 0f, h.root.motion.alpha, 0f)
+        h.at(t0 + 40_000_000)
+        assertEquals("held inside its delay", 0f, h.root.motion.alpha, 0f)
+        h.at(t0 + 80_000_000)
+        assertEquals("still at its start when the delay ends", 0f, h.root.motion.alpha, 1e-4f)
+        h.at(t0 + 140_000_000)
+        assertTrue("moving after its delay", h.root.motion.alpha > 0.2f && h.root.motion.alpha < 1f)
+        h.settle()
+        assertEquals(1f, h.root.motion.alpha, 0f)
+        // Shown again and gone again inside the delay: not a frame of it shows.
+        shown = false; h.refresh(); h.settle()
+        val t1 = clock
+        shown = true; h.refresh(); h.place()
+        h.at(t1 + 30_000_000)
+        shown = false; h.refresh()
+        var t = t1 + 30_000_000
+        var most = 0f
+        val seen = ArrayList<Float>()
+        while (h.at(t)) { most = maxOf(most, h.root.motion.alpha); seen += h.root.motion.alpha; t += 8_333_333 }
+        assertEquals("never seen: $seen", 0f, most, 0f)
+    }
+
+    @Test fun reducedMotionIgnoresTheDelay() {
+        reduced = true
+        val h = host("row visible=\"{@on}\" exit=\"fade 100ms\" enter=\"fade 120ms delay(80ms)\" { box width=10 height=10 }"); h.place()
+        shown = false; h.refresh(); h.settle()
+        shown = true; h.refresh(); h.place()
+        assertEquals(1f, h.root.motion.alpha, 0f)
+    }
 }

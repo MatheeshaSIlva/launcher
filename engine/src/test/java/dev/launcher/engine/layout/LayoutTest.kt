@@ -116,6 +116,18 @@ class LayoutTest {
         assertEquals(Size(40, 20), Layout.stack(none, wide, 0.5f, 0.5f, kids()).measured.size)
     }
 
+    /** T-013: a clipping box keeps a wider child whole, centred over both sides; without overflow it is squeezed. */
+    @Test fun anOverflowingStackKeepsAWiderChildWholeAndCentred() {
+        val box = Frame(width = 132f, height = 32f)
+        val bound = Constraints(132, 132, 32, 32)
+        val kept = Layout.stack(box, bound, 0.5f, 0.5f, listOf(Fixed(236, 20)), overflow = true)
+        assertEquals(236, kept.children[0].size.width)
+        assertEquals(-52, kept.placements[0].x)
+        assertEquals(Size(132, 32), kept.measured.size)
+        val squeezed = Layout.stack(box, bound, 0.5f, 0.5f, listOf(Fixed(236, 20)))
+        assertEquals(132, squeezed.children[0].size.width)
+    }
+
     @Test fun boxPaddingBoundsAndFixedSizes() {
         val padded = Layout.box(Frame(padStart = 2f, padTop = 3f, padEnd = 4f, padBottom = 5f), wide, listOf(Fixed(10, 10)))
         assertEquals(Placement(2, 3), padded.placements.single())

@@ -172,9 +172,16 @@ object Layout {
             xs.indices.map { Placement.exact(xs[it], ys[it]) }, ms)
     }
 
-    /** Children over each other, each placed at the fractions [ax], [ay] of the room left (0 start, 0.5 middle, 1 end). */
-    fun stack(f: Frame, c: Constraints, ax: Float, ay: Float, children: List<Child>, centreLine: Boolean = false): Arranged = framed(f, c) { inner ->
-        val ms = children.map { it.measure(inner.loose()) }
+    /**
+     * Children over each other, each placed at the fractions [ax], [ay] of the room left (0 start, 0.5 middle, 1 end).
+     * [overflow]: children keep their own size past this one's (up to [OVERFLOW_MAX] px), placed by the same fractions,
+     * so a wider child centred overhangs both sides; for a box that clips them (T-013: the island's 236 dp media row in
+     * its 132 dp pill was squeezed, and its slots slid over the camera while the pill closed).
+     */
+    fun stack(f: Frame, c: Constraints, ax: Float, ay: Float, children: List<Child>, centreLine: Boolean = false,
+              overflow: Boolean = false): Arranged = framed(f, c) { inner ->
+        val room = if (overflow) Constraints(0, OVERFLOW_MAX, 0, OVERFLOW_MAX) else inner.loose()
+        val ms = children.map { it.measure(room) }
         val w = max(inner.minWidth, ms.maxOfOrNull { it.size.width } ?: 0).coerceAtMost(inner.maxWidth)
         val h = max(inner.minHeight, ms.maxOfOrNull { it.size.height } ?: 0).coerceAtMost(inner.maxHeight)
         val ew = (f.width?.let { max(0f, it - f.padStart - f.padEnd) } ?: max(inner.minWidth.toFloat(), ms.maxOfOrNull { it.exactWidth } ?: 0f)).coerceAtMost(inner.maxWidth.toFloat())
@@ -183,6 +190,9 @@ object Layout {
             Placement.exact((ew - it.exactWidth) * ax, if (centreLine) eh / 2f - it.centre else (eh - it.exactHeight) * ay)
         }, ms)
     }
+
+    /** The largest side a child of an overflowing stack may take: 8191 px fits every split of Compose's constraints (13 bits a side). */
+    const val OVERFLOW_MAX = (1 shl 13) - 1
 
     /** A box holds its children at its top start, inside its padding. */
     fun box(f: Frame, c: Constraints, children: List<Child>) = stack(f, c, 0f, 0f, children)

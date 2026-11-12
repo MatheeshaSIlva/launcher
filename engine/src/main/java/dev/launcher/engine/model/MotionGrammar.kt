@@ -4,6 +4,9 @@ import dev.launcher.app.design.Curve
 import dev.launcher.engine.kdl.KdlValue
 import dev.launcher.engine.kdl.Span
 
+/** A presence delay (T-013): `delay(80ms)`, milliseconds only. */
+private val DELAY = Regex("delay\\(\\s*([0-9]+(?:\\.[0-9]+)?)\\s*ms\\s*\\)")
+
 /** Fixed, data-only motion declarations. No token lookup, expression evaluation or reflection. */
 object MotionGrammar {
     val ATTRS = setOf("transition", "spring", "enter", "exit", "roll")
@@ -102,7 +105,8 @@ object MotionGrammar {
                 }
             }
             if (presence) {
-                val later = Regex("(?<![A-Za-z0-9_.-])(?:slide|blur|delay)(?![A-Za-z0-9_.-])").find(inspected)
+                // `delay(Nms)` is a presence word (T-013); any other use of "delay" is not supported yet.
+                val later = Regex("(?<![A-Za-z0-9_.-])(?:slide|blur|delay)(?![A-Za-z0-9_.-])").find(DELAY.replace(inspected) { " ".repeat(it.value.length) })
                 if (later != null) {
                     error("motion-not-supported", "'${later.value}' is not yet supported in E2 motion", later.range.first, later.value.length)
                     return false
@@ -128,6 +132,17 @@ object MotionGrammar {
             return out
         }
         fun presence(): Presence? {
+            // `delay(Nms)` anywhere in the clause, at most once; read and blanked (offsets kept) before the rest is read.
+            val delays = DELAY.findAll(text).toList()
+            if (delays.size > 1) { error("motion-duplicate-delay", "Presence takes one delay", delays[1].range.first, delays[1].value.length); return null }
+            val delayMs = delays.firstOrNull()?.let { m ->
+                val v = m.groupValues[1].toFloatOrNull()
+                if (v == null || !v.isFinite() || v < 0f || v > Presence.MAX_DELAY_MS) {
+                    error("motion-bad-delay", "A delay is 0 to ${Presence.MAX_DELAY_MS.toInt()} ms", m.range.first, m.value.length); return null
+                }
+                v
+            } ?: 0f
+            val text = delays.firstOrNull()?.let { m -> text.replaceRange(m.range, " ".repeat(m.value.length)) } ?: text
             val clauses = clauses()
             if (clauses.size > 1) {
                 val comma = clauses.first().first.length
@@ -166,7 +181,7 @@ object MotionGrammar {
                 return null
             }
             val curve = rest?.let { curve(text.substring(it.range.first), it.range.first) }
-            return Presence(selected, curve, at(0, text.length))
+            return Presence(selected, curve, at(0, text.length), delayMs)
         }
         fun curve(input: String, offset: Int, defaultSpring: Boolean = false): CurveSpec? {
             val s = input.trim()

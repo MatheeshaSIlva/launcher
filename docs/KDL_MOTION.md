@@ -46,6 +46,11 @@ including through `fade-up`. `scale` here is a presence effect; other channel na
 `value` belong to `transition`. Each presence declaration takes one clause; commas
 are permitted only inside spring/bezier curves.
 
+A presence clause may also take `delay(Nms)` (T-013): 0 to 1000 ms, once, literal. The node holds its start (an
+arrival's `enter` values; a departure where it is) for that long, then moves on its curve. A node shown and hidden again
+inside its arrival's delay never shows: a motion still waiting carries no speed. Motion reduced ignores the delay. Codes:
+`motion-bad-delay`, `motion-duplicate-delay`. A bare `delay`, or a delay in `transition`, is still refused.
+
 For presence, precedence is its own curve, then the node's `spring`, then
 `@motion.enter` or `@motion.exit`. Without the corresponding declaration there is
 no presence animation. Presence accepts every curve form below, including a duration
@@ -83,7 +88,7 @@ Unknown channels, effects and easings suggest a nearby spelling.
 Declarations are bounded to 4096 characters. Plain single-line quoted values have exact
 inside-value spans; raw, escaped or multiline values conservatively use the value span.
 
-Presence slide,
-blur and delay, keyframes, stagger, progress=, rotation, per-property durations outside
+Presence slide and
+blur, keyframes, stagger, progress=, rotation, per-property durations outside
 clauses, stiffness/damping/mass and duration/bounce spring forms are not yet supported:
 `motion-not-supported`. This subset does not replace the spec's later surface tracks.

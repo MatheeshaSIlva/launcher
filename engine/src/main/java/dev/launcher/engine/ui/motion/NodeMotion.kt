@@ -56,7 +56,7 @@ class Track {
     }
 
     /** Its speed now, per second (0 at rest). */
-    fun velocity(now: Long): Float = mover?.velocity(elapsed(now))?.takeIf { it.isFinite() } ?: 0f
+    fun velocity(now: Long): Float = if (now < started) 0f else mover?.velocity(elapsed(now))?.takeIf { it.isFinite() } ?: 0f
 
     /** Shown at [from] with [speed] now, then on to [to] on [curve], continued (a residual's start: T-011's radius). */
     fun continueFrom(from: Float, speed: Float, to: Float, curve: Curve, now: Long) {
@@ -74,9 +74,11 @@ class Track {
     private fun go(to: Float, curve: Curve, now: Long, delta: Float) {
         val m = mover
         val t = elapsed(now)
-        val v = m?.velocity(t) ?: 0f
+        // A motion still waiting for its start (a presence delay, T-013) is at rest on its start: no speed to carry.
+        val waiting = m != null && now < started
+        val v = if (waiting) 0f else m?.velocity(t) ?: 0f
         val from = (m?.value(t) ?: value) + delta
-        val next = if (m == null) Continuation.fresh(curve, from, to) else Continuation.continued(curve, from, v, to)
+        val next = if (m == null || waiting) Continuation.fresh(curve, from, to) else Continuation.continued(curve, from, v, to)
         val r = Envelope.range(curve, next, from, v, to)
         low = if (m == null) r.start else min(low, r.start)
         high = if (m == null) r.endInclusive else max(high, r.endInclusive)
@@ -210,7 +212,9 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     fun enter(rise: Float, alongX: Boolean, now: Long = context.now()): Boolean {
         val p = spec.enter ?: return false
         val c = enterCurve() ?: return false
-        for (e in p.effects) presence(e, rise, alongX).let { (track, out) -> track.launch(out, c, now) }
+        // A delay holds the start pose until its time (a track's clock counts from its start); motion reduced has no curve.
+        val at = now + delayNanos(p)
+        for (e in p.effects) presence(e, rise, alongX).let { (track, out) -> track.launch(out, c, at) }
         return moving
     }
 
@@ -219,9 +223,12 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         val p = spec.exit ?: return false
         val c = exitCurve() ?: return false
         leaving = true
-        exiting = p.effects.map { e -> presence(e, rise, alongX).also { (track, out) -> track.present(out, c, now) }.first }.toSet()
+        val at = now + delayNanos(p)
+        exiting = p.effects.map { e -> presence(e, rise, alongX).also { (track, out) -> track.present(out, c, at) }.first }.toSet()
         return true
     }
+
+    private fun delayNanos(p: Presence): Long = if (context.reduced()) 0L else (p.delayMs * 1_000_000L).toLong()
 
     /** Comes back before its exit ended: every track turns back to what its bindings asked, from where it is. */
     fun revive(now: Long = context.now()) {
