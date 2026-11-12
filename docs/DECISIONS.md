@@ -1185,3 +1185,23 @@ the first to use it).
   tells everything on its handler's thread.
 - **Not proven:** the S24 (the owner's exit check), live display changes on Android (shown with a simulated display:
   the proof's activity is made again by an overlay or a turn), multi-window, a spring's interruption here (13a-0's).
+
+## D-103: E2.13c's shapes (2026-11-12, lead and Codex; one point to the owner) [team]
+
+Made without the owner (T-011); nothing on screen changes today (no component in use clips or morphs a radius).
+- **One shown radius** for a box's fill, its children's clip and its hit region: the declaration at the drawn size
+  (`full`: half the shorter side, whichever axis) plus a handover residual continued toward 0 on the radius curve from
+  the radius and speed shown at a change (the clamp's speed where it holds); clamped to `[0, half the shorter side]`;
+  empty or non-finite geometry draws nothing and clips nothing.
+- **The children's rounded clip by release** (read from AOSP's `SkiaCanvas.cpp` per branch): a path clip on the GPU
+  from Android 11 (antialiased since android11-release; measured equal to the fill's edge); a two-layer `DST_IN` mask on
+  Android 10 and on software canvases (whose path clip is antialiased differently from their fill: 0.11 apart).
+- **Android 10's mask budget (lead, after four rounds; Codex dissents; Q-003 to the owner):** at most 8 MiB of mask
+  layers held by every masking node on a thread together (device size, the display as the cap), counted before any
+  allocation; a mask past it keeps the same rounded clip, aliased. Android 11 and later are unaffected.
+- **Acceptance (agreed with Codex):** shapes are judged against each renderer's own `drawRoundRect` of the expected
+  geometry (mean edge error ≤ 0.02, every channel ≤ 24); the error against ideal coverage is reported, not judged (GPU
+  0.015 mean and 0.028 worst; Skia's software raster 0.07-0.12 off ideal on any rounded fill).
+- **A shape clip's GPU work is done before a component shows** (an off-screen frame at its preparation, completion
+  observed); its benefit on first use is not measured.
+- **A child cannot be larger than its box** (the layout keeps children within their parent's bounds): known, unchanged.
