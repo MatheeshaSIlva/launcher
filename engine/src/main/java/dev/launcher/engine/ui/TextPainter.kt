@@ -22,7 +22,7 @@ class TextPainter(private val tokens: Tokens) : Painter {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var directionText: String? = null
     private var directionRtl = false
-    private data class FadeKey(val width: Float, val length: Float, val color: Int, val rtl: Boolean)
+    private data class FadeKey(val width: Float, val length: Float, val color: Int, val rtl: Boolean, val start: Int)
     private var fadeKey: FadeKey? = null
     private var fadeShader: android.graphics.Shader? = null
     /** Paints onto a GPU recording and onto any other canvas (the warm-up's evidence, E2 slice 6). */
@@ -64,13 +64,18 @@ class TextPainter(private val tokens: Tokens) : Painter {
             val length = (node.length("fade")?.takeIf { it.isFinite() && it >= 0f } ?: node.dp(12.0)).coerceIn(0f, width)
             if (length > 0f) {
                 val color = p.color or 0xFF000000.toInt()
-                val key = FadeKey(width, length, color, rtl)
+                // Scrolled, the start edge fades too, as far as the title has moved a fade's length (T-015: a scrolled
+                // title was cut hard at its start); at rest it is crisp, so nothing pops as the scroll starts or ends.
+                val start = ((kotlin.math.abs(node.scroll.offset) / length).coerceIn(0f, 1f) * 64f).toInt()
+                val key = FadeKey(width, length, color, rtl, start)
                 if (fadeKey != key) {
                     fadeKey = key
-                    fadeShader = if (rtl) android.graphics.LinearGradient(0f, 0f, length, 0f,
-                        color and 0x00FFFFFF, color, android.graphics.Shader.TileMode.CLAMP)
-                    else android.graphics.LinearGradient(width - length, 0f, width, 0f,
-                        color, color and 0x00FFFFFF, android.graphics.Shader.TileMode.CLAMP)
+                    val clear = color and 0x00FFFFFF
+                    val edge = (color and 0x00FFFFFF) or ((255 * (1f - start / 64f)).toInt() shl 24)
+                    val f = (length / width).coerceIn(0f, 0.5f)
+                    val (a, b) = if (rtl) clear to edge else edge to clear
+                    fadeShader = android.graphics.LinearGradient(0f, 0f, width, 0f, intArrayOf(a, color, color, b),
+                        floatArrayOf(0f, f, 1f - f, 1f), android.graphics.Shader.TileMode.CLAMP)
                 }
                 p.shader = fadeShader
             }
