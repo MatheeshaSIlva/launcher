@@ -85,8 +85,13 @@ class ComponentView(
     private var disposed = false
     /** Whether motion is reduced, followed on this thread; the node motion reads it through [Env.reducedMotion]. */
     private val reduced = dev.launcher.engine.ui.motion.ReducedMotion.Watch(context.contentResolver, handler) { on ->
-        if (on && !disposed) host.snapMotion()
+        if (disposed) return@Watch
+        if (on) host.snapMotion() else host.refreshMotion()
     }
+    /** Shown ([show]) and in a window: recurring work (loops, scrolls) runs only while both hold (T-013, Codex). */
+    private var shown = false     // the view starts at alpha 0 until [show]
+    private var attached = false
+    private fun visibility() { if (!disposed) host.setVisible(shown && attached) }
     /** Its nodes' motion clock: registered only while some node moves, nothing at rest (13a-0's [MotionTicker]). */
     private val ticker = dev.launcher.engine.ui.motion.MotionTicker(frames) { nanos ->
         !disposed && host.step(nanos)
@@ -135,6 +140,11 @@ class ComponentView(
         recomposeScope.launch(start = CoroutineStart.UNDISPATCHED) { recomposer.runRecomposeAndApplyChanges() }
         view.setParentCompositionContext(recomposer)
         view.alpha = 0f
+        host.setVisible(false)
+        view.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: android.view.View) { attached = true; visibility() }
+            override fun onViewDetachedFromWindow(v: android.view.View) { attached = false; visibility() }
+        })
         view.setViewTreeLifecycleOwner(owner)
         view.setViewTreeSavedStateRegistryOwner(owner)
         view.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -342,7 +352,12 @@ class ComponentView(
     }
 
     /** Seen or not (the view's alpha: composed and drawn either way; never the window's parameters). */
-    fun show(on: Boolean) { if (!disposed) view.alpha = if (on) 1f else 0f }
+    fun show(on: Boolean) {
+        if (disposed) return
+        view.alpha = if (on) 1f else 0f
+        shown = on
+        visibility()
+    }
 
     /** What the warm-up and the draw node did: text paints on the GPU and elsewhere, recordings of content and frames. */
     fun counters(): String {

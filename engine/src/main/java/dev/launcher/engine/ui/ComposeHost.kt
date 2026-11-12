@@ -111,7 +111,14 @@ private class Policy(val n: HostNode, val composed: List<HostNode>) : MeasurePol
 
 private class DrawElement(val n: HostNode) : ModifierNodeElement<DrawNode>() {
     override fun create() = DrawNode(n)
-    override fun update(node: DrawNode) { node.n.redraw = {}; node.n = n; n.redraw = node::redraw }
+    override fun update(node: DrawNode) {
+        node.n.redraw = {}
+        // The drawing moves to another host node: recurring work (loops, scrolls) follows it (T-013, Codex).
+        if (node.isAttached) node.n.setDrawingAttached(false)
+        node.n = n
+        n.redraw = node::redraw
+        if (node.isAttached) n.setDrawingAttached(true)
+    }
     override fun equals(other: Any?) = other is DrawElement && other.n === n
     override fun hashCode() = System.identityHashCode(n)
 }
@@ -128,8 +135,8 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
      * on the emulator: no frame recorded, nothing moved on the GPU path): each moving node asks for its own draw.
      */
     fun redraw() { if (isAttached) invalidateDraw() }
-    override fun onAttach() { n.redraw = ::redraw }
-    override fun onDetach() { if (n.redraw == ::redraw) n.redraw = {} }
+    override fun onAttach() { n.redraw = ::redraw; n.setDrawingAttached(true) }
+    override fun onDetach() { if (n.redraw == ::redraw) n.redraw = {}; n.setDrawingAttached(false) }
     override fun ContentDrawScope.draw() {
         if (n.hidden.value) return
         n.epoch.intValue
