@@ -249,6 +249,18 @@ scheduling, stop when disabled, hidden, exiting, disposed or under reduced motio
 
 ## 5. Reports
 
+### codex — work, 2026-11-12T12:54Z
+
+- **Commits:** blocked: Git cannot create `D:/Launcher/.git/worktrees/launcher-codex/index.lock` under current permissions. Nothing pushed.
+- **Handoff:** four verified patches in `.gradle/media-01-schema.patch` through `.gradle/media-04-title.patch`; apply in order.
+- **Changed:** image/loop/title schema and refusals; sine loops with reserved layout height and exit freezing; end fade, scrolling, RTL and continuous retargeting.
+- **Verified — measured:** full gate passed all six shell scripts, including 74 capture scenarios/746 checks. Final loop correction then passed the fast gate: **446 engine + 442 app tests**, including 15 new tests. Gradle daemon stopped.
+- **Required lead edit — `ComposeHost.kt`:** call `setDrawingAttached(true/false)` on draw-node attach/detach; transfer attachment when `DrawElement.update` changes node identity.
+- **Required lead edit — `ComponentView.kt`:** initially call `host.setVisible(false)`; forward effective show/window visibility to `setVisible`; call `snapMotion()` when motion becomes reduced and `refreshMotion()` when restored.
+- **Security §7 — judged:** caller checks N/A (no new IPC); numeric bounds checked; no new unsafe execution/file/app paths; source declarations checked, runtime picture authorization awaits Claude; no captured data or secret changes; refusal paths tested.
+- **Not verified:** integrated drawing, emulator frames, fidelity, S24 performance or owner approval. No device used.
+- **Surprises:** preserved common `radius="full"` behavior for images. Added a regression proven failing before and passing after the rest-height handover fix.
+
 ## 6. Cross-check
 
 ## 7. Sign-off
