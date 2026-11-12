@@ -398,6 +398,8 @@ class HostNode internal constructor(
             "centre-line" -> Layout.stack(frame(), c, 0f, 0.5f, kids, centreLine = true, overflow = clips)
             else -> Layout.stack(frame(), c, 0f, 0f, kids, overflow = clips)
         } }
+        // A blob holds its shapes as a box does, at its top start (each placed by its translate and motion).
+        "blob" -> Layout.box(frame(), c, kids)
         "spacer" -> Arranged(Layout.spacer(length("size") ?: 0f, c), emptyList(), emptyList())
         else -> Layout.leaf(frame(), c, Measurer { w, h -> painter.measure(this, w, h) ?: Measured(dev.launcher.engine.layout.Size(0, 0)) })
     }

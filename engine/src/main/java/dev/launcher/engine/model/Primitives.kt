@@ -87,5 +87,7 @@ object Primitives {
             AttrDef("picture", AttrType.STRING) + AttrDef("rev", AttrType.STRING),
             arg = AttrDef("symbol", AttrType.STRING)),
         PrimitiveDef("spacer", lengths("size") + AttrDef("flex", AttrType.NUMBER, 0.0), parents = setOf("row", "column")),
+        // T-015: the smooth union of its `box` children's shapes in one `fill`, joined within `smooth`.
+        PrimitiveDef("blob", lengths("smooth") + AttrDef("fill", AttrType.COLOR), container = true),
     ).associateBy { it.name }
 }

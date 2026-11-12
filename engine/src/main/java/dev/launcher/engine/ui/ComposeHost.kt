@@ -136,7 +136,11 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
      * A motion step changes no Compose state, and the window's own invalidation does not draw a node again (13a-1b, measured
      * on the emulator: no frame recorded, nothing moved on the GPU path): each moving node asks for its own draw.
      */
-    fun redraw() { if (isAttached) invalidateDraw() }
+    fun redraw() {
+        if (isAttached) invalidateDraw()
+        // A blob's shape moving changes the blob's picture (T-015).
+        n.parent?.takeIf { it.view.primitive == "blob" }?.redraw?.invoke()
+    }
     override fun onAttach() { n.redraw = ::redraw; n.setDrawingAttached(true) }
     override fun onDetach() { if (n.redraw == ::redraw) n.redraw = {}; n.setDrawingAttached(false) }
     override fun ContentDrawScope.draw() {

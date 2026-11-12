@@ -19,7 +19,8 @@ class BoxPainter : Painter {
         val h = loopHeight?.coerceIn(0f, height) ?: height
         val y = (height - h) / 2f
         val radius = node.shownRadius().coerceAtMost(minOf(width, h) / 2f)
-        color(node.value("fill"))?.let {
+        // A box inside a blob is one of its shapes: the blob fills them all as one (T-015).
+        color(node.value("fill"))?.takeIf { node.parent?.view?.primitive != "blob" }?.let {
             p.style = Paint.Style.FILL
             p.color = it
             canvas.drawRoundRect(0f, y, width, y + h, radius, radius, p)

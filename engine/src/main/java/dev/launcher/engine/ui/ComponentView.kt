@@ -411,6 +411,7 @@ class ComponentView(
             "text" -> TextPainter(tokens)
             "icon" -> IconPainter(tokens, glyphs)
             "box" -> BoxPainter()
+            "blob" -> BlobPainter()
             "image" -> ImagePainter()
             else -> Nothing
         }
