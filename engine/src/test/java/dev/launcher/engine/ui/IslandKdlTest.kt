@@ -60,7 +60,8 @@ class IslandKdlTest {
         assertEquals(Value.Str("cutout"), root.value("place"))
         assertEquals(Value.Str("full"), root.value("radius"))
         assertEquals(Value.Str("#000000"), root.value("fill"))
-        assertEquals(Value.Str("centre-line"), root.value("align"))
+        assertEquals(Value.Str("centre"), root.value("align"))
+        assertEquals(Value.Bool.TRUE, root.value("clip"))
         // Only one state is present at a time (the other leaves on presence motion).
         assertEquals(listOf("Idle"), root.children.map { (it.value("label") as Value.Str).value })
         assertEquals(listOf("Media"), host(playing = true).root.children.map { (it.value("label") as Value.Str).value })

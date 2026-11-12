@@ -8,7 +8,7 @@
 // left of the camera, five terracotta bars right of it, in fixed slots (14 | 90 | 28 | 92 | 12) so the camera slot stays
 // on the pill's centre whatever the title. A pause goes back at once (owner). The bars loop while it plays (owner: a
 // made-up rhythm, no permission); a long title fades at its end and scrolls slowly, `title-scroll` off stops the scroll
-// (owner, 2026-11-12).
+// (owner, 2026-11-12). Both states are centred on the camera and clipped to the pill, which reveals them as it moves.
 component "island" version="0.2.0" {
   props {
     hour24 type=bool default=#true
@@ -21,13 +21,13 @@ component "island" version="0.2.0" {
     source media
   }
   view {
-    box place="cutout" place-gap=(dp)4 width="{media.playing ? 236dp : 132dp}" height=(dp)32 radius="full" fill="#000000" align="centre-line" transition="size @motion.move, place @motion.move" label="Island" {
-      row padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{!media.playing}" enter="fade @motion.enter" exit="fade @motion.exit" label="Idle" {
+    box place="cutout" place-gap=(dp)4 width="{media.playing ? 236dp : 132dp}" height=(dp)32 radius="full" fill="#000000" align="centre" clip=#true transition="size @motion.move, place @motion.move" label="Island" {
+      row width=(dp)132 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{!media.playing}" enter="fade @motion.enter" exit="fade @motion.exit" label="Idle" {
         text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true label="Time"
         spacer flex=1
         text "{battery.level}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true label="Battery"
       }
-      row padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{media.playing}" enter="fade @motion.enter" exit="fade @motion.exit" label="Media" {
+      row width=(dp)236 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{media.playing}" enter="fade @motion.enter" exit="fade @motion.exit" label="Media" {
         row width=(dp)90 gap=(dp)6 align="centre-line" label="Left" {
           image picture="{media.art}" size=(dp)20 radius=(dp)4 label="Cover"
           text "{media.title}" font="plex-sans" size=(dp)13 weight=400 color="#F2F2F2" width=(dp)64 overflow="fade" fade=(dp)12 scroll="{@title-scroll && media.playing}" label="Title"
