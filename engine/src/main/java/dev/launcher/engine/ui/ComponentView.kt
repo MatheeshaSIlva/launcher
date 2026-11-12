@@ -267,6 +267,9 @@ class ComponentView(
         return (node.painter as? TextPainter)?.measure(node, Int.MAX_VALUE, Int.MAX_VALUE)?.exactWidth
     }
 
+    /** The root's width in px as its last layout measured it (proofs, T-012). */
+    fun rootWidth(): Float = host.root.exactWidth
+
     /** The unit (px a point) now: every primitive measured and drawn again when it changed. */
     fun setUnit(unitPx: Float) {
         if (disposed || unitPx == units.unitPx) return

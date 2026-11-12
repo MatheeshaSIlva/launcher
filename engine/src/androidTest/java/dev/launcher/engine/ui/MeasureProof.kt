@@ -87,8 +87,12 @@ class MeasureProof(private val instrumentation: Instrumentation) {
             check(runs.all { it[1] == 10 }) { "box widths ${runs.map { it[1] }}, expected 10 each" }
             check(gaps.all { it == 4 }) { "gaps $gaps, expected 4 each" }
             check(span == if (n == 0) 0 else 10 * n + 4 * (n - 1)) { "span $span px for $n boxes" }
+            // And as laid out, apart from the pixels: the row measured to that span (Codex).
+            var width = -1f
+            instrumentation.runOnMainSync { width = v!!.rootWidth() }
+            check(width == span.toFloat()) { "the row measured $width px for a $span px span" }
             result.putString("measure", "40 frames whose children changed between composition and measure: no exception; " +
-                "ended with $n boxes of ${runs.map { it[1] }} px, gaps $gaps, span $span px (n = $last)")
+                "ended with $n boxes of ${runs.map { it[1] }} px, gaps $gaps, span $span px, the row measured $width px (n = $last)")
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(old)
             instrumentation.runOnMainSync { v?.dispose(); activity.finish() }
