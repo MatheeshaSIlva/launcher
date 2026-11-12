@@ -152,6 +152,50 @@ sans as negative controls. Fixed dp text is a stated limitation.
 
 ## 5. Reports
 
+### claude — report (`055cbfe`, `7998f74`, `c381e60`; Codex's `090918d` committed for it after its run timed out)
+
+- **Changed:** `KdlBar` shows an allowlisted component (`COMPONENTS`: `status-bar`, `island`; none named = the status
+  bar, anything else refused with a log and nothing changed), the island without StatusBarView's colour or
+  `max-icons`, StatusBarView still handing over (`kdlInPlace` a no-op for the island); `GestureNav`'s switch takes
+  `--es component`. `KdlBarChoiceTest` (allowlist, refusals, every allowed file ships).
+- **Owner, 2026-11-12, second question:** the emulator's centred punch hole has its centre 12.5 dp from the top; a
+  32 dp pill centred there stood 9 px above the screen. Asked: "Keep the 8 dp gap". Built as a root attribute,
+  `place-gap` (a literal length, only beside `place="cutout"` on a root; refused otherwise with spans:
+  `place-gap-needs-cutout`, `place-root-only`, `not-bindable`): the root's top never nearer the screen's top than it;
+  without it D-102 is unchanged. `island.kdl` takes `place-gap=(dp)8`. **Codex: this is grammar in your files
+  (`Primitives`, `Validator`, `PlaceTest`); please review it as yours.**
+- **A pre-existing engine bug found and fixed:** the KDL status bar crashed the launcher at every start in the app
+  (`IndexOutOfBoundsException` in `Policy.measure`, since 13a-2's drawn list): a node's children changed between its
+  composition and its measure. A node now measures the children it composed. New proof `component-measure` (a prop set
+  again from a frame callback after the recomposer's, 40 frames): crashes the process with the old `ComposeHost.kt`
+  (same exception, read from the log), passes with the fix. `component-motion`, `component-shape`,
+  `component-placement` pass with it.
+- **Measured, emulator (`component-island`, emu01, 2.625):** pill 346.49 × 84.00 px (132 × 32 dp: 346.5 × 84.0),
+  centre off D-102's point with the 8 dp gap by (0.000, 0.000) px; clearance against draft 4's 28 dp camera slot on
+  the pill's centre (the emulator's cutouts are a notch wider than the pill or a corner hole, not a centred punch
+  hole): the time's ink ends 1 px before it, the battery's starts 67 px after, and every frame of 9:59→10:00,
+  23:59→0:00, 12:59→1:00 (12-hour), 9→10 and 99→100 keeps 1 px or more (15 frames each at 120 Hz, the role's 120 ms);
+  typeface: the time's ink against the asset's JetBrains Mono 0.0005, the system's monospace 0.2716, sans 0.2864;
+  `Fonts.of("jetbrains-mono")` is the asset (0.0000); the face rolls by character (API 37); reduced motion lands at once.
+- **Looks, `diff.py` against the Figma export (camera slot masked):** FAIL at the defaults, overall mean 7.58, 7.0 %
+  of pixels over 12; regions time, battery and outline over. Read: the pill's outline and the texts' places agree
+  within 1-2 px (ink time x 39-135 Figma, 39-134 ours; battery 275-310, 277-311; ours about 1 px higher), and side by
+  side they read the same; Figma rasterises the glyphs heavier and about 1 px taller (best one-pixel alignment still
+  leaves 13 % of the time's pixels over 12). Our text is Android's own rendering of the bundled face (0.0005 above). I
+  propose, as for 13c's shapes (D-103), judging glyphs against the device's own rendering of the expected face, size and
+  place, with `diff.py`'s numbers against Figma reported, not judged. **Codex: please agree or not.**
+- **Screenshots (emulator):** home and an app (Settings), light and dark: the pill around the camera, time left,
+  battery right (`tools/shots/island/tops.png`, not committed). Switching status-bar ↔ island, a refused name, off and
+  on: no crash, each load logged.
+- **Every device proof run on this tip** (emulator): component-lifecycle, -refusal, -icons, -icon-reveal, -layer,
+  -motion, -roll, -placement, -shape, -measure, -island, device-display: PASS. Two were failing before this task for
+  reasons of their own, fixed in `ComponentProof.kt`: `component-lifecycle` validated the status bar with every token
+  existing, which slice 3b's `prop-shadows-token` refuses (now only `comp.*` exists); `component-icons`' "no icon" case
+  used the status bar, which has had icons since slice 9 (now a component with none). The icons proof also returns its
+  own failure's words.
+- **Not verified:** the S24 (its hole's place; frame stats); a phone without a cutout on the device (JVM and the
+  placement proof's fallback only); large font scale (the text is dp, a stated limitation).
+
 ## 6. Cross-check
 
 ## 7. Sign-off

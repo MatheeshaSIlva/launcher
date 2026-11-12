@@ -39,7 +39,7 @@ class ComponentProof(private val context: Context) {
         val handler = Handler(thread.looper)
         try {
             val def = context.assets.open("kdl/components/status-bar.kdl").bufferedReader().use { r ->
-                (Validator(TokenCheck { true }).load(KdlParser.parse(r.readText())) as ReadResult.Ok).component
+                (Validator(TokenCheck { it.startsWith("comp.") }).load(KdlParser.parse(r.readText())) as ReadResult.Ok).component
             }
             val tokens = CountingTokens()
             val sources = Sources.fixture(mapOf("time" to Time(13L * 3_600_000, "UTC")))
@@ -89,7 +89,12 @@ class ComponentProof(private val context: Context) {
      * worker. [ComponentView.whenPrepared] waits for them (late = true once they come after construction); a bound name
      * changed meanwhile and a disposal while waiting are both handled; a component with no icon is prepared at once.
      */
-    fun preparation(result: Bundle) {
+    /** [preparation], its own failure's words in the result (the runner gives only the exception's type). */
+    fun preparation(result: Bundle) = try { prepare(result) } catch (e: IllegalStateException) {
+        result.putString("errors", e.message); throw e
+    }
+
+    private fun prepare(result: Bundle) {
         val thread = HandlerThread("component-proof-icons").apply { start() }
         val handler = Handler(thread.looper)
         val release = CountDownLatch(1)
@@ -131,10 +136,12 @@ class ComponentProof(private val context: Context) {
             result.putString("heldLoads", "prepared only after its glyph loaded, late=true; loaded $loaded")
             result.putString("disposedWhileWaiting", "its callback never ran")
             onThread(handler) { a.dispose() }
-            // 3. No icon: prepared at once, not late.
-            val barDef = context.assets.open("kdl/components/status-bar.kdl").bufferedReader().use { r ->
-                (Validator(TokenCheck { true }).load(KdlParser.parse(r.readText())) as ReadResult.Ok).component
-            }
+            // 3. No icon: prepared at once, not late. (It once used the status bar, which has had icons since slice 9:
+            // their glyphs load in the background, so it was never prepared at once; T-012 found the case failing.)
+            val barDef = (Validator(TokenCheck { false }).load(KdlParser.parse("""
+                component "no-icons" {
+                  view { row { text "{now | date:'H:mm'}" size=(px)40 } }
+                }""".trimIndent())) as ReadResult.Ok).component
             val noIcon = onThread(handler) {
                 var at: Boolean? = null
                 ComponentView(context, barDef, tokens, Sources.fixture(mapOf("time" to Time(0L, "UTC"))), Units(3f, 3f))
