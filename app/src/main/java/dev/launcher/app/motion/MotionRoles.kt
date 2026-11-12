@@ -278,7 +278,16 @@ object MotionRoles {
         r("transition.nc.after-close.lock", "Notification Center: after closing on the lock screen", "What finishes once the sheet has left the lock screen."),
     ))
 
-    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, QUICK_SETTINGS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE, MOMENTS, STYLES, TRANSITIONS)
+    /** Engine defaults shared by KDL components: glue, outside the launcher's editable settings moments. */
+    val ENGINE = MotionGroup("Engine", "Default motion for components.", listOf(
+        r("state", "Value changing", "A value ticking to its new number."),
+        r("text.roll", "Text rolling", "Changed numerals rolling to their new value."),
+        r("move", "Moving", "A component moving or changing its shape."),
+        r("enter", "Arriving", "A component coming into view."),
+        r("exit", "Leaving", "A component leaving view."),
+    ))
+
+    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, QUICK_SETTINGS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE, MOMENTS, STYLES, TRANSITIONS, ENGINE)
 
     /**
      * What the settings' Motion lets a person retime, by group (docs/PLAN_MOTION.md): every animation but the App Switcher's

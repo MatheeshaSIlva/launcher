@@ -6,6 +6,31 @@
  "version": "0.1",
  "_about": "The iOS 27 animation preset: every motion role (motion.*) as a spring or a bezier curve. Written by tools/design/build_ios27_theme.py (its seeds); kept as edited here once written.",
  "tokens": {
+  "motion.state": {
+   "bezier": [0.23, 1, 0.32, 1],
+   "ms": 120,
+   "src": "judged:design language dur-state / ease-out (T-012)"
+  },
+  "motion.text.roll": {
+   "bezier": [0.23, 1, 0.32, 1],
+   "ms": 120,
+   "src": "judged:design language dur-state / ease-out (T-012)"
+  },
+  "motion.move": {
+   "bezier": [0.2, 1.06, 0.32, 1],
+   "ms": 220,
+   "src": "judged:design language dur-move / ease-move (T-012)"
+  },
+  "motion.enter": {
+   "bezier": [0.23, 1, 0.32, 1],
+   "ms": 220,
+   "src": "judged:design language dur-move / ease-out (T-012)"
+  },
+  "motion.exit": {
+   "bezier": [0.55, 0, 1, 0.45],
+   "ms": 220,
+   "src": "judged:design language dur-move / ease-in (T-012)"
+  },
   "motion.adjust.banners.bounce": {
    "factor": 1,
    "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"

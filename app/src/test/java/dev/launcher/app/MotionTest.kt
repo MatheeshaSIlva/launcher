@@ -121,6 +121,29 @@ class MotionTest {
         for (k in dev.launcher.app.motion.MotionTokens.CURVES + dev.launcher.app.motion.MotionTokens.NUMBERS) assertTrue("$k not named", k in named)
     }
 
+    @Test fun engineDefaultsKeepTheDesignLanguageInEveryPreset() {
+        val expected = mapOf(
+            "motion.state" to Curve.Ease(0.23f, 1f, 0.32f, 1f, 120f),
+            "motion.text.roll" to Curve.Ease(0.23f, 1f, 0.32f, 1f, 120f),
+            "motion.move" to Curve.Ease(0.2f, 1.06f, 0.32f, 1f, 220f),
+            "motion.enter" to Curve.Ease(0.23f, 1f, 0.32f, 1f, 220f),
+            "motion.exit" to Curve.Ease(0.55f, 0f, 1f, 0.45f, 220f),
+        )
+        val roles = dev.launcher.app.motion.MotionRoles
+        assertEquals(expected.keys, roles.ENGINE.roles.map { it.key }.toSet())
+        assertTrue(roles.EDITABLE.flatMap { it.roles }.none { it.key in expected })
+        for (f in presets.listFiles()!!.filter { it.extension == "json" }) {
+            val layers = ArrayList<Map<String, dev.launcher.app.design.Entry>>()
+            var id: String? = f.nameWithoutExtension
+            while (id != null) { val p = preset(id); layers.add(0, p.entries); id = p.extends }
+            val resolver = Resolver(layers)
+            for ((key, curve) in expected) {
+                assertEquals("${f.name}: $key", curve, (resolver.resolve(key) as Value.CurveV).curve)
+                assertEquals(1, roles.ALL.sumOf { g -> g.roles.count { it.key == key } })
+            }
+        }
+    }
+
     /** How far past its target a curve goes, of its travel (sampled from rest to rest). */
     private fun overshoot(c: Curve): Float {
         val m = c.mover().apply { start(0f, 0f, 1f) }
