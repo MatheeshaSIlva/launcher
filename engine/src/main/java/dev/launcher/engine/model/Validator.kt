@@ -52,6 +52,13 @@ class Validator(private val tokens: TokenCheck) {
                     d += Diagnostic(a.value.span, "place-needs-device", "'place=\"cutout\"' reads display geometry from device, which uses does not declare",
                         "uses { source device }")
             }
+            // How near the screen's top a root on the camera may come (T-012): with `place="cutout"` on the same root only.
+            n.attrs["place-gap"]?.let { a ->
+                if (!root) d += Diagnostic(a.value.span, "place-root-only", "'place-gap' is allowed only on a view or fallback root, not a child or variant override")
+                else if (((n.attrs["place"]?.value as? AttrValue.Literal)?.value as? KdlValue.Str)?.value != "cutout")
+                    d += Diagnostic(a.value.span, "place-gap-needs-cutout", "'place-gap' keeps a root placed on the camera off the screen's top edge; this root is not placed on the camera",
+                        "place=\"cutout\"")
+            }
             val def = Primitives.ALL[n.primitive]
             if (def == null) {   // its children are still checked, for every finding at once
                 d += unknown(n.nameSpan, "unknown-primitive", "primitive", n.primitive, Primitives.ALL.keys)

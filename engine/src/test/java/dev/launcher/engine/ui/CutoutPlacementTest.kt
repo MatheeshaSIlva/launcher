@@ -12,6 +12,18 @@ class CutoutPlacementTest {
 
     @Test fun withoutACutoutTheWindowsCentreAndFiftyTwoPercent() = assertEquals(Place(540f, 52f), at(null))
 
+    /** T-012: `place-gap`. A 84 px pill (centre 42) on a hole whose centre is 25 px down: its top would be -17. */
+    @Test fun aGapKeepsTheRootOffTheScreensTop() {
+        val p = at(Cutout(520f, 5f, 560f, 45f))                       // centre 25, inside the band
+        assertEquals("no gap: centred, above the screen", -17f, p.top(42f, null), 0f)
+        assertEquals("a gap of 0: at the screen's top", 0f, p.top(42f, 0f), 0f)
+        assertEquals("a 21 px gap: 21 below the top", 21f, p.top(42f, 21f), 0f)
+        assertEquals("a gap it already clears: centred", 50f - 42f, at(Cutout(520f, 30f, 560f, 70f)).top(42f, 5f), 0f)
+        // Seen from a view lower on the screen: the screen's top is above it.
+        val q = at(Cutout(520f, 5f, 560f, 45f), oy = 40f)
+        assertEquals(-40f + 21f, q.top(42f, 21f), 0f)
+    }
+
     @Test fun aCentredHoleIsTheCentreAndItsLine() = assertEquals(Place(540f, 50f), at(Cutout(520f, 30f, 560f, 70f)))
 
     @Test fun aCornerCutoutKeepsItsOwnCentre() = assertEquals(Place(60f, 40f), at(Cutout(0f, 0f, 120f, 80f)))

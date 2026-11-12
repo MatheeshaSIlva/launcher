@@ -24,6 +24,14 @@ class PlaceTest {
         assertTrue(findings(text("box place=window")).isEmpty())
     }
 
+    @Test fun placeGapOnlyBesideCutoutOnARoot() {
+        assertTrue(findings(text("box place=cutout place-gap=(dp)8", "uses { source device }")).isEmpty())
+        refused(text("box place-gap=(dp)8"), "place-gap-needs-cutout", "8")
+        refused(text("box place=window place-gap=8"), "place-gap-needs-cutout", "8")
+        refused(text("box place=cutout { box place-gap=(dp)8 }", "uses { source device }"), "place-root-only", "8")
+        assertTrue(findings(text("box place=cutout place-gap=\"{1}\"", "uses { source device }")).any { it.code == "not-bindable" })
+    }
+
     @Test fun cutoutRequiresDeviceWithReasonOnViewAndFallback() {
         for (t in listOf(text("box place=cutout"), text("box", fallback = "fallback { box place=cutout }"))) {
             refused(t, "place-needs-device", "cutout")

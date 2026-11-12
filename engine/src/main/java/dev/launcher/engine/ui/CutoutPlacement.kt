@@ -16,7 +16,18 @@ object CutoutPlacement {
         val centreY get() = (top + bottom) / 2f
     }
 
-    data class Place(val centreX: Float, val centreY: Float)
+    data class Place(val centreX: Float, val centreY: Float) {
+        /** The screen's top edge in the view's px (less its resting place on screen); not part of the place itself. */
+        var screenTop = 0f
+            internal set
+
+        /**
+         * The root's top for a root whose centre line is [rootCentre] below its top, never nearer the screen's top than
+         * [gap] px (`place-gap`, T-012): a camera high on the screen leaves the root lower, its centre below the camera's.
+         * No gap (null): centred on the camera wherever that puts it (D-102).
+         */
+        fun top(rootCentre: Float, gap: Float?): Float = if (gap == null) centreY - rootCentre else maxOf(centreY - rootCentre, screenTop + gap)
+    }
 
     const val BAND_LOW = 0.2f
     const val BAND_HIGH = 0.8f
@@ -27,6 +38,6 @@ object CutoutPlacement {
         val x = cutout?.centreX ?: windowCentreX
         val cy = cutout?.centreY
         val y = if (cy != null && cy > BAND_LOW * statusHeight && cy < BAND_HIGH * statusHeight) cy else FALLBACK_LINE * statusHeight
-        return Place(x - originX, y - originY)
+        return Place(x - originX, y - originY).also { it.screenTop = 0f - originY }
     }
 }

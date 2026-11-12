@@ -58,6 +58,7 @@ object Primitives {
         fixed("transition", "enter", "exit", "spring", "as") + listOf(
         AttrDef("radius", AttrType.RADIUS),
         AttrDef("place", AttrType.oneOf("window", "cutout"), "window", bindable = false),
+        AttrDef("place-gap", AttrType.LENGTH, bindable = false),
         AttrDef("layer", AttrType.BOOL, false, bindable = false), AttrDef("background", AttrType.COLOR), AttrDef("opacity", AttrType.NUMBER, 1.0),
         AttrDef("scale", AttrType.NUMBER, 1.0), AttrDef("rotate", AttrType.NUMBER, 0.0),
         AttrDef("visible", AttrType.BOOL, true), AttrDef("each", AttrType.LIST), AttrDef("label", AttrType.STRING))

@@ -159,7 +159,7 @@ class ComponentView(
                     placeTick.intValue
                     val at = onCamera()
                     left = at.centreX - host.root.exactWidth / 2f
-                    top = at.centreY - host.root.centre
+                    top = at.top(host.root.centre, placeGap())
                 } else top = centre.floatValue - host.root.centre
                 val whole = floor(top)
                 val wholeX = floor(left)
@@ -174,6 +174,12 @@ class ComponentView(
                 }
             }
         }
+    }
+
+    /** The root's `place-gap` in px (null without one): how near the screen's top it may come (T-012). */
+    private fun placeGap(): Float? {
+        val n = (def.view.attrs["place-gap"]?.value as? dev.launcher.engine.model.AttrValue.Literal)?.value as? KdlValue.Num ?: return null
+        return n.raw.replace("_", "").toDoubleOrNull()?.let { units.px(it, n.type) }
     }
 
     /** Its root's horizontal centre and centre line on the camera, in this view's px ([CutoutPlacement]). */

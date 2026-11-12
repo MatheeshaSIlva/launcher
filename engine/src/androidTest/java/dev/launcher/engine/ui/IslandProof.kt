@@ -56,7 +56,7 @@ import kotlin.math.roundToInt
  * test (`EngineRolesTest`).
  *   adb shell am instrument -w -e mode component-island dev.launcher.engine.test/dev.launcher.engine.adb.AdbProofInstrumentation
  */
-class IslandProof(private val instrumentation: Instrumentation) {
+class IslandProof(private val instrumentation: Instrumentation, private val cutout: String = "emu01") {
     private val ROLL = "roll=\"cubic-bezier(0.23,1,0.32,1) 120ms\""
     private val ctx get() = instrumentation.targetContext
 
@@ -80,17 +80,22 @@ class IslandProof(private val instrumentation: Instrumentation) {
         try {
             sh("settings put system accelerometer_rotation 0")
             sh("settings put system user_rotation 0")
-            overlay("hole")
+            overlay(cutout)
             val d = def()
-            rest(d, result, errors)
-            rolls(d, result, errors)
-            reduced(d, result, errors)
+            fun stage(name: String, f: () -> Unit) = try { f() } catch (e: Throwable) {
+                errors += "$name: ${e.javaClass.simpleName} ${e.message} at ${e.stackTrace.filter { "IslandProof" in it.className }.take(2).joinToString { "${it.methodName}:${it.lineNumber}" }}"
+            }
+            stage("rest") { rest(d, result, errors) }
+            stage("rolls") { rolls(d, result, errors) }
+            stage("reduced") { reduced(d, result, errors) }
         } finally {
             overlay("none")
             sh("settings put system user_rotation ${rotation.ifEmpty { "0" }}")
             sh("settings put system accelerometer_rotation ${auto.ifEmpty { "1" }}")
         }
-        typeface(result, errors)
+        try { typeface(result, errors) } catch (e: Throwable) {
+            errors += "typeface: ${e.javaClass.simpleName} ${e.message} at ${e.stackTrace.filter { "IslandProof" in it.className }.take(2).joinToString { "${it.methodName}:${it.lineNumber}" }}"
+        }
         if (errors.isNotEmpty()) result.putString("errors", errors.take(12).joinToString("; "))
         check(errors.isEmpty()) { errors.take(8).joinToString("; ") }
     }
@@ -106,8 +111,10 @@ class IslandProof(private val instrumentation: Instrumentation) {
             val w = 132 * density; val h = 32 * density
             if (abs(g.width - w) > 1f || abs(g.height - h) > 1f) errors += "size ${g.width} x ${g.height} px, expected $w x $h"
             if (abs(g.cx - ex) > 0.5f || abs(g.cy - ey) > 0.5f) errors += "centre (${g.cx}, ${g.cy}), expected ($ex, $ey)"
-            result.putString("rest", "pill ${"%.2f".format(g.width)} x ${"%.2f".format(g.height)} px (132 x 32 dp at $density: " +
-                "${"%.1f".format(w)} x ${"%.1f".format(h)}), centre off D-102's point by (${"%.3f".format(g.cx - ex)}, ${"%.3f".format(g.cy - ey)}) px; " +
+            val hole = s.activity.window.decorView.display.cutout?.boundingRectTop
+            if (g.cy - g.height / 2f < -0.5f) errors += "the pill's top is ${-(g.cy - g.height / 2f)} px above the screen (hole $hole)"
+            result.putString("rest", "cutout $cutout, hole $hole; pill ${"%.2f".format(g.width)} x ${"%.2f".format(g.height)} px (132 x 32 dp at $density: " +
+                "${"%.1f".format(w)} x ${"%.1f".format(h)}), centre off D-102's point with the 8 dp gap by (${"%.3f".format(g.cx - ex)}, ${"%.3f".format(g.cy - ey)}) px; " +
                 "clearance ${s.clearance(shot)}")
             s.clearanceErrors(shot, "21:40 64", errors)
             // The Figma export's frame: 347 x 84 at 2.625, centred on the pill.
@@ -279,7 +286,10 @@ class IslandProof(private val instrumentation: Instrumentation) {
             val cut = decor.display?.cutout?.boundingRectTop?.takeIf { !it.isEmpty } ?: error("no top cutout")
             val status = decor.rootWindowInsets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top.toFloat()
             val cy = cut.exactCenterY()
-            val ey = if (cy > 0.2f * status && cy < 0.8f * status) cy else 0.52f * status
+            val line = if (cy > 0.2f * status && cy < 0.8f * status) cy else 0.52f * status
+            // `place-gap=(dp)8`: the pill's top never nearer the screen's top than 8 dp (owner, 2026-11-12).
+            val d = ctx.resources.displayMetrics.density
+            val ey = maxOf(line, 8 * d + 16 * d)
             return (cut.exactCenterX() - origin[0]) to (ey - origin[1])
         }
 
@@ -300,12 +310,21 @@ class IslandProof(private val instrumentation: Instrumentation) {
             return Geometry(w, h, cx, cy)
         }
 
-        /** The hole in the window's pixels. */
-        private fun hole(): android.graphics.Rect = activity.window.decorView.display.cutout!!.boundingRectTop.apply { offset(-origin[0], -origin[1]) }
+        /**
+         * What the text must stay out of: draft 4's camera slot, 28 dp square on the pill's centre, which D-102 puts on the
+         * camera's centre (a centred punch hole sits inside it; the emulator's own cutouts are a notch wider than the pill
+         * or a hole in a corner, neither the phones the island is drawn for).
+         */
+        private fun hole(): android.graphics.Rect {
+            val g = last ?: error("no geometry")
+            val half = 14 * ctx.resources.displayMetrics.density
+            return android.graphics.Rect((g.cx - half).roundToInt(), (g.cy - half).roundToInt(), (g.cx + half).roundToInt(), (g.cy + half).roundToInt())
+        }
+        private var last: Geometry? = null
 
         /** Left and right texts' ink spans across ([left, right] each), light over the pill. */
         private fun inks(b: Bitmap): Pair<IntArray?, IntArray?> {
-            val g = geometry(b)
+            val g = geometry(b).also { last = it }
             val half = 16 * ctx.resources.displayMetrics.density
             var ll = Int.MAX_VALUE; var lr = -1; var rl = Int.MAX_VALUE; var rr = -1
             for (y in (g.cy - half).toInt() until (g.cy + half).toInt()) for (x in 0 until b.width) {
@@ -323,12 +342,12 @@ class IslandProof(private val instrumentation: Instrumentation) {
 
         fun clearance(b: Bitmap): String {
             val (l, r) = inks(b); val c = hole()
-            return "time ink ends ${l?.let { c.left - it[1] - 1 }} px before the hole (x ${c.left}..${c.right}), battery ink starts ${r?.let { it[0] - c.right }} px after it"
+            return "time ink ends ${l?.let { c.left - it[1] - 1 }} px before the 28 dp camera slot (x ${c.left}..${c.right}), battery ink starts ${r?.let { it[0] - c.right }} px after it"
         }
 
         fun clearanceErrors(b: Bitmap, what: String, errors: MutableList<String>) {
             val gap = minGap(b)
-            if (gap < 0f) errors += "$what: text reaches the hole (${clearance(b)})"
+            if (gap < 0f) errors += "$what: text reaches the camera slot (${clearance(b)})"
         }
     }
 
