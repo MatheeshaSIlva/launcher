@@ -140,7 +140,6 @@ class ComponentView(
         recomposeScope.launch(start = CoroutineStart.UNDISPATCHED) { recomposer.runRecomposeAndApplyChanges() }
         view.setParentCompositionContext(recomposer)
         view.alpha = 0f
-        host.setVisible(false)
         view.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: android.view.View) { attached = true; visibility() }
             override fun onViewDetachedFromWindow(v: android.view.View) { attached = false; visibility() }

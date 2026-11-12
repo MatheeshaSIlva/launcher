@@ -26,7 +26,11 @@ object CutoutPlacement {
          * [gap] px (`place-gap`, T-012): a camera high on the screen leaves the root lower, its centre below the camera's.
          * No gap (null): centred on the camera wherever that puts it (D-102).
          */
-        fun top(rootCentre: Float, gap: Float?): Float = if (gap == null) centreY - rootCentre else maxOf(centreY - rootCentre, screenTop + gap)
+        fun top(rootCentre: Float, gap: Float?): Float =
+            if (gap == null) centreY - rootCentre
+            // The gap on a whole pixel of the screen (D-113): 4 dp at 2.625 is 10.5 px, which left the pill's top edge a
+            // half-lit row and its text half a pixel off the pill's centre (the text is placed on whole pixels).
+            else maxOf(centreY - rootCentre, screenTop + kotlin.math.floor(gap + 0.5f))
     }
 
     const val BAND_LOW = 0.2f

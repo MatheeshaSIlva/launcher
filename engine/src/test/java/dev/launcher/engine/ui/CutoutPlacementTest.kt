@@ -18,6 +18,8 @@ class CutoutPlacementTest {
         assertEquals("no gap: centred, above the screen", -17f, p.top(42f, null), 0f)
         assertEquals("a gap of 0: at the screen's top", 0f, p.top(42f, 0f), 0f)
         assertEquals("a 21 px gap: 21 below the top", 21f, p.top(42f, 21f), 0f)
+        assertEquals("a gap of 10.5 px (4 dp at 2.625): on a whole pixel", 11f, p.top(42f, 10.5f), 0f)
+        assertEquals("a gap of 10.4 px: on a whole pixel", 10f, p.top(42f, 10.4f), 0f)
         assertEquals("a gap it already clears: centred", 50f - 42f, at(Cutout(520f, 30f, 560f, 70f)).top(42f, 5f), 0f)
         // Seen from a view lower on the screen: the screen's top is above it.
         val q = at(Cutout(520f, 5f, 560f, 45f), oy = 40f)
