@@ -157,6 +157,43 @@ class HostNode internal constructor(
     internal var onMoving: (HostNode) -> Unit = {}
     /** Asks its draw node to draw again (set by the draw node while attached): a motion step changes no Compose state. */
     internal var redraw: () -> Unit = {}
+    internal val hasLoop = view.primitive == "box" && "loop-from" in bindings
+    internal val hasScroll = view.primitive == "text" && "scroll" in bindings
+    internal val loop by lazy { LoopMotion() }
+    internal val scroll by lazy { TitleScroll() }
+    internal var drawingAttached = false
+    internal var recurringChanged: () -> Unit = {}
+    /** Called by the Compose draw node on attach/detach; recurring work never runs off screen. */
+    fun setDrawingAttached(on: Boolean) { drawingAttached = on; recurringChanged() }
+    internal var motionContext = dev.launcher.engine.ui.motion.MotionContext()
+    internal fun dp(value: Double) = units.px(value, "dp")
+    internal fun loopSpec(): LoopMotion.Spec? {
+        if (!hasLoop) return null
+        for (name in listOf("loop-from", "loop-to")) {
+            val value = value(name) as? Value.Num ?: return null
+            if (value.unit !in dev.launcher.engine.model.AttrType.UNITS) return null
+        }
+        for (name in listOf("loop-period", "loop-phase")) {
+            val value = value(name)
+            if (value != Value.Null && (value !is Value.Num || value.unit != null)) return null
+        }
+        val from = length("loop-from") ?: return null
+        val to = length("loop-to") ?: return null
+        return LoopMotion.Spec(from, to, number("loop-period") ?: 1000f, number("loop-phase") ?: 0f)
+    }
+    internal fun recurring(visible: Boolean, now: Long): Boolean {
+        var p: HostNode? = this
+        var frozen = false
+        var hidden = !visible
+        while (p != null) { frozen = frozen || p.isLeaving; hidden = hidden || p.hidden.value; p = p.parent }
+        val eligible = drawingAttached && !hidden
+        val spec = loopSpec()
+        if (hasLoop) loop.update(spec, value("loop-run") == Value.Bool.TRUE, length("height") ?: 0f,
+            eligible, motionContext.reduced(), frozen, motionContext.resolver.curve("motion.state"), now)
+        if (hasScroll) scroll.enabled(value("scroll") == Value.Bool.TRUE, eligible, frozen, motionContext.reduced(),
+            motionContext.resolver.curve("motion.move"), now)
+        return (hasLoop && loop.busy) || (hasScroll && scroll.busy)
+    }
     /** The size its surface draws at now. */
     /** The radius declaration its shown radius last followed: a new one starts a handover (T-011). */
     private var radiusFollowed: RadiusDecl? = null
@@ -266,10 +303,11 @@ class HostNode internal constructor(
 
     /** Its motion's values onto what draws it; false once every track has settled. */
     internal fun step(now: Long): Boolean {
-        val m = nodeMotion ?: return false
-        val busy = m.step(now)
+        val busy = nodeMotion?.step(now) == true
+        if (hasLoop) loop.step(now)
+        if (hasScroll) scroll.step(now)
         shown()
-        return busy
+        return busy || (hasLoop && loop.busy) || (hasScroll && scroll.busy)
     }
 
     internal fun snapMotion() { nodeMotion?.let { it.snap(); shown() } }
@@ -339,7 +377,9 @@ class HostNode internal constructor(
 
     val flex: Float get() = number("flex") ?: 0f
 
-    fun frame() = Frame(length("width"), length("height"), length("min-width") ?: 0f, length("max-width") ?: Float.POSITIVE_INFINITY,
+    fun frame() = Frame(length("width"), loopSpec()?.takeIf { it.valid }?.let {
+        maxOf(length("height") ?: 0f, it.maximum)
+    } ?: length("height"), length("min-width") ?: 0f, length("max-width") ?: Float.POSITIVE_INFINITY,
         length("min-height") ?: 0f, length("max-height") ?: Float.POSITIVE_INFINITY,
         length("padding-start") ?: length("padding") ?: 0f, length("padding-top") ?: length("padding") ?: 0f,
         length("padding-end") ?: length("padding") ?: 0f, length("padding-bottom") ?: length("padding") ?: 0f)
@@ -398,6 +438,22 @@ class ComponentHost(
     private var count = 0
     private var rootShown = true
     private var disposed = false
+    private var visible = true
+    private val recurringNodes = LinkedHashSet<HostNode>()
+    /** The owning view calls this when its window/content visibility changes. */
+    fun setVisible(on: Boolean) { visible = on; refreshMotion() }
+    /** Also call when reduced motion is disabled, to resume eligible recurring work. */
+    fun refreshMotion(now: Long = motionContext.now()) {
+        if (disposed) return
+        for (n in recurringNodes) {
+            val height = if (n.hasLoop) n.loop.height else null
+            val offset = if (n.hasScroll) n.scroll.offset else null
+            val busy = n.recurring(visible, now)
+            if (busy) startMoving(n)
+            else if (!n.isLeaving && n.nodeMotion?.moving != true) moving.remove(n)
+            if (height != (if (n.hasLoop) n.loop.height else null) || offset != (if (n.hasScroll) n.scroll.offset else null)) n.redraw()
+        }
+    }
     /** At most one data-only error per refresh; invalid repeats disappear whole and may recover. */
     var diagnostics: List<String> = emptyList(); private set
     val root: HostNode
@@ -413,6 +469,7 @@ class ComponentHost(
 
     /** Moves every moving node to [frameTimeNanos] and asks for a frame to show it; false once all have settled. */
     fun step(frameTimeNanos: Long): Boolean {
+        refreshMotion(frameTimeNanos)
         if (moving.isEmpty()) return false
         val done = ArrayList<HostNode>()
         moving.removeAll { n -> !n.step(frameTimeNanos).also { n.redraw(); if (!it && n.isLeaving) done += n } }
@@ -488,6 +545,7 @@ class ComponentHost(
 
     /** Reduced motion turned on: every moving node on its target now, in one frame. */
     fun snapMotion() {
+        refreshMotion()
         if (moving.isEmpty()) return
         val all = moving.toList()
         moving.clear()
@@ -505,6 +563,7 @@ class ComponentHost(
             reconcile(plan(), reads)
             // In one snapshot with the change that caused it: no frame sees the new values with an old derived prop (T-007).
             if (settle?.invoke() == true) reconcile(plan()) { it.props.isNotEmpty() }
+            refreshMotion()
         }
     }
 
@@ -518,10 +577,11 @@ class ComponentHost(
         retained.clear()
         exits.clear()
         moving.clear()
+        recurringNodes.clear()
         compiled.clear()
     }
 
-    private fun release(node: HostNode) { moving.remove(node); node.release(); onRemoved(node) }
+    private fun release(node: HostNode) { node.drawingAttached = false; node.recurringChanged = {}; recurringNodes.remove(node); moving.remove(node); node.release(); onRemoved(node) }
     private class InvalidRepeat(val limit: Boolean = false) : RuntimeException()
     private fun error() { diagnostics = listOf("Invalid repeat or component expansion limit (256 items, 4096 nodes)") }
     private fun scoped(scope: Map<String, Value>) = object : Env by env {
@@ -617,6 +677,9 @@ class ComponentHost(
                 val node = HostNode(p.view, bindings, emptyList(), painters(p.view), units, requestFrame, epoch)
                 p.view.motion?.let { node.nodeMotion = dev.launcher.engine.ui.motion.NodeMotion(it, motionContext) }
                 node.onMoving = startMoving
+                node.motionContext = motionContext
+                node.recurringChanged = { refreshMotion(); node.redraw() }
+                if ("loop-from" in bindings || "scroll" in bindings) recurringNodes += node
                 node.key = p.key
                 node.arriving = !building
                 Instance(node, p.scope)

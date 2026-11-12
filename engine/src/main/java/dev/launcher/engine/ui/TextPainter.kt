@@ -20,13 +20,21 @@ import kotlin.math.ceil
  */
 class TextPainter(private val tokens: Tokens) : Painter {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var directionText: String? = null
+    private var directionRtl = false
+    private data class FadeKey(val width: Float, val length: Float, val color: Int, val rtl: Boolean)
+    private var fadeKey: FadeKey? = null
+    private var fadeShader: android.graphics.Shader? = null
     /** Paints onto a GPU recording and onto any other canvas (the warm-up's evidence, E2 slice 6). */
     var hardwarePaints = 0; private set
     var softwarePaints = 0; private set
 
-    override fun key(node: HostNode): Any = Key(content(node), node.length("size") ?: DEFAULT_SIZE_PX, weight(node),
+    override fun key(node: HostNode): Any {
+        scrolling(node, prepared(node), node.drawnWidth)
+        return listOf(node.scroll.offset, node.value("overflow"), node.value("fade"), Key(content(node), node.length("size") ?: DEFAULT_SIZE_PX, weight(node),
         font(node), color(node), tnum(node), align(node), knockout(node), tokens.version,
-        node.nodeMotion?.roll?.takeIf { it.moving }?.glyphs?.map { Triple(it.text, it.y, it.offset) })
+        node.nodeMotion?.roll?.takeIf { it.moving }?.glyphs?.map { Triple(it.text, it.y, it.offset) }))
+    }
 
     override fun measure(node: HostNode, maxWidth: Int, maxHeight: Int): Measured {
         val p = prepared(node)
@@ -46,23 +54,59 @@ class TextPainter(private val tokens: Tokens) : Painter {
         if (canvas.isHardwareAccelerated) hardwarePaints++ else softwarePaints++
         val p = prepared(node)
         val text = content(node)
-        val r = node.nodeMotion?.roll
-        if (r != null && r.moving) {
-            val baseline = -p.fontMetrics.ascent
-            val rise = RollMotion.RISE * p.textSize
-            val alpha = p.alpha
-            for (g in r.glyphs) {
-                val a = g.alpha
-                if (a <= 0f) continue
-                p.alpha = (alpha * a).toInt()
-                canvas.drawText(g.text, x(node, width, g.width) + g.offset, baseline + g.y * rise, p)
+        scrolling(node, p, width)
+        val fade = node.value("overflow") == Value.Str("fade") && p.measureText(text) > width
+        val rtl = rtl(text)
+        val saved = canvas.save()
+        if (fade || node.value("scroll") == Value.Bool.TRUE || node.scroll.offset != 0f)
+            canvas.clipRect(0f, 0f, width, height)
+        if (fade) {
+            val length = (node.length("fade")?.takeIf { it.isFinite() && it >= 0f } ?: node.dp(12.0)).coerceIn(0f, width)
+            if (length > 0f) {
+                val color = p.color or 0xFF000000.toInt()
+                val key = FadeKey(width, length, color, rtl)
+                if (fadeKey != key) {
+                    fadeKey = key
+                    fadeShader = if (rtl) android.graphics.LinearGradient(0f, 0f, length, 0f,
+                        color and 0x00FFFFFF, color, android.graphics.Shader.TileMode.CLAMP)
+                    else android.graphics.LinearGradient(width - length, 0f, width, 0f,
+                        color, color and 0x00FFFFFF, android.graphics.Shader.TileMode.CLAMP)
+                }
+                p.shader = fadeShader
             }
-            p.alpha = alpha
-            return
         }
-        // At rest the whole string: the same picture as its characters where they were verified.
-        if (r != null && r.text == text) roll(node, p)
-        canvas.drawText(text, x(node, width, p.measureText(text)), -p.fontMetrics.ascent, p)
+        try {
+            val r = node.nodeMotion?.roll
+            if (r != null && r.moving) {
+                val baseline = -p.fontMetrics.ascent
+                val rise = RollMotion.RISE * p.textSize
+                val alpha = p.alpha
+                for (g in r.glyphs) {
+                    val a = g.alpha
+                    if (a <= 0f) continue
+                    p.alpha = (alpha * a).toInt()
+                    canvas.drawText(g.text, x(node, width, g.width) + g.offset, baseline + g.y * rise, p)
+                }
+                p.alpha = alpha
+                return
+            }
+            // At rest the whole string: the same picture as its characters where they were verified.
+            if (r != null && r.text == text) roll(node, p)
+            val textWidth = p.measureText(text)
+            val base = if ((fade || node.hasScroll) && textWidth > width) { if (rtl) width - textWidth else 0f } else x(node, width, textWidth)
+            canvas.drawText(text, base + node.scroll.offset, -p.fontMetrics.ascent, p)
+        } finally { p.shader = null; canvas.restoreToCount(saved) }
+    }
+
+    private fun rtl(text: String): Boolean {
+        if (directionText != text) { directionText = text; directionRtl = TitleScroll.rtl(text) }
+        return directionRtl
+    }
+    private fun scrolling(node: HostNode, p: Paint, width: Float) {
+        if ("scroll" !in node.bindings) return
+        val changed = node.scroll.configure(content(node), p.measureText(content(node)), width.coerceAtLeast(0f), rtl(content(node)),
+            node.dp(24.0), node.motionContext.now())
+        if (changed) node.recurringChanged()
     }
 
     private fun x(node: HostNode, width: Float, w: Float) = when (align(node)) { "center" -> (width - w) / 2f; "end" -> width - w; else -> 0f }

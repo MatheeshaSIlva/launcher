@@ -20,6 +20,8 @@ class AttrType(val name: String, val accepts: (KdlValue) -> Boolean) {
         val COLOR = AttrType("a colour: #RGB, #RRGGBB, #AARRGGBB or a @token") {
             it is KdlValue.Str && COLOUR.matches(it.value)
         }
+        /** Opaque source-owned handle: no literal can construct one. */
+        val PICTURE = AttrType("a prepared picture from a source binding") { false }
         /** Only a binding (`each`'s list): no literal fits. */
         val LIST = AttrType("a list from a binding (\$state or {expression})") { false }
         fun oneOf(vararg values: String) = AttrType("one of ${values.joinToString()}") { it is KdlValue.Str && it.value in values }
@@ -68,13 +70,19 @@ object Primitives {
             AttrDef("justify", AttrType.oneOf("start", "center", "end", "space-between"), "start"), container = true),
         PrimitiveDef("stack", listOf(AttrDef("align", AttrType.oneOf("top-start", "top", "top-end", "start", "center", "end",
             "bottom-start", "bottom", "bottom-end", "centre-line"), "center")), container = true),
-        PrimitiveDef("box", lengths("stroke") + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("stroke-align", AttrType.oneOf("inside", "center"), "inside") + AttrDef("align", AttrType.oneOf("top-start", "centre-line"), "top-start") + AttrDef("fill", AttrType.COLOR) +
+        PrimitiveDef("box", lengths("loop-from", "loop-to", "stroke") + listOf(
+            AttrDef("loop-period", AttrType.NUMBER, 1000.0), AttrDef("loop-phase", AttrType.NUMBER, 0.0),
+            AttrDef("loop-run", AttrType.BOOL, false)) + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("stroke-align", AttrType.oneOf("inside", "center"), "inside") + AttrDef("align", AttrType.oneOf("top-start", "centre-line"), "top-start") + AttrDef("fill", AttrType.COLOR) +
             AttrDef("reveal", AttrType.NUMBER, 1.0) + AttrDef("clip", AttrType.BOOL, false), container = true),
-        PrimitiveDef("text", lengths("size") + fixed("roll") + listOf(AttrDef("font", AttrType.STRING), AttrDef("weight", AttrType.INT, 400),
+        PrimitiveDef("text", lengths("size", "fade") + listOf(
+            AttrDef("overflow", AttrType.oneOf("clip", "fade"), "clip", bindable = false),
+            AttrDef("scroll", AttrType.BOOL, false)) + fixed("roll") + listOf(AttrDef("font", AttrType.STRING), AttrDef("weight", AttrType.INT, 400),
             AttrDef("blend", AttrType.oneOf("normal", "knockout"), "normal", bindable = false),
             AttrDef("color", AttrType.COLOR), AttrDef("tnum", AttrType.BOOL, false),
             AttrDef("align", AttrType.oneOf("start", "center", "end"), "start"), AttrDef("max-lines", AttrType.INT, 1)),
             arg = AttrDef("content", AttrType.STRING)),
+        PrimitiveDef("image", lengths("size") + listOf(AttrDef("picture", AttrType.PICTURE),
+            AttrDef("fit", AttrType.oneOf("cover"), "cover", bindable = false))),
         PrimitiveDef("icon", lengths("size") + AttrDef("color", AttrType.COLOR) + AttrDef("set", AttrType.STRING) +
             AttrDef("picture", AttrType.STRING) + AttrDef("rev", AttrType.STRING),
             arg = AttrDef("symbol", AttrType.STRING)),

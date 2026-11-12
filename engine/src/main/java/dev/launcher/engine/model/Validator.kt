@@ -68,6 +68,7 @@ class Validator(private val tokens: TokenCheck) {
                 d += Diagnostic(n.nameSpan, "misplaced", "'${parent.name}' cannot hold children: put '${n.primitive}' beside it in a row or a stack")
             else if (place && def.parents != null && parent?.name !in def.parents)
                 d += Diagnostic(n.nameSpan, "misplaced", "'${def.name}' goes only in ${def.parents.joinToString(" or ")}, not in ${parent?.name ?: "the root"}")
+            mediaAttributes(n)
             val each = n.attrs["each"]
             val aliasAttr = n.attrs["as"]
             val alias = ((aliasAttr?.value as? AttrValue.Literal)?.value as? KdlValue.Str)?.value
@@ -104,6 +105,25 @@ class Validator(private val tokens: TokenCheck) {
             n.children.forEach { node(it, def, inner, place = true, layered = layered || enabled, root = false) }
         }
 
+        /** Literals are checked here; runtime bindings must be bounded again by the drawing state. */
+        fun mediaAttributes(n: ViewNode) {
+            fun number(name: String, low: Double, high: Double) {
+                val v = ((n.attrs[name]?.value as? AttrValue.Literal)?.value as? KdlValue.Num) ?: return
+                if (!v.double.isFinite() || v.double !in low..high || v.type != null && name in setOf("loop-period", "loop-phase"))
+                    d += Diagnostic(v.span, "motion-range", "'$name' must be in $low..$high")
+            }
+            if (n.primitive == "box") {
+                val loop = n.attrs.keys.any { it.startsWith("loop-") }
+                if (loop && ("loop-from" !in n.attrs || "loop-to" !in n.attrs))
+                    d += Diagnostic(n.nameSpan, "loop-endpoints", "A loop needs both loop-from and loop-to")
+                number("loop-from", 0.0, Double.MAX_VALUE)
+                number("loop-to", 0.0, Double.MAX_VALUE)
+                number("loop-period", 200.0, 10000.0)
+                number("loop-phase", 0.0, 1.0)
+            }
+            if (n.primitive == "text") number("fade", 0.0, Double.MAX_VALUE)
+        }
+
         fun value(ad: AttrDef, v: AttrValue, scope: Set<String>) {
             if (!ad.bindable && (v !is AttrValue.Literal))
                 d += Diagnostic(v.span, "not-bindable", "'${ad.name}' is fixed when the component loads: it takes ${ad.type.name}, not a binding")
@@ -116,6 +136,10 @@ class Validator(private val tokens: TokenCheck) {
         }
 
         fun literal(ad: AttrDef, v: KdlValue) {
+            if (ad.type === AttrType.PICTURE) {
+                d += Diagnostic(v.span, "picture-not-literal", "A picture must come from a source binding; literals cannot name pictures")
+                return
+            }
             val s = (v as? KdlValue.Str)?.value
             if (s != null && (s.startsWith("$") || s.startsWith("@")))
                 d += Diagnostic(v.span, "expression-syntax", "'$s' is neither a reference nor plain text",
