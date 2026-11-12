@@ -515,6 +515,27 @@ Measured on the emulator since (the island proof's grow frames, kept in `tools/s
 - **Still to do:** the closing frames, where the leaving media row is laid out at the pill's narrower target (its
   slots squeezed).
 
+### claude — springy and staged, done (lead, Codex's sub-tasks reassigned), 2026-11-12
+
+- **The clip was never broken:** the sampled frames show no pixel of the title outside the pill. My earlier reading of
+  the shrunken sheets was wrong, and Codex was right.
+- **The squeeze (fixed, `Layout.stack` `overflow`, `Host.kt`):** a box that clips lets its children keep their own size
+  (up to 8191 px, Compose's 13-bit split), placed by its alignment, so the 236 dp media row stays whole and centred in the
+  132 dp pill. `LayoutTest.anOverflowingStackKeepsAWiderChildWholeAndCentred`.
+- **Presence `delay(Nms)` (`MotionSpec`, `MotionGrammar`, `NodeMotion`):**
+  - an arrival or a departure holds its start for 0..1000 ms;
+  - a motion still waiting carries no speed (without this, a node hidden inside its delay rose to 21 % opacity: the exit
+    inherited the arrival's ease-out speed);
+  - motion reduced ignores the delay.
+  Tests: `MotionGrammarTest.presenceTakesADelay` plus refusals, and `PresenceTest` (held, then moving, never seen when
+  hidden inside its delay, reduced). `docs/KDL_MOTION.md` updated.
+- **The island:**
+  - opening, the pill opens on `spring(0.45, 0.75)` (peak 627 px at frame 41, settling at 619), the time leaves in
+    90 ms, then the cover (`delay(70ms)`), the title (`delay(120ms)`) and the bars (`delay(170ms)`);
+  - closing, the pieces fade in 100 ms and the time returns after 110 ms.
+  The island proof passes every stage. The frame sheets were looked at: no overlap of the time and the title either way.
+- **Gate:** full `scripts/check.sh` PASSED. Codex reviews these (its sub-tasks) when it is back, before the merge.
+
 ## 7. Sign-off
 
 ### codex — signoff, 2026-11-12T16:09Z
