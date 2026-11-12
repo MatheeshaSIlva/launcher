@@ -292,6 +292,30 @@ class ComponentView(
     private fun prepareGlyphs() {
         glyphs.prepare(iconKeys(), wanted = { !disposed }, by = this) {
             if (!glyphsReady()) return@prepare prepareGlyphs()
+            warmShapes { finishPreparing() }
+        }
+    }
+
+    /** Whether any box in it may clip its children to its shape (T-011): its GPU work is done before it is shown. */
+    // A function, not a property: the constructor's preparation reads it before the body's properties exist (a lazy
+    // delegate too: measured, every component crashed at construction).
+    private fun clips() = generateSequence(listOf(def.view)) { level -> level.flatMap { it.children }.takeIf { it.isNotEmpty() } }
+        .flatten().any { it.primitive == "box" && "clip" in it.attrs }
+    private var shapesWarmed = false
+
+    /** [then] once a clipping shape has been drawn off screen ([ShapeWarmUp]), at once for a component with none. */
+    private fun warmShapes(then: () -> Unit) {
+        if (!clips() || shapesWarmed) return then()
+        ShapeWarmUp.run(handler) { ok ->
+            if (disposed) return@run
+            shapesWarmed = true
+            if (!ok) android.util.Log.w("Launcher", "[kdl] ${def.name}: the shape clip's warm-up failed")
+            then()
+        }
+    }
+
+    private fun finishPreparing() {
+        run {
             prepared = true
             preparedLate = !constructing
             if (preparedLate) host.invalidateAll()

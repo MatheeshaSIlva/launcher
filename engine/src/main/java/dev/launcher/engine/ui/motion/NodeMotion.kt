@@ -55,6 +55,15 @@ class Track {
         if (delta != 0f && curve != null && !value.isNaN()) go(target, curve, now, delta)
     }
 
+    /** Its speed now, per second (0 at rest). */
+    fun velocity(now: Long): Float = mover?.velocity(elapsed(now))?.takeIf { it.isFinite() } ?: 0f
+
+    /** Shown at [from] with [speed] now, then on to [to] on [curve], continued (a residual's start: T-011's radius). */
+    fun continueFrom(from: Float, speed: Float, to: Float, curve: Curve, now: Long) {
+        mover = Continuation.continued(curve, from, speed, to); started = now; target = to; value = from
+        low = minOf(from, to); high = maxOf(from, to)
+    }
+
     /** Shown at [from] now, then on to its target on [curve] (an arrival's start: `enter`). */
     fun launch(from: Float, curve: Curve, now: Long) {
         if (value.isNaN()) return
@@ -108,12 +117,15 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     /** The tracks its exit drives while it leaves. */
     private var exiting: Set<Track> = emptySet()
 
+    /** What its radius shows beyond its declaration's value at the drawn size, going to 0 (T-011's handover). */
+    val radius = Track().also { it.snap(0f) }
+
     /** Its text's roll (`roll`, 13a-3b), stepped with its tracks; drawn by the text painter. */
     val roll: RollMotion? = if (spec.roll != null) RollMotion() else null
     /** Half a pixel in the roll's units (rises), set by the text painter from its size. */
     var rollEpsilon = 0.01f
 
-    val moving get() = tracks.any { it.moving } || roll?.moving == true
+    val moving get() = tracks.any { it.moving } || radius.moving || roll?.moving == true
     /** Placed at least once (its first placement shows it where layout put it). */
     val placedOnce get() = !layoutX.isNaN()
 
@@ -168,6 +180,7 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         busy = alpha.step(now, 1f / 255) or busy
         busy = scale.step(now, PIXEL / max(1f, max(width.target, height.target))) or busy
         roll?.let { busy = it.step(now, rollEpsilon) or busy }
+        busy = radius.step(now, PIXEL / 4) or busy
         return busy
     }
 
@@ -233,7 +246,10 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     }
 
     /** Every track on its target at once (reduced motion turned on mid-motion). */
-    fun snap() { tracks.forEach { it.snap() }; roll?.snap() }
+    fun snap() { tracks.forEach { it.snap() }; roll?.snap(); radius.snap(0f) }
+
+    /** The radius channel's curve now; null: a change of radius jumps. */
+    fun radiusCurve(): Curve? = curve(MotionChannel.RADIUS)
 
     companion object {
         const val PIXEL = 0.5f

@@ -158,6 +158,63 @@ class HostNode internal constructor(
     /** Asks its draw node to draw again (set by the draw node while attached): a motion step changes no Compose state. */
     internal var redraw: () -> Unit = {}
     /** The size its surface draws at now. */
+    /** The radius declaration its shown radius last followed: a new one starts a handover (T-011). */
+    private var radiusFollowed: RadiusDecl? = null
+    /** The rounded clip's path, made again only when its geometry changes (T-011). */
+    internal var clipPath: android.graphics.Path? = null
+    internal var clipPathKey: NodeShape? = null
+
+    /**
+     * The radius it shows now (T-011): its declaration at the size it draws now (`full`: half the shorter side, whichever
+     * it is), plus what a handover still carries (a residual going to 0 on the radius curve, started from the radius and
+     * speed shown at the change: 13a-0's continuation), clamped to `[0, half the shorter side]`. An empty or non-finite
+     * box shows 0. Without a radius curve a change jumps.
+     */
+    internal fun shownRadius(): Float {
+        val w = drawnWidth; val h = drawnHeight
+        if (!(w > 0f && h > 0f) || !w.isFinite() || !h.isFinite()) return 0f
+        val decl = radiusDecl()
+        val m = nodeMotion
+        val old = radiusFollowed
+        if (old != decl) {
+            if (old != null && m != null) {
+                val curve = m.radiusCurve()
+                if (curve == null) m.radius.snap(0f)
+                else {
+                    val now = m.now()
+                    val shown = (old.at(w, h) + residual(m)).coerceIn(0f, kotlin.math.min(w, h) / 2f)
+                    val speed = baseSpeed(old, w, h, now) + m.radius.velocity(now) - baseSpeed(decl, w, h, now)
+                    m.radius.continueFrom(shown - decl.at(w, h), speed, 0f, curve, now)
+                    onMoving(this)
+                }
+            }
+            radiusFollowed = decl
+        }
+        val r = decl.at(w, h) + (m?.let(::residual) ?: 0f)
+        return if (r.isFinite()) r.coerceIn(0f, kotlin.math.min(w, h) / 2f) else 0f
+    }
+
+    private fun residual(m: dev.launcher.engine.ui.motion.NodeMotion) = m.radius.value.takeIf { it.isFinite() } ?: 0f
+
+    /** How fast a declaration's own value moves now: `full` with its size's shorter side, a length not at all. */
+    private fun baseSpeed(d: RadiusDecl, w: Float, h: Float, now: Long): Float {
+        val m = nodeMotion ?: return 0f
+        if (d !is RadiusDecl.Full) return 0f
+        return (if (w <= h) m.width.velocity(now) else m.height.velocity(now)) / 2f
+    }
+
+    /**
+     * Its shape now (T-011), in its own px from its layout box's top-left: the rectangle it draws, where its anchors put
+     * it, and the radius it shows. Its hit region; strokes, `reveal`, translation and scale not counted.
+     */
+    internal fun shape(): NodeShape {
+        val w = drawnWidth; val h = drawnHeight
+        val x = (exactWidth - w) * motion.anchorX
+        val y = (exactHeight - h) * motion.anchorY
+        val s = NodeShape(x, y, x + w, y + h, shownRadius())
+        return if (s.isEmpty) NodeShape.EMPTY else s
+    }
+
     val drawnWidth get() = motion.drawnWidth.takeIf { !it.isNaN() } ?: exactWidth
     val drawnHeight get() = motion.drawnHeight.takeIf { !it.isNaN() } ?: exactHeight
 

@@ -140,7 +140,7 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
                 softwareFrame(software, n) {
                     val c = target.nativeCanvas
                     surface(c, n) { n.painter.paint(c, n, n.drawnWidth, n.drawnHeight) }
-                    drawContent()
+                    children(c, n) { drawContent() }
                 }
             } finally { software.target = null }
             return
@@ -178,7 +178,7 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
             if (left != 0 || top != 0) recording.translate(-left.toFloat(), -top.toFloat())
             surface(recording, n) { recording.drawRenderNode(own) }
             drawContext.canvas = ComposeCanvas(recording)
-            drawContent()
+            children(recording, n) { drawContent() }
         } finally {
             drawContext.canvas = target
             frame.endRecording()
@@ -274,11 +274,86 @@ private fun clipFrame(canvas: android.graphics.Canvas, n: HostNode, x: Float, y:
     // A box that names `reveal` clips whatever its value: at 1 too, as StatusBarView's level does (its antialiased clip on
     // a fractional edge is part of how the edge looks, T-006).
     revealFraction(n)?.let { canvas.clipRect(x, y, x + w * it, y + h) }
-    if (n.value("clip") == Value.Bool.TRUE) {
-        val radius = (n.length("radius") ?: 0f).coerceAtLeast(0f)
-        if (radius == 0f) canvas.clipRect(x, y, x + w, y + h)
-        else canvas.clipPath(android.graphics.Path().apply {
-            addRoundRect(x, y, x + w, y + h, radius, radius, android.graphics.Path.Direction.CW)
-        })
+}
+
+/**
+ * A box's children, drawn after its own surface: with `clip=#true` inside the shape it draws now (T-011), the surface
+ * itself never cut by it. Android 11 and later clip a path with antialiasing (AOSP `SkiaCanvas::clipPath`, `true` from
+ * android11-release); Android 10 does not, so there the children are masked: a layer, then a second layer composited
+ * `DST_IN` holding the shape, within [ShapeMask]'s budget (past it, the same rounded clip, aliased). An empty shape draws
+ * no children.
+ */
+private inline fun children(canvas: android.graphics.Canvas, n: HostNode, content: () -> Unit) {
+    if (n.view.primitive != "box" || n.value("clip") != Value.Bool.TRUE) return content()
+    val s = n.shape()
+    if (s.isEmpty) return
+    if (s.radius <= 0f) { canvas.clipRect(s.left, s.top, s.right, s.bottom); return content() }
+    // A software canvas masks too: its path clip's antialiasing is not its fill's (measured on the emulator: mean edge
+    // coverage 0.11 off `drawRoundRect`; the GPU's clip matched it exactly).
+    if (!ShapeMask.masks() && canvas.isHardwareAccelerated) { canvas.clipPath(n.roundedPath(s)); return content() }
+    val bytes = ShapeMask.bytes(canvas, s)
+    if (!ShapeMask.take(bytes)) {
+        ShapeMask.refused(n)
+        canvas.clipPath(n.roundedPath(s))
+        return content()
+    }
+    try {
+        // Whole pixels round the shape: a layer cut at a fractional bound cuts the edge's antialiased pixels.
+        val l = kotlin.math.floor(s.left); val t = kotlin.math.floor(s.top)
+        val r = kotlin.math.ceil(s.right); val b = kotlin.math.ceil(s.bottom)
+        val outer = canvas.saveLayer(l, t, r, b, null)
+        content()
+        canvas.saveLayer(l, t, r, b, ShapeMask.dstIn)
+        canvas.drawRoundRect(s.left, s.top, s.right, s.bottom, s.radius, s.radius, ShapeMask.opaque)
+        canvas.restoreToCount(outer)
+    } finally { ShapeMask.give(bytes) }
+}
+
+/** The path of [s], kept on the node and made again only when the shape changes. */
+private fun HostNode.roundedPath(s: NodeShape): android.graphics.Path {
+    val key = clipPathKey
+    val same = key != null && key.left == s.left && key.top == s.top && key.right == s.right && key.bottom == s.bottom && key.radius == s.radius
+    val p = clipPath ?: android.graphics.Path().also { clipPath = it }
+    if (!same) { p.rewind(); p.addRoundRect(s.left, s.top, s.right, s.bottom, s.radius, s.radius, android.graphics.Path.Direction.CW); clipPathKey = s }
+    return p
+}
+
+/**
+ * Android 10's masks (T-011, D-103): at most [BUDGET] bytes of mask layers open at once on a thread (two layers of four
+ * bytes a pixel over the shape's area on the device), counted before anything is allocated; a mask past it is refused.
+ */
+internal object ShapeMask {
+    const val BUDGET = 8L * 1024 * 1024
+    /** Proofs only: take Android 10's route on any release. */
+    @Volatile internal var force = false
+    private val open = ThreadLocal.withInitial { longArrayOf(0L) }
+    private val logged = java.util.Collections.newSetFromMap(java.util.WeakHashMap<HostNode, Boolean>())
+    val dstIn = android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN) }
+    val opaque = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF000000.toInt() }
+
+    fun masks() = force || android.os.Build.VERSION.SDK_INT < 30
+
+    @Suppress("DEPRECATION")
+    fun bytes(canvas: android.graphics.Canvas, s: NodeShape): Long {
+        val r = android.graphics.RectF(kotlin.math.floor(s.left), kotlin.math.floor(s.top), kotlin.math.ceil(s.right), kotlin.math.ceil(s.bottom))
+        canvas.matrix.mapRect(r)
+        val area = r.width().toDouble() * r.height().toDouble()
+        return if (area.isFinite() && area > 0) (2 * 4 * area).toLong() else Long.MAX_VALUE
+    }
+
+    fun take(bytes: Long): Boolean {
+        val o = open.get()
+        if (bytes > BUDGET - o[0]) return false
+        o[0] += bytes
+        return true
+    }
+
+    fun give(bytes: Long) { open.get()[0] -= bytes }
+
+    /** Bytes of masks open now on this thread (proofs). */
+    fun openBytes() = open.get()[0]
+
+    fun refused(n: HostNode) {
+        if (logged.add(n)) android.util.Log.w("Launcher", "[kdl] a clipping box past Android 10's mask budget: its rounded clip is aliased")
     }
 }
