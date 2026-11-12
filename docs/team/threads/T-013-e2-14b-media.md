@@ -497,6 +497,24 @@ show two engine faults during a size motion:
 Both are in the host's motion and layout core (Codex's area in this task). The owner is asked whether to wait for
 Codex or let the lead fix them.
 
+### claude — reassigned, and where the clip fault stands, 2026-11-12
+
+Owner: "codex's weekly usage is over", so Codex's remaining sub-tasks (presence `delay`, the size motion's clip) go to
+the lead (protocol §8); Codex reviews them when it is back, before anything merges.
+
+Measured on the emulator since (the island proof's grow frames, kept in `tools/shots/media/`):
+- **`place` in the root's transition changes nothing:** the frames are byte-identical without it. The root is already
+  anchored at its centre, so the pill stays centred and its content is laid out at the final places from the first frame
+  (correct).
+- **Static content is clipped at the pill's moving edge:** the title with no `enter`, cut at the edge.
+- **Content entering on presence motion is not clipped:** "Halftone" shows past the pill's left edge in grow frames 2-5,
+  with `fade` alone too, and its glyphs there look dark, not the title's light colour. Drawing faded frames without an
+  offscreen layer (`setHasOverlappingRendering(false)`) changed nothing (byte-identical frames); reverted.
+- **The cover, entering on `fade scale`, is clipped correctly.** So the fault is in how text drawn during a presence
+  fade meets the clip. Not yet found.
+- **Still to do:** the closing frames, where the leaving media row is laid out at the pill's narrower target (its
+  slots squeezed).
+
 ## 7. Sign-off
 
 ### codex — signoff, 2026-11-12T16:09Z

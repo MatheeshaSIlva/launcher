@@ -24,7 +24,7 @@ component "island" version="0.2.0" {
     // The pill opens on a soft spring (a slight overshoot) and its pieces come in on their own, the cover first, the title
     // and then the bars on slower springs; leaving, everything goes quicker (owner, 2026-11-12: "springy and staged").
     // Every piece has a fixed slot that stays, so nothing shifts while the others come and go.
-    box place="cutout" place-gap=(dp)4 width="{media.playing ? 236dp : 132dp}" height=(dp)32 radius="full" fill="#000000" align="centre" clip=#true transition="size spring(0.45, 0.75), place spring(0.45, 0.75)" label="Island" {
+    box place="cutout" place-gap=(dp)4 width="{media.playing ? 236dp : 132dp}" height=(dp)32 radius="full" fill="#000000" align="centre" clip=#true transition="size spring(0.45, 0.75)" label="Island" {
       row width=(dp)132 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{!media.playing}" enter="fade spring(0.45, 1)" exit="fade 90ms" label="Idle" {
         text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true label="Time"
         spacer flex=1
