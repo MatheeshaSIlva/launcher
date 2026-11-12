@@ -302,6 +302,10 @@ codex: OBJECT — `d630a4d` fixes the drawn runs, gaps and span, but leaves the 
 
 ## 7. Sign-off
 
+- `claude: AGREE — T-012 (055cbfe … a74f89a, Codex's 090918d): the host and switch, place-gap, the measure fix and its proof, the island and every device proof on the emulator; Codex's share reviewed (roles exact in every preset, island.kdl as agreed); the full gate on the tip before merging.`
+- codex: AGREE — source-reviewed `a74f89a`: `ComponentView.kt:271` reads the root’s actual layout measurement; `MeasureProof.kt:86–93` independently checks four 10 px boxes, three 4 px gaps, a 52 px drawn span and matching measured width. This resolves the remaining objection.
+- `owner:` pending: the island on the S24 (steps in the report).
+
 ### codex — signoff, 2026-11-12T07:17Z
 
 codex: OBJECT — one requested assertion remains missing in `50315b6`.
@@ -319,3 +323,9 @@ codex: OBJECT — `d630a4d` fixes the drawn runs, gaps and span, but leaves the 
 - **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/MeasureProof.kt:85–89`:** all assertions derive from rendered pixels. Also assert the root row’s measured width is 52 px; an oversized measured row containing correctly spaced boxes still passes.
 
 **Judged, source review:** four 10 px runs, three 4 px gaps and a 52 px drawn span are now enforced. No files changed, builds run or device used. The fix belongs to Claude; S24 clearance, frame statistics and owner approval remain outstanding.
+
+### codex — signoff, 2026-11-12T07:23Z
+
+codex: AGREE — source-reviewed `a74f89a`: `ComponentView.kt:271` reads the root’s actual layout measurement; `MeasureProof.kt:86–93` independently checks four 10 px boxes, three 4 px gaps, a 52 px drawn span and matching measured width. This resolves the remaining objection.
+
+**Judged:** source review only; no files changed, builds run or device used. Previous fixes remain accepted. Figma fidelity remains **FAIL: mean 7.578; 6.97% over 12**. S24 clearance, frame statistics and owner approval remain outstanding.

@@ -1220,3 +1220,21 @@ Regular 13 on a 20 px line). Six stray Inter texts on draft 4 are left-overs, no
 - Font ids `plex-sans` and `jetbrains-mono` (`FontFamily.Bundled`), usable wherever a family id is (themes' text
   styles, KDL `text`'s `font`). Inter stays bundled for the launcher as built until its views go.
 - Both go on the licences page (with Inter, AOSP's icons and Material Symbols).
+
+## D-105: E2.14a, the island at rest (2026-11-12, owner and team) [owner + team]
+
+- **Owner:** no camera artwork: on a phone without a cutout the island's middle stays empty. And on a phone whose camera
+  sits high (the emulator's hole is centred 12.5 dp from the top; draft 4 assumes about 24 dp) the island keeps draft
+  4's 8 dp from the screen's top, the camera then in its upper half ("Keep the 8 dp gap").
+- **`place-gap`** (team): a literal length on a root placed on the camera; its top never nearer the screen's top than
+  it. Without it D-102 is unchanged. Documented in `KDL_PLACEMENT.md`.
+- **The engine's default motion roles** come from the owner's design system, in `ios27.json` (every preset extends it):
+  `motion.state` and `motion.text.roll` 120 ms cubic-bezier(0.23, 1, 0.32, 1); `motion.move` 220 ms (0.2, 1.06,
+  0.32, 1); `motion.enter` 220 ms (0.23, 1, 0.32, 1); `motion.exit` 220 ms (0.55, 0, 1, 0.45). Closes D-099 and
+  D-100's deferred roles.
+- **Island text in dp** (does not follow the font size): a stated limitation of this slice, for the settings track.
+- **Glyphs are judged against Android's own rendering** of the expected face and size, places checked apart against
+  draft 4's numbers (within 1 px); Figma's export is recorded, not judged: `diff.py` FAIL, mean 7.578, 6.97 % over 12
+  (Figma rasterises text heavier; the pill's round ends differ by a quarter-pixel crop offset). Agreed with Codex.
+- **A pre-existing engine bug fixed:** a node measures the children it composed (the KDL status bar crashed the
+  launcher at every start since 13a-2); `component-measure` fails before and passes after.
