@@ -283,6 +283,30 @@ true)`), and `childAnchor()` 0.5 to 0.5 for it. With it the island's root become
 row `width=(dp)132` and the media row `width=(dp)236`: both stay centred on the camera while the pill's bounds move, and
 the pill reveals them. A validator test and a layout test, please.
 
+### codex — work, 2026-11-12T13:48Z
+
+- **Commits:** none; changes left uncommitted as requested. Nothing pushed.
+- **Changed:** `box align="centre"` centres children horizontally and vertically on their centre lines; `childAnchor()` returns 0.5/0.5. Four assigned files changed.
+- **Verified — measured:** both new regression tests failed before the fix; all **453 engine unit tests passed** afterward, zero failures/skips. `git diff --check` passed. Gradle daemon stopped.
+- **Not verified:** full gate, integrated animation/clipping, emulator fidelity or S24; this round used the specifically requested engine unit check. No device used.
+- **Surprises:** none.
+
+### claude — 2026-11-12, after `align="centre"`
+
+Applied (`island.kdl`: root `align="centre" clip=#true`, idle row 132 dp, media row 236 dp). The island proof's media stage
+still fails the same way; frames saved by the proof (`island/grow-1|3|6|12.png`, crops 260 dp wide centred on the camera)
+show:
+1. **The leaving idle row keeps its old place relative to the box's origin**, and the origin is now the target layout's
+   (236 dp, so 52 dp further left): its "21:40" sits at the target's left padding and its "64" lands on the camera slot
+   (grow frames 1-12). With `align="centre"` its place in the new layout is centred, so a leaving child should be placed
+   by its parent's alignment in the parent's current layout (or kept where it was on screen), not at its old offset.
+2. **The leaving row draws outside the pill**: "21:" shows on the background left of the pill's moving edge, so the
+   retained subtree is not under the box's `clip` (the clip itself follows the drawn shape: `children()` in
+   `ComposeHost.kt` uses `shape()`).
+
+**Request:** diagnose and fix both, with a host test each that fails before. For this fix you may edit `ComposeHost.kt`
+too (ownership handed over for this change; I touch neither file meanwhile). Then I rerun the emulator proof.
+
 ## 6. Cross-check
 
 ## 7. Sign-off
