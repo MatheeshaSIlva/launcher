@@ -8,6 +8,7 @@ import dev.launcher.engine.kdl.Span
 object MotionGrammar {
     val ATTRS = setOf("transition", "spring", "enter", "exit", "roll")
     data class Result(val spec: NodeMotionSpec?, val diagnostics: List<Diagnostic>)
+    // `value` expands this complete set, including radius.
     private val channels = MotionChannel.entries.associateBy { it.name.lowercase() }
     private val effects = PresenceEffect.entries.associateBy { it.name.lowercase() }
     private val easings = mapOf(

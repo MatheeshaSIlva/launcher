@@ -3,7 +3,7 @@ package dev.launcher.engine.model
 import dev.launcher.app.design.Curve
 import dev.launcher.engine.kdl.Span
 
-enum class MotionChannel { PLACE, SIZE, OPACITY, SCALE }
+enum class MotionChannel { PLACE, SIZE, OPACITY, SCALE, RADIUS }
 sealed class CurveSpec {
     data class Role(val role: String) : CurveSpec()
     data class Literal(val curve: Curve) : CurveSpec()

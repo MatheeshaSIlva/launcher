@@ -14,6 +14,9 @@ class AttrType(val name: String, val accepts: (KdlValue) -> Boolean) {
         val NUMBER = AttrType("a number") { it is KdlValue.Num }
         val BOOL = AttrType("#true or #false") { it is KdlValue.Bool }
         val LENGTH = AttrType("a length: a number, (pt), (dp) or (px)") { it is KdlValue.Num && it.type in UNITS }
+        val RADIUS = AttrType("a length or \"full\"") {
+            LENGTH.accepts(it) || it is KdlValue.Str && it.type == null && it.value == "full"
+        }
         val COLOR = AttrType("a colour: #RGB, #RRGGBB, #AARRGGBB or a @token") {
             it is KdlValue.Str && COLOUR.matches(it.value)
         }
@@ -51,8 +54,9 @@ object Primitives {
 
     /** Every primitive's: layout, padding, radius, background, opacity, transform, motion, visible, each/as, label. */
     val COMMON: List<AttrDef> = lengths("width", "height", "min-width", "min-height", "max-width", "max-height", "padding",
-        "padding-start", "padding-end", "padding-top", "padding-bottom", "radius", "translate-x", "translate-y") +
+        "padding-start", "padding-end", "padding-top", "padding-bottom", "translate-x", "translate-y") +
         fixed("transition", "enter", "exit", "spring", "as") + listOf(
+        AttrDef("radius", AttrType.RADIUS),
         AttrDef("place", AttrType.oneOf("window", "cutout"), "window", bindable = false),
         AttrDef("layer", AttrType.BOOL, false, bindable = false), AttrDef("background", AttrType.COLOR), AttrDef("opacity", AttrType.NUMBER, 1.0),
         AttrDef("scale", AttrType.NUMBER, 1.0), AttrDef("rotate", AttrType.NUMBER, 0.0),

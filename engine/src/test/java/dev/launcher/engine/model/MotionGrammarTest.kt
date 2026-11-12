@@ -1,6 +1,9 @@
 package dev.launcher.engine.model
 
 import dev.launcher.app.design.Curve
+import dev.launcher.engine.expr.Compiled
+import dev.launcher.engine.expr.Env
+import dev.launcher.engine.expr.Value
 import dev.launcher.engine.kdl.KdlParser
 import dev.launcher.engine.kdl.KdlValue
 import dev.launcher.engine.kdl.Span
@@ -16,6 +19,81 @@ class MotionGrammarTest {
         return r.spec!!
     }
     private fun ease(a: Float, b: Float, c: Float, d: Float, ms: Float = 200f) = CurveSpec.Literal(Curve.Ease(a,b,c,d,ms))
+
+    @Test fun radiusChannelIncludesValueAndUsesSizePrecedence() {
+        val node = CurveSpec.Role("motion.node")
+        assertEquals(setOf(MotionChannel.SIZE, MotionChannel.RADIUS),
+            spec("size radius spring(0.4,0.8)").transitions.single().channels)
+        assertEquals(CurveSpec.Literal(Curve.Spring(.4f,.8f)),
+            spec("size radius spring(0.4,0.8)").copy(spring=node).curveFor(MotionChannel.RADIUS))
+        assertEquals(ease(0f,0f,.58f,1f), spec("value 200ms").curveFor(MotionChannel.RADIUS))
+        assertEquals(CurveSpec.Role("motion.move"), spec("radius").curveFor(MotionChannel.RADIUS))
+        assertEquals(node, spec("radius").copy(spring=node).curveFor(MotionChannel.RADIUS))
+        assertNull(NodeMotionSpec(emptyList(), node).curveFor(MotionChannel.RADIUS))
+        assertNull(spec("size").copy(spring=node).curveFor(MotionChannel.RADIUS))
+    }
+
+    @Test fun radiusChannelRefusalsHaveExactSpans() {
+        for ((text, token, code) in listOf(
+            Triple("radius,radius", "radius", "motion-duplicate-channel"),
+            Triple("value,radius", "radius", "motion-duplicate-channel"),
+            Triple("radius,value", "value", "motion-duplicate-channel"),
+            Triple("raduis", "raduis", "motion-unknown-channel"),
+            Triple("radius 0ms", "0ms", "motion-bad-duration")
+        )) {
+            val d = parse(text).diagnostics.single()
+            val at = text.lastIndexOf(token)
+            assertEquals(code, d.code)
+            assertEquals(Span(11 + at, 11 + at + token.length, 2, 4 + at), d.span)
+            assertTrue(d.message.isNotBlank())
+        }
+        assertEquals("did you mean 'radius'?", parse("raduis").diagnostics.single().hint)
+        for (key in listOf("enter", "exit"))
+            assertEquals("motion-presence-channel", parse("radius", key).diagnostics.single().code)
+    }
+
+    @Test fun radiusSchemaAcceptsLengthsAndFullAcrossPrimitives() {
+        for (primitive in Primitives.ALL.keys) for (value in listOf("0", "-2", "2.5", "(pt)8", "(dp)8", "(px)8", "\"full\"")) {
+            val view = if (primitive == "spacer") "row { spacer radius=$value; }" else "$primitive radius=$value"
+            val s = """component "c" { view { $view; }; }"""
+            val result = Validator(TokenCheck { false }).load(KdlParser.parse(s))
+            assertTrue("$s: $result", result is ReadResult.Ok)
+        }
+        assertSame(AttrType.LENGTH, Primitives.ALL.getValue("box").attrs.getValue("width").type)
+    }
+
+    @Test fun radiusLiteralRefusalsHaveReasonsAndValueSpans() {
+        for (value in listOf("\"pill\"", "\"Full\"", "\"full \"", "\"8\"", "#true", "#false", "#null", "(sp)8", "(dp)\"full\"")) {
+            val s = """component "c" { view { box radius=$value; }; }"""
+            val d = (Validator(TokenCheck { false }).load(KdlParser.parse(s)) as ReadResult.Invalid).diagnostics.single()
+            val token = value.substringAfter(')', value)
+            val at = s.indexOf(value) + value.length - token.length
+            assertEquals(value, "wrong-type", d.code)
+            assertEquals(value, Span(at, at + token.length, 1, at + 1), d.span)
+            assertTrue(d.message.contains("length or \"full\""))
+        }
+        val s = """component "c" { view { box width="full"; }; }"""
+        assertEquals("wrong-type", (Validator(TokenCheck { false }).load(KdlParser.parse(s)) as ReadResult.Invalid).diagnostics.single().code)
+    }
+
+    @Test fun radiusBindingsKeepFullStringOrLengthExpressionValues() {
+        var pill = true
+        val env = object : Env {
+            override fun state(name: String) = if (name == "pill") Value.Bool.of(pill) else Value.Str("full")
+            override fun prop(name: String) = Value.Str("full")
+            override fun token(key: String) = Value.Str("full")
+            override fun source(path: String) = Value.Null
+            override fun now() = 0L
+        }
+        for (binding in listOf("\$r", "@r", "{\$pill ? 'full' : 8dp}")) {
+            val s = """component "c" { props { r type=string default="full"; }; state { r "full"; pill #true; }; view { box radius="$binding"; }; }"""
+            assertTrue(Validator(TokenCheck { false }).load(KdlParser.parse(s)) is ReadResult.Ok)
+        }
+        val compiled = Compiled.of("{\$pill ? 'full' : 8dp}", emptySet())
+        assertEquals(Value.Str("full"), compiled.value(env))
+        pill = false
+        assertEquals(Value.Num(8.0, "dp"), compiled.value(env))
+    }
 
     @Test fun rollBooleansAndCurvePrecedence() {
         fun bool(enabled: Boolean) = MotionGrammar.read(mapOf("roll" to

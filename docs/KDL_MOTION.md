@@ -8,19 +8,36 @@ runtime resolver, not the grammar.
 ```kdl
 box transition="place size @motion.move, opacity 120ms" spring="stiff"
 box transition="value 200ms ease-out"
+box radius="full" transition="size radius spring(0.4, 0.8)"
 box enter="fade-up 240ms" exit="fade 120ms"
 text "12:34" roll=#true
 text "42%" roll="@motion.text.roll" spring="stiff"
 ```
 
 `transition` takes comma-separated clauses: one or more channels followed by an optional
-curve. Channels are `place` (including translate-x/y), `size`, `opacity`, `scale`;
-`value` means all four E2 channels. A channel may occur only once, including through `value`.
+curve. Channels are `place` (including translate-x/y), `size`, `opacity`, `scale`, `radius`;
+`value` means all five E2 channels. A channel may occur only once, including through `value`.
 An omitted channel jumps. `spring` alone does not animate undeclared channels.
 
 For a declared channel, precedence is its clause's explicit curve, then the node's `spring`,
 then `@motion.move` (`@motion.state` for opacity). Despite its name, `spring` is the node's
 default curve and may refer to any motion role.
+
+`radius` takes a length (a number in the default pt unit, or `(pt)`, `(dp)`, `(px)`)
+or exactly `"full"`. Other words, numeric strings, booleans, null and other units
+are refused with `wrong-type` at the value's source span. Other length attributes
+still require lengths. Radius may bind to state, a prop/token or an expression;
+a whole expression preserves either its length value or the string `full`, for example
+`radius="{$pill ? 'full' : 8dp}"`.
+
+For a box, `full` means half its currently drawn shorter side. The radius channel
+uses the same precedence as size: explicit curve, node `spring`, then `@motion.move`.
+With that channel declared, changes between lengths and `full` continue from the
+displayed radius and speed using a residual that settles toward zero relative to
+the new declaration. Without a radius curve the declaration applies immediately;
+an established `full` follows drawn size on every frame. The displayed radius is
+clamped to zero through half the drawn shorter side; invalid or empty geometry
+has an empty shape. The box's painter, child clip and hit region share that radius.
 
 `enter` and `exit` each take one or more effects followed by an optional curve:
 `fade` (opacity), `grow` (size from zero along the parent's axis), `scale`, and `rise`
