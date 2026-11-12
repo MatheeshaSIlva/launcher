@@ -28,6 +28,8 @@ import dev.launcher.engine.source.DeviceSource
 import dev.launcher.engine.source.Source
 import dev.launcher.engine.source.Sources
 import dev.launcher.engine.source.Time
+import dev.launcher.engine.source.MediaArt
+import dev.launcher.engine.source.MediaState
 import dev.launcher.engine.token.Tokens
 import dev.launcher.engine.ui.motion.FrameSource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,6 +96,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             stage("rest") { rest(d, result, errors) }
             stage("rolls") { rolls(d, result, errors) }
             stage("reduced") { reduced(d, result, errors) }
+            stage("media") { media(d, result, errors) }
         } finally {
             overlay("none")
             sh("settings put system user_rotation ${rotation.ifEmpty { "0" }}")
@@ -258,7 +261,8 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
     private class Geometry(val width: Float, val height: Float, val cx: Float, val cy: Float)
 
     private inner class Session(val activity: ProofActivity, val view: ComponentView, val frames: Frames,
-        private val timeFlow: MutableStateFlow<Time>, private val batteryFlow: MutableStateFlow<Battery>) {
+        private val timeFlow: MutableStateFlow<Time>, private val batteryFlow: MutableStateFlow<Battery>,
+        private val mediaFlow: MutableStateFlow<MediaState>) {
         var now = 1_000_000_000L
         private val origin = IntArray(2)
 
@@ -271,6 +275,21 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             SystemClock.sleep(300)
             instrumentation.waitForIdleSync()
             drawn()
+        }
+
+        /** What plays (T-013): delivered as the session watcher would, then drawn. */
+        fun media(m: MediaState) {
+            instrumentation.runOnMainSync { mediaFlow.value = m }
+            SystemClock.sleep(150)
+            instrumentation.waitForIdleSync()
+        }
+
+        /** The pill's outer edges on row [cy] (partial coverage counted): content inside it does not move them. */
+        fun edges(b: Bitmap, cy: Int): FloatArray {
+            var first = -1; var last = -1
+            for (x in 0 until b.width) if (cov(b.getPixel(x, cy)) > 0f) { if (first < 0) first = x; last = x }
+            check(first >= 0) { "no pill on row $cy" }
+            return floatArrayOf(first + 1f - cov(b.getPixel(first, cy)), last + cov(b.getPixel(last, cy)))
         }
 
         fun step() {
@@ -415,6 +434,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
         val activity = instrumentation.startActivitySync(Intent(ctx, ProofActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as ProofActivity
         val timeFlow = MutableStateFlow(Time(epoch, TimeZone.getDefault().id))
         val batteryFlow = MutableStateFlow(Battery(level, false, false))
+        val mediaFlow = MutableStateFlow(MediaState.NONE)
         val frames = Frames()
         var made: ComponentView? = null
         var s: Session? = null
@@ -429,11 +449,13 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
                 w.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.BLUE))
                 val info = DeviceDisplayInfo(activity, Handler(Looper.getMainLooper()))
                 val sources = Sources(listOf(DeviceSource.of(info),
-                    Source("time", "none", { timeFlow.value }, timeFlow), Source("battery", "none", { batteryFlow.value }, batteryFlow)))
+                    Source("time", "none", { timeFlow.value }, timeFlow), Source("battery", "none", { batteryFlow.value }, batteryFlow),
+                    Source("media", "media.read", { mediaFlow.value }, mediaFlow)))
                 lateinit var session: Session
                 val v = ComponentView(activity, d, FontTokens, sources, Units(1f, ctx.resources.displayMetrics.density),
+                    granted = setOf("media.read"), imagePictures = mapOf("media" to ProofArt),
                     frames = frames, clock = { session.now }).also { made = it }
-                session = Session(activity, v, frames, timeFlow, batteryFlow).also { s = it }
+                session = Session(activity, v, frames, timeFlow, batteryFlow, mediaFlow).also { s = it }
                 info.bind(v.view)
                 v.setProp("hour24", Value.Bool.of(hour24))
                 activity.setContentView(v.view)
@@ -448,6 +470,108 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
         } finally {
             instrumentation.runOnMainSync { made?.dispose(); activity.finish() }
         }
+    }
+
+    // ------------------------------------------------------------------------------------------------ media (T-013)
+
+    /** One cover, "s1" at revision "1": a diagonal terracotta to blue, 300 px square (cropped to the slot). */
+    private object ProofArt : PictureSource {
+        override val version = androidx.compose.runtime.mutableIntStateOf(0)
+        private val bmp by lazy {
+            Bitmap.createBitmap(300, 300, Bitmap.Config.ARGB_8888).also { b ->
+                val p = Paint(Paint.ANTI_ALIAS_FLAG)
+                p.shader = android.graphics.LinearGradient(0f, 0f, 300f, 300f, Color.rgb(217, 134, 95), Color.rgb(40, 60, 120), android.graphics.Shader.TileMode.CLAMP)
+                Canvas(b).drawRect(0f, 0f, 300f, 300f, p)
+            }
+        }
+        override fun has(id: String, rev: String) = id == "s1" && rev == "1"
+        override fun picture(id: String, rev: String): android.graphics.drawable.Drawable? =
+            if (has(id, rev)) android.graphics.drawable.BitmapDrawable(null as android.content.res.Resources?, bmp) else null
+    }
+
+    /**
+     * Idle to playing and back, frame by frame at 120 Hz on the real preset: the pill grows from 132 to 236 dp and shrinks
+     * back, its centre on the camera's at every frame (within 1 px) and nothing drawn in the 28 dp camera slot; a reversal
+     * at frame 6 turns back without growing again; at rest playing, the cover, title and bars in draft 4's slots; the bars'
+     * clock stops once it pauses (no frame asked for).
+     */
+    private fun media(d: ComponentDef, result: Bundle, errors: MutableList<String>) {
+        val density = ctx.resources.displayMetrics.density
+        val playing = MediaState.of(true, "Halftone", null, "proof", MediaArt("s1", "1"))
+        val lines = ArrayList<String>()
+        session(d, at(21, 40), 64, hour24 = true) { s ->
+            val (ex, ey) = s.expected()
+            val cy = ey.toInt()
+            var slotHits = 0
+            fun frame(label: String, widths: MutableList<Float>) {
+                s.step()
+                val b = s.capture()
+                val e = s.edges(b, cy)
+                val c = (e[0] + e[1]) / 2f
+                if (abs(c - ex) > 1f) errors += "$label: centre ${"%.2f".format(c)}, the camera's $ex"
+                // The camera slot: 28 dp square on the centre, nothing but the pill's black in it.
+                val half = 14 * density
+                loop@ for (y in (ey - half).toInt()..(ey + half).toInt()) for (x in (ex - half).toInt()..(ex + half).toInt()) {
+                    val px = b.getPixel(x, y)
+                    if ((px shr 16 and 255) > 40 || (px shr 8 and 255) > 40) {
+                        if (slotHits++ < 3) errors += "$label: something drawn in the camera slot at ($x, $y)"
+                        break@loop
+                    }
+                }
+                widths += e[1] - e[0]
+                if (label.startsWith("grow") && label.removePrefix("grow ").toInt() in listOf(1, 3, 6, 12))
+                    save("${label.replace(' ', '-')}.png", Bitmap.createBitmap(b, (ex - 130 * density).toInt(), (ey - 18 * density).toInt(), (260 * density).toInt(), (36 * density).toInt()))
+            }
+            // Idle to playing.
+            s.media(playing)
+            val grow = ArrayList<Float>()
+            repeat(40) { frame("grow ${it + 1}", grow) }
+            val w0 = 132 * density; val w1 = 236 * density
+            if (abs(grow.last() - w1) > 1f) errors += "grown to ${grow.last()} px, expected $w1"
+            if (grow.zipWithNext().any { (a, b) -> b < a - 0.5f }) errors += "the width went back while growing: $grow"
+            lines += "grow: ${grow.first().roundToInt()} .. ${grow.last().roundToInt()} px in ${grow.size} frames"
+            // At rest playing: the slots.
+            val b = s.capture()
+            val e = s.edges(b, cy)
+            val top = (ey - 16 * density).roundToInt()
+            save("media.png", Bitmap.createBitmap(b, e[0].toInt(), top, minOf((e[1] - e[0]).roundToInt(), b.width - e[0].toInt()), (32 * density).roundToInt()))
+            fun coloured(x0: Float, x1: Float): Int {
+                var n = 0
+                for (y in (ey - 10 * density).toInt()..(ey + 10 * density).toInt()) for (x in x0.toInt() until x1.toInt()) {
+                    val px = b.getPixel(x, y); if ((px shr 16 and 255) > 60 || (px and 255) > 60) n++
+                }
+                return n
+            }
+            val cover = coloured(e[0] + 14 * density, e[0] + 34 * density)
+            val title = coloured(e[0] + 40 * density, e[0] + 104 * density)
+            val bars = coloured(e[1] - 30 * density, e[1] - 12 * density)
+            if (cover < 20 * density * 20 * density * 0.8f) errors += "cover covers $cover px of its 20 dp slot"
+            if (title < 50) errors += "no title ink ($title px)"
+            if (bars < 20) errors += "no bars ($bars px)"
+            lines += "at rest: cover $cover px, title $title px, bars $bars px"
+            if (s.frames.held == null) errors += "playing, yet the bars' clock asks for no frame"
+            // Back to idle.
+            s.media(MediaState.NONE)
+            val shrink = ArrayList<Float>()
+            repeat(40) { frame("back ${it + 1}", shrink) }
+            if (abs(shrink.last() - w0) > 1f) errors += "back to ${shrink.last()} px, expected $w0"
+            // A reversal: playing again, turned back at frame 6.
+            s.media(playing)
+            val rev = ArrayList<Float>()
+            repeat(6) { frame("reversal out ${it + 1}", rev) }
+            s.media(MediaState.NONE)
+            repeat(40) { frame("reversal back ${it + 1}", rev) }
+            val peak = rev.indexOf(rev.max())
+            if (rev.drop(peak).zipWithNext().any { (a, b) -> b > a + 0.5f }) errors += "after the reversal the width grew again: $rev"
+            if (abs(rev.last() - w0) > 1f) errors += "after the reversal ${rev.last()} px, expected $w0"
+            lines += "reversal at frame 6: peak ${rev.max().roundToInt()} px at frame ${peak + 1}, back to ${rev.last().roundToInt()} px"
+            // Paused: the clock stops once everything has landed.
+            var settle = 0
+            while (s.frames.held != null && settle++ < 120) s.step()
+            if (s.frames.held != null) errors += "paused, yet frames are still asked for after 120"
+            lines += "paused: the clock stopped after $settle frames"
+        }
+        result.putString("media", lines.joinToString("; "))
     }
 
     private fun overlay(name: String) {

@@ -261,6 +261,28 @@ scheduling, stop when disabled, hidden, exiting, disposed or under reduced motio
 - **Not verified:** integrated drawing, emulator frames, fidelity, S24 performance or owner approval. No device used.
 - **Surprises:** preserved common `radius="full"` behavior for images. Added a regression proven failing before and passing after the rest-height handover fix.
 
+### claude — integration, 2026-11-12
+
+Your share is merged onto `team/claude/e2-14b-media` (`6607896`, committed by me from your worktree) with your two
+requests in my files (`ComposeHost.kt` attach/detach and node changes; `ComponentView.kt` visibility = shown and attached,
+reduced motion snapping and refreshing). Mine since: the session watcher moved into the engine (`SessionMedia`, so a test
+can drive real sessions) and `media-sessions` passes on the emulator (B chosen with no list change, cover 128 px, an
+art-only change moves the revision and retires the old one, a track change withdraws the cover, pause and resume, A takes
+over); `image`'s painter with pictures by source and grant (`ImageAccess`, JVM-tested both ways); `island.kdl`'s media
+state; and a fix of mine from T-012: the 4 dp gap is 10.5 px on the S24, so the gap now rounds to a whole pixel (the
+island proof caught it: time ink 1.21 px off).
+
+The island proof's new `media` stage (frames at 120 Hz on the real preset) found a defect: during the grow the leaving
+idle row is laid out again from the pill's left edge (its "64" lands in the camera slot), and nothing is clipped to the
+pill (the time shows outside it). Measured: centre within 1 px at every frame, width 132 to 236 dp monotonic, reversal
+at frame 6 clean, the clock stops when paused; the camera slot is hit in grow frames 1-3.
+
+**Request (your files, `Primitives.kt` and `Host.kt`):** `box align="centre"`: children centred on the box both ways,
+the vertical on their centre lines as `centre-line` does (`Layout.stack(frame(), c, 0.5f, 0.5f, kids, centreLine =
+true)`), and `childAnchor()` 0.5 to 0.5 for it. With it the island's root becomes `align="centre" clip=#true`, the idle
+row `width=(dp)132` and the media row `width=(dp)236`: both stay centred on the camera while the pill's bounds move, and
+the pill reveals them. A validator test and a layout test, please.
+
 ## 6. Cross-check
 
 ## 7. Sign-off

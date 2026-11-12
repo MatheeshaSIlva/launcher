@@ -132,3 +132,28 @@ class MediaSessionProof(private val instrumentation: Instrumentation) {
         if (errors.isNotEmpty()) throw IllegalStateException(errors.joinToString("; "))
     }
 }
+
+/**
+ * Not a proof: holds one playing session with a cover for [secs] seconds so the launcher's island can be looked at
+ * (T-013). `-e title` sets the title, `-e state paused` holds it paused.
+ *   adb shell am instrument -w -e mode media-hold -e secs 60 -e title "Halftone" dev.launcher.engine.test/dev.launcher.engine.adb.AdbProofInstrumentation
+ */
+class MediaHold(private val instrumentation: Instrumentation, private val args: Bundle) {
+    fun run(result: Bundle) {
+        val ctx = instrumentation.targetContext
+        val s = MediaSession(ctx, "hold").apply { isActive = true }
+        val side = 300
+        val art = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(art)
+        val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        p.shader = android.graphics.LinearGradient(0f, 0f, side.toFloat(), side.toFloat(), Color.rgb(217, 134, 95), Color.rgb(40, 60, 120), android.graphics.Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, side.toFloat(), side.toFloat(), p)
+        s.setMetadata(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, args.getString("title") ?: "Halftone")
+            .putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, art).build())
+        val st = if (args.getString("state") == "paused") PlaybackState.STATE_PAUSED else PlaybackState.STATE_PLAYING
+        s.setPlaybackState(PlaybackState.Builder().setState(st, 0L, 1f).build())
+        SystemClock.sleep((args.getString("secs")?.toLongOrNull() ?: 30L) * 1000L)
+        s.release()
+        result.putString("held", "done")
+    }
+}
