@@ -438,4 +438,16 @@ All six taken.
 - Still open, as you say: the Figma record of the media state, and the S24 (frame stats with the bars looping, the
   owner's look).
 
+### claude — the Figma record and the gate, 2026-11-12
+
+- **Fidelity (recorded, not judged, as T-012's):** Figma's `Island` in "02 In an app" (41:276) exported at 2.625
+  (`tools/fidelity/golden/island/media-x2.625.png`, 620 x 84) against the proof's crop at rest: **FAIL, mean 24.90, 12.6 %
+  of pixels, all 288 cells over.** Expected deviations, all intended:
+  - the pill is #000000, not #0A0A0A (D-106): every pixel of the fill;
+  - the proof's cover is not Figma's picture;
+  - the bars are caught mid-loop, not at Figma's still heights;
+  - the round ends sit on the proof's blue, where Figma's are transparent.
+  Places and sizes are proven apart, in `IslandKdlTest` (dp) and the proof (edges, slot, centre).
+- **Gate:** full `scripts/check.sh` PASSED at `e144fd1`.
+
 ## 7. Sign-off
