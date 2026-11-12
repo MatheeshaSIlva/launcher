@@ -1,6 +1,6 @@
 # Board
 
-**Now:** E2.13a, 13b and 13c merged (T-009, T-010, T-011; D-099 to D-103). Next E2.14a, the island at rest, waits on the owner: Q-004 (its typeface); also open with the owner: Q-003 (Android 10 clip fallback) and the S24 check of 13b (the punch hole, upright and turned). Earlier context: direction changed (D-092): iOS and Pixel scrapped, a default theme of our own, settings are what creators offer.
+**Now:** E2.13a, 13b and 13c merged (T-009, T-010, T-011; D-099 to D-103). Next E2.14a, the island at rest (Q-004 answered: JetBrains Mono, OFL, bundled with it); open with the owner: Q-003 (Android 10 clip fallback) and the S24 check of 13b (the punch hole, upright and turned). Earlier context: direction changed (D-092): iOS and Pixel scrapped, a default theme of our own, settings are what creators offer.
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
 **Device:** claude (lead)

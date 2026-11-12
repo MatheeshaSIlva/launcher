@@ -6,10 +6,6 @@ Format:
 `- [Q-001] (blocks: M2 | not blocking) Question? Options: A (recommended), B. Context: why it matters.`
 
 ## Open
-- [Q-004] (blocks: E2.14a) Draft 4's island at rest shows the time and battery in a monospaced typeface; the app only
-  bundles Inter. Which font should the island (and draft 4's clock and labels) use? Options: A name the font your Figma
-  draft uses, and we bundle it if its licence allows (OFL or Apache); B use Android's built-in monospace for now and
-  match it later. Context: a new font file is a new asset with a licence, so it needs your yes (AGENTS.md).
 - [Q-003] (not blocking) On Android 10 only, a clipping box larger than about two-thirds of the screen (or a nest of
   them) cannot get its smooth rounded clip within the memory budget (8 MiB of mask layers at once). Options: A
   (recommended, built) it keeps the rounded clip with rough, aliased edges; B the component refuses to draw such a box
@@ -17,6 +13,14 @@ Format:
   (T-011, D-103).
 
 ## Answered
+- [Q-004] (blocks: E2.14a) Draft 4's island at rest shows the time and battery in a monospaced typeface; the app only
+  bundles Inter. Which font should the island (and draft 4's clock and labels) use? Options: A name the font your Figma
+  draft uses, and we bundle it if its licence allows (OFL or Apache); B use Android's built-in monospace for now and
+  match it later. Context: a new font file is a new asset with a licence, so it needs your yes (AGENTS.md).
+  Answer (2026-11-12): A, "Name the Figma font". Read from Figma by the lead: the island at rest (component 8:175)
+  sets the time and battery in JetBrains Mono Regular, 13 px on a 20 px line; the live media state's title is IBM Plex
+  Sans Regular, 13 px on 18 px. Both are SIL OFL 1.1: JetBrains Mono is bundled for E2.14a, IBM Plex Sans when a state
+  that uses it is built; both go on the licences page.
 - [Q-001] Confirm the draft severities of B-006 to B-014 and add any bugs you see on the phone now. Answer (2026-10-24):
   "the bugs I noticed are mentioned above": the Pixel shade's crashes (B-031), expanded notifications (B-034), the
   notification tap highlight (B-035), the tiles' state animations (B-036), iOS's glass pull-down (B-037). The draft
