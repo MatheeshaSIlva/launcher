@@ -51,7 +51,7 @@ class IslandKdlTest {
         assertEquals("box", root.view.primitive)
         assertEquals(Value.Str("cutout"), root.value("place"))
         assertEquals(Value.Str("full"), root.value("radius"))
-        assertEquals(Value.Str("#0A0A0A"), root.value("fill"))
+        assertEquals(Value.Str("#000000"), root.value("fill"))
         assertEquals(Value.Str("centre-line"), root.value("align"))
         val row = root.children.single()
         assertEquals("row", row.view.primitive)

@@ -1238,3 +1238,10 @@ Regular 13 on a 20 px line). Six stray Inter texts on draft 4 are left-overs, no
   (Figma rasterises text heavier; the pill's round ends differ by a quarter-pixel crop offset). Agreed with Codex.
 - **A pre-existing engine bug fixed:** a node measures the children it composed (the KDL status bar crashed the
   launcher at every start since 13a-2); `component-measure` fails before and passes after.
+
+## D-106: The island is pure black (2026-11-12, owner) [owner]
+
+On the S24 the pill covered the camera but its #0A0A0A, the design language's background, is lit on an OLED screen, so
+the camera showed through it (owner: "the background is not fully black, therefore the camera is visible"). The island's
+fill is #000000 (pixels off), the one place the design language's near-black gives way; everything else keeps #0A0A0A.
+When the default theme supplies the island's tokens, its fill stays true black. Figma's draft 4 still says #0A0A0A.

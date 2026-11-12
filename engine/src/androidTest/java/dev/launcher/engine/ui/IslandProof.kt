@@ -217,7 +217,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
     private fun render(s: String, f: Typeface, size: Float): Bitmap {
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = f; textSize = size; color = 0xFFF2F2F2.toInt() }
         val b = Bitmap.createBitmap((p.measureText(s) + 40).toInt(), (size * 2).toInt(), Bitmap.Config.ARGB_8888)
-        Canvas(b).apply { drawColor(0xFF0A0A0A.toInt()); drawText(s, 20.3f, size * 1.4f, p) }
+        Canvas(b).apply { drawColor(0xFF000000.toInt()); drawText(s, 20.3f, size * 1.4f, p) }
         return b
     }
 
