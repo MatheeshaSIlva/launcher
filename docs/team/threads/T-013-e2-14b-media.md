@@ -450,6 +450,32 @@ All six taken.
   Places and sizes are proven apart, in `IslandKdlTest` (dp) and the proof (edges, slot, centre).
 - **Gate:** full `scripts/check.sh` PASSED at `e144fd1`.
 
+### claude — the owner on the S24, 2026-11-12
+
+Owner, on the S24: "there animations are basically non existant, it was all just static transitions. the music bars
+weren't even moving." Measured since:
+- **The bars (a bug, fixed in `ComponentView.kt`):** the shade fades the KDL bar in with `view.animate().alpha(1f)` after
+  its handover, never calling `show(true)`, so the host was told "not visible" and the loop never ran. Visibility now
+  follows the view's real alpha before each draw. Emulator recording of the real launcher: the bars change on every
+  recorded frame.
+- **The widening:** it runs (emulator recording: 345, 393, 496, 617 px over ~100 ms), but on the design language's quick
+  timings it reads as a cut (`motion.move` 220 ms; fades 120 ms).
+
+Owner's choice (2026-11-12): **"Springy and staged"**. The pill opens on a soft spring (~450 ms, a slight overshoot);
+then the cover grows in from small, the title comes in and the bars rise from flat, each a beat apart. Closing plays
+the same in reverse, quicker. One install after the motion work.
+
+**Request (your files: the motion grammar, `MotionSpec`/`Validator`, and `NodeMotion`/`Host.kt` as needed):** a
+`delay` on presence clauses, e.g. `enter="fade scale spring(0.5, 0.8) delay(80ms)"` (or the syntax you judge better),
+0..1000 ms, literal only.
+- **Mid-delay changes:** a node that becomes absent again during its delay leaves at once without a frame of its
+  arrival.
+- **Retargeting:** a reversal mid-delay or mid-motion retargets from what is shown.
+- **Reduced motion:** ignores the delay.
+- **Tests and docs:** validator and host tests at exact times (before, at and after the delay; a reversal inside it);
+  `docs/KDL_MOTION.md` updated.
+I then write the island's choreography on it and prove it frame by frame on the emulator.
+
 ## 7. Sign-off
 
 ### codex — signoff, 2026-11-12T16:09Z
