@@ -57,6 +57,26 @@ class SourcesTest {
         assertEquals(1, g.subscribed)
         binder.stop()
     }
+    /** T-014: a path deeper than a source's member reads on through the record (`notifications.arrival.name`). */
+    @Test fun aDeeperPathReadsThroughTheRecord() {
+        val a = NotifArrival("k", "Kasun", 3)
+        val src = Source("notifications", "none", { NotifIcons(emptyList(), a) }, kotlinx.coroutines.flow.flowOf(NotifIcons(emptyList(), a)))
+        val binder = SourceBinder(Sources(listOf(src)), { }, Dispatchers.Unconfined, emptySet()) { _, _ -> }
+        val env = binder.env(object : dev.launcher.engine.expr.Env {
+            override fun state(name: String) = Value.Null
+            override fun prop(name: String) = Value.Null
+            override fun token(key: String) = Value.Null
+            override fun source(path: String) = Value.Null
+            override fun now() = 0L
+        })
+        binder.start(listOf("notifications")) { }
+        assertEquals(Value.Str("Kasun"), env.source("notifications.arrival.name"))
+        assertEquals(Value.Num(3.0), env.source("notifications.arrival.others"))
+        assertEquals(Value.Bool.TRUE, env.source("notifications.arriving"))
+        assertEquals(Value.Null, env.source("notifications.arrival.missing"))
+        binder.stop()
+    }
+
     @Test fun aGrantWithoutADeclarationReadsNothing() {
         val g = Guarded()
         val binder = binderOver(g, setOf("notifications.read"))

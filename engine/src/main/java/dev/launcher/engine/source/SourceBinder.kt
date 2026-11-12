@@ -53,8 +53,13 @@ class SourceBinder(
 
     /** [base] with sources, `now` and the zone read from the latest values (`battery.level`: source `battery`, `level`). */
     fun env(base: Env): Env = object : Env by base {
-        override fun source(path: String): Value =
-            latest[path.substringBefore('.')]?.member(path.substringAfter('.', "")) ?: base.source(path)
+        // `source.member` from the source; anything deeper (`notifications.arrival.name`, T-014) through the record.
+        override fun source(path: String): Value {
+            val v = latest[path.substringBefore('.')] ?: return base.source(path)
+            val rest = path.substringAfter('.', "")
+            val first = v.member(rest.substringBefore('.'))
+            return if ('.' in rest) first.member(rest.substringAfter('.')) else first
+        }
         override fun now(): Long = (latest["time"] as? Time)?.epochMs ?: base.now()
         override val zone: TimeZone get() = (latest["time"] as? Time)?.let { t ->
             zoneFor?.takeIf { it.first == t.zoneId }?.second ?: TimeZone.getTimeZone(t.zoneId).also { zoneFor = t.zoneId to it }
