@@ -41,7 +41,7 @@ object KdlBar {
     private val tokens by lazy { DesignTokens() }
 
     /** What the bar we ship may read; a grant model for other components is the store's step (T-007). */
-    private val GRANTED = setOf("network.read", "notifications.read")
+    private val GRANTED = setOf("network.read", "notifications.read", "media.read")
 
     fun on(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
     fun set(ctx: Context, on: Boolean) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, on).apply()
@@ -74,11 +74,13 @@ object KdlBar {
         val icons = dev.launcher.engine.source.Access.ifAllowed(def.uses.sources.map { it.name }, "notifications", "notifications.read", GRANTED) { KdlNotifIcons(ctx, handler) }
         // The `device` source (T-010) follows the display of the bar's own view, bound once the view exists.
         val display = dev.launcher.engine.source.DeviceDisplayInfo(ctx, handler)
-        val system = SystemSources.all(ctx, handler, display)
-        val view = ComponentView(ctx, def, tokens, icons?.let { system + dev.launcher.engine.source.NotificationSource.of(it.feed) } ?: system, units,
-            granted = GRANTED, pictures = icons)
+        val media = dev.launcher.engine.source.Access.ifAllowed(def.uses.sources.map { it.name }, "media", "media.read", GRANTED) { KdlMedia(ctx, handler) }
+        var sources = SystemSources.all(ctx, handler, display)
+        icons?.let { sources += dev.launcher.engine.source.NotificationSource.of(it.feed) }
+        media?.let { sources += dev.launcher.engine.source.MediaSource.of(it) }
+        val view = ComponentView(ctx, def, tokens, sources, units, granted = GRANTED, pictures = icons)
         display.bind(view.view)
-        view.addOnDispose { icons?.dispose(); display.unbind() }
+        view.addOnDispose { icons?.dispose(); media?.dispose(); display.unbind() }
         // The island takes nothing of StatusBarView's (its colours are its own, it has no notification icons).
         if (!island) view.derive = {
             view.textWidth("Time")?.let { w ->

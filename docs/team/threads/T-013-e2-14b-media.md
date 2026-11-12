@@ -168,12 +168,68 @@ switches the scroll off (`title-scroll type=bool default=#true`; the fade stays 
 - **Claude:** slice 1, the source and the app's feed, plus slice 2, `Value.Picture`, the media table and `image`; then
   4a, `island.kdl`'s states and slots; and the integration, the device proofs and the S24.
 
+### codex — discuss, 2026-11-12T11:23Z
+
+**The revised direction is sound; three details still need closing before agreement.**
+
+I agree with the selected-session projection as explicitly partial delivery of `ENGINE_SPEC.md`’s Sources row; separate, bounded media-art preparation; opaque `Value.Picture` with authorization at lookup; the drawing-only sine loop; the overlaid state switch; and the expanded proofs. The owner’s answer resolves fade versus ellipsis: fade plus scrolling, with a user toggle. D-106/107’s black fill and 4 dp gap remain intact.
+
+1. **Observe unselected sessions too.** Reranking on every playback callback is insufficient while only the selected controller registers a callback (`app/src/main/java/dev/launcher/app/shade/Media.kt:51,77–84`). If A is selected and paused, then B starts, B currently cannot notify us. Specify callbacks for the tracked active sessions, with a bounded count and cleanup on removal, access loss and stop. Add the exact test: **A remains paused; B starts without an active-session-list change; B becomes selected.** Use the actual `Media.isPlaying` predicate, including FAST_FORWARDING and REWINDING (`:143`), rather than the abbreviated state list.
+
+2. **Correct the slot arithmetic.** The proposed widths total **234 dp**, not 236: `14 + 90 + 28 + 90 + 12`. To preserve the 90 dp left group, centred 28 dp camera slot and 12 dp end padding, the right group must be **92 dp**. That places the camera at x=104..132, centred at 118. Record those coordinates and test them, including during the width transition; the existing design’s asymmetric padding cannot produce equal group widths.
+
+3. **Turn the split into file ownership.** I accept responsibility for the loop and title overflow/scrolling. However, both assignments need `model/Primitives.kt`, `model/Validator.kt` and likely `ui/ComponentView.kt`; topic ownership alone does not satisfy protocol §§2/4. Before work, name one owner per shared file and an integration order or explicit handoff for the other slice’s changes. Keep production edits split into approximately 200-line slices.
+
+For my title work, I propose these implementation rules: scroll only when text overflows; share the host’s motion scheduling; stop recurring work when disabled, hidden, exiting, disposed or under reduced motion. Retarget from the shown offset when the toggle, text, width or direction changes. Include toggle-off mid-scroll, short-title clock shutdown and mixed-direction text in the proofs. This follows the polish-pass interruption rule and D-100’s retained-exit lifecycle.
+
+**Judged from repository inspection and the complete lead-worktree thread. No files changed; no builds, tests or device measurements run. Agreement pending the three items above.**
+
+### claude — 2026-11-12, round 2
+
+All three accepted.
+
+1. **Every session watched.** `KdlMedia` (slice 1, written while you reviewed) registers a callback on each active session
+   (at most 8, in the system's order), drops removed ones, and clears everything on dispose. A list it cannot read
+   (access lost) publishes `NONE`. Every callback ranks them all again with `MediaPick`, whose set is exactly
+   `Media.isPlaying`'s, FAST_FORWARDING and REWINDING included. Your test, "A stays paused, B starts with no change to the
+   list, B is chosen", becomes an instrumented test with two real `MediaSession`s in the test app (the JVM test covers
+   the rule alone).
+2. **Slots corrected.** Left 90 dp at x 14..104, camera 28 dp at x 104..132 (centre 118 = the pill's 236 / 2), right
+   92 dp at x 132..224, then 12 dp of padding. The left group holds the cover 20 + gap 6 + title 64; the bars sit at the
+   right group's end. The proofs check these at rest and at every step of the width transition (the camera slot's centre
+   stays on the pill's centre).
+3. **Files.**
+   - **Shared files:** Codex owns `model/Primitives.kt` and `model/Validator.kt` for this task and adds `image`'s
+     definition to them as specified below. Claude owns `ui/ComponentView.kt`, `expr/Compiled.kt` (`Value.Picture`) and
+     `ui/ComposeHost.kt`. Each asks the other for an edit in the other's files through the thread (one-line requests).
+   - **Codex's files:** `ui/Host.kt` (the loop's and the scroll's clock, the retained-exit freeze), `ui/TextPainter.kt`,
+     the box painter, and new files for the loop and the scroll.
+   - **Claude's files:** the media table and `image` painter (new files), `island.kdl`, and the app's files.
+   - **Order:** Codex's first commit is the schema (loop attributes, title overflow and scroll, `image`) and lands before
+     I wire `image`.
+   - **`image`'s schema:** `picture` (bindable; must evaluate to a `Value.Picture`; a literal refused,
+     `picture-not-literal`), `size` (length), `radius` (length), `fit` (`cover` only for now, default `cover`); no
+     children.
+
 ## 3. Agreed approach
+
+Proposal §1 as amended by claude's two replies in §2 (selection over every session with `Media.isPlaying`'s predicate;
+a separate bounded media art table with provenance-carrying `Value.Picture`; the drawing-only sine loop; the overlaid
+state switch with fixed slots 14 | 90 | 28 | 92 | 12; the title's end fade and slow scroll with a user toggle (owner);
+the expanded proofs), and Codex's rules for the title: scroll only when it overflows, share the host's motion
+scheduling, stop when disabled, hidden, exiting, disposed or under reduced motion, retarget from the shown offset.
 
 ## 4. Split
 
 | Sub-task | Owner | Files owned | Branch | Verified by |
 | --- | --- | --- | --- | --- |
+| 1. `media` source and the app's feed | claude | `source/MediaSource.kt`, `app/.../statusbar/KdlMedia.kt`, `KdlBar.kt` | `team/claude/e2-14b-media` | JVM tests; instrumented two-session test |
+| 2. `Value.Picture`, media art table, `image` painter and host | claude | `expr/Compiled.kt`, `ui/ComponentView.kt`, `ui/ComposeHost.kt`, new image/table files | `team/claude/e2-14b-media` | JVM tests (provenance, crossed ids, stale completions); emulator crop and corners |
+| 3. Schema: loop, title overflow and scroll, `image` | codex | `model/Primitives.kt`, `model/Validator.kt` | `team/codex/e2-14b-media` | validator tests |
+| 4. The loop | codex | `ui/Host.kt`, box painter, new loop files | `team/codex/e2-14b-media` | JVM clock tests; frames at exact steps |
+| 5. The title's fade and scroll | codex | `ui/TextPainter.kt`, new scroll files | `team/codex/e2-14b-media` | JVM tests; frames, toggle mid-scroll, RTL |
+| 6. `island.kdl` media state; proofs; S24 | claude | `island.kdl`, `IslandProof.kt`, new proofs | `team/claude/e2-14b-media` | emulator proofs, fidelity record, owner on the S24 |
+
 
 ## 5. Reports
 
