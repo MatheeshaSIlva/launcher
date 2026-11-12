@@ -1253,3 +1253,29 @@ bar, and the camera (centre 51.5 px down) in the pill's upper half. The owner se
 about 4-36 dp, its centre at 20 dp on the camera's 19.6 dp, its bottom about 94.5 px, inside the bar. The owner judges it
 on the phone. Making Android's bar taller in other apps was looked at: without root only the developer option's fake
 cutouts change it (Tall: 48 dp), each drawing a black cutout of its own and moving what Android reports as the camera.
+
+## D-114: A cutout gap on a whole pixel (2026-11-12, lead) [team]
+
+`place-gap` rounds to a whole pixel of the screen (halves up). The island's 4 dp is 10.5 px on the S24: the pill's top
+edge was a half-lit row and its text half a pixel low (the island proof: time ink 1.21 px off). Now 11 px. The 4 dp
+change (D-107) had been checked with the fast gate only; this proof caught it.
+
+## D-115: The island's media state moves springy and staged (2026-11-12, owner) [owner + lead]
+
+The owner, on the S24: the first version's motion was "basically non existant" and the bars "weren't even moving". The
+bars were a bug (the shade fades the KDL bar in with `animate()`, so the engine took it for unseen; visibility now follows
+the view's real alpha). The owner chose "springy and staged":
+- the pill opens on `spring(0.45, 0.75)`, a slight overshoot;
+- the time leaves in 90 ms, then the cover, the title and the bars arrive at 70, 120 and 170 ms;
+- closing, the pieces fade together in 100 ms and the time returns after 110 ms.
+For it the engine gained a presence `delay(Nms)` (0..1000 ms; a motion still waiting carries no speed; motion reduced
+ignores it), and a box that clips keeps wider children whole, centred by its alignment (the 236 dp media row was
+squeezed into the 132 dp pill). Owner: "the animations are better". Known: a long title scrolls only a little ("fine for
+now").
+
+## D-116: Codex out for the week: merge and work solo (2026-11-12, owner) [owner]
+
+Codex's weekly usage is spent (protocol §8). The owner chose to merge E2.14b into `engine` without Codex's sign-off and
+for the lead to carry on alone, each step checked the same way (tests, emulator proofs, the full gate, the owner on the
+S24). Codex reviews all of it when it is back; what it finds is fixed then. Codex's sub-tasks of T-013 (presence delay,
+the size motion's layout) were done by the lead.

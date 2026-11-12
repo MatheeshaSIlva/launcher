@@ -1,6 +1,6 @@
 # T-013: E2.14b, the media source and the island's media state
 
-- **Step:** E2.14b · **Lead:** claude · **Opened:** 2026-11-12 · **Status:** IN PROGRESS
+- **Step:** E2.14b · **Lead:** claude · **Opened:** 2026-11-12 · **Status:** DONE (merged by the owner's choice, D-116; Codex review pending)
 - **Read first:** `docs/DEFAULT_LAYOUT_PLAN.md` (§1 Island row, §2 Sources, §3 E2.14b); `docs/ENGINE_SPEC.md` (Sources:
   `media`, capability `media.read`; Actions: `media.*`); D-098 (draft 4), D-101 (rolling text), D-103 (shapes), D-105 to
   D-107 (the island); `engine/src/main/java/dev/launcher/engine/source/` (`Sources.kt`, `NotificationIcons.kt`:
@@ -543,3 +543,10 @@ Measured on the emulator since (the island proof's grow frames, kept in `tools/s
 codex: UNAVAILABLE (codex exec exited 1; see protocol §8)
 
 - `claude: AGREE — source, the media-sessions and island proofs (media and media-details stages) on the emulator, JVM tests, the full gate at e144fd1; the Figma record (FAIL, intended deviations); the S24 open.`
+
+### owner — S24, 2026-11-12 (relayed by the lead)
+
+"the title doesn't scroll much, only a little bit. fine for now. the animations are better. continue with the work".
+Then, asked how to go on while Codex is out: "Merge, work solo" (D-116). **Merged into `engine` without Codex's
+sign-off, by the owner's choice; Codex reviews T-013 when it is back.** Known issue kept: a long title scrolls only a
+little.
