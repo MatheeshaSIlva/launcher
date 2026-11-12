@@ -3,6 +3,8 @@ package dev.launcher.app.theme
 /**
  * A font family as a theme names it (docs/PLAN_LAYOUTS_THEMES.md, B2d). Ids:
  * - `inter`: Inter, bundled (variable: any weight; its optical sizes play SF's Text and Display cuts);
+ * - `plex-sans`, `jetbrains-mono`: the design language's two families (D-104), bundled, variable in weight
+ *   (IBM Plex Sans 100-700, JetBrains Mono 100-800; both SIL OFL 1.1, unmodified);
  * - `system`, `system-serif`, `system-mono`: the phone's own fonts (on One UI the font the user picked in its settings);
  * - `google:<Family Name>`: a family of fonts.google.com, downloaded on the phone ([GoogleFonts]).
  *
@@ -11,6 +13,13 @@ package dev.launcher.app.theme
  */
 sealed class FontFamily(val id: String) {
     object Inter : FontFamily("inter")
+    /** A variable font in the app's assets, [file] under `assets/`, its `wght` axis from [minWeight] to [maxWeight]. */
+    class Bundled private constructor(id: String, val file: String, val minWeight: Int, val maxWeight: Int) : FontFamily(id) {
+        companion object {
+            val PLEX_SANS = Bundled("plex-sans", "fonts/IBMPlexSansVariable.ttf", 100, 700)
+            val JETBRAINS_MONO = Bundled("jetbrains-mono", "fonts/JetBrainsMonoVariable.ttf", 100, 800)
+        }
+    }
     class System(val generic: Generic) : FontFamily(if (generic == Generic.SANS) "system" else "system-" + generic.id)
     class Google(val name: String) : FontFamily("google:$name")
 
@@ -27,6 +36,8 @@ sealed class FontFamily(val id: String) {
         /** The family [id] names, or null if it names none. */
         fun parse(id: String): FontFamily? = when (val s = id.trim()) {
             "inter" -> Inter
+            "plex-sans" -> Bundled.PLEX_SANS
+            "jetbrains-mono" -> Bundled.JETBRAINS_MONO
             "system", "system-sans" -> System(Generic.SANS)
             "system-serif" -> System(Generic.SERIF)
             "system-mono" -> System(Generic.MONO)

@@ -1136,7 +1136,7 @@ The product questions that used to be here (Play policy, billing, the name, them
   itself that no disable flag hides". Our bar has no call capsule yet (iOS's green).
 - Accessibility requirements need writing. The package id `dev.launcher.app` is still a placeholder (the name is Not a
   Launcher; no rename until its own step, D-070).
-- A licences page before release: Inter (OFL), AOSP's Quick Settings icons (Apache-2.0: `assets/icons/pixel.json`, each
+- A licences page before release: Inter, IBM Plex Sans and JetBrains Mono (OFL; D-104), AOSP's Quick Settings icons (Apache-2.0: `assets/icons/pixel.json`, each
   symbol with its source), Material Symbols (Apache-2.0: the app's own `sym_*`).
 - Everything was probed on one S24 (and the Redmi for E2's benchmarks); the engine targets more phones, so re-run the key
   probes on each new test device.

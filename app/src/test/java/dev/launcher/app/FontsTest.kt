@@ -22,7 +22,9 @@ class FontsTest {
         assertEquals("IBM Plex Sans", (FontFamily.parse("google:IBM Plex Sans") as FontFamily.Google).name)
         assertEquals("Noto Sans JP", (FontFamily.parse(" google:  Noto  Sans JP ") as FontFamily.Google).name)
         // Written back as read.
-        for (id in listOf("inter", "system", "system-serif", "system-mono", "google:Manrope")) assertEquals(id, FontFamily.parse(id)!!.id)
+        assertEquals("fonts/IBMPlexSansVariable.ttf", (FontFamily.parse("plex-sans") as FontFamily.Bundled).file)
+        assertEquals(800, (FontFamily.parse("jetbrains-mono") as FontFamily.Bundled).maxWeight)
+        for (id in listOf("inter", "plex-sans", "jetbrains-mono", "system", "system-serif", "system-mono", "google:Manrope")) assertEquals(id, FontFamily.parse(id)!!.id)
     }
 
     @Test fun whatNamesNoFamilyIsRefused() {

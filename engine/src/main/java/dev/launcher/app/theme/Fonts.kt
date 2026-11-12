@@ -119,6 +119,7 @@ object Fonts {
         cache[key]?.let { return it }
         val tf = when (family) {
             is FontFamily.Inter -> inter(w, opsz)
+            is FontFamily.Bundled -> bundled(family, w)
             is FontFamily.System -> Typeface.create(when (family.generic) {
                 FontFamily.Generic.SANS -> Typeface.DEFAULT
                 FontFamily.Generic.SERIF -> Typeface.SERIF
@@ -134,6 +135,17 @@ object Fonts {
         Typeface.Builder(ctx.assets, "fonts/InterVariable.ttf")
             .setFontVariationSettings("'wght' $weight, 'opsz' $opsz")
             .setWeight(weight)
+            .build() ?: fallback(weight)
+    } catch (_: Throwable) {
+        fallback(weight)
+    }
+
+    /** A bundled variable font at [weight], held within its axis (a weight past it draws the nearest it has). */
+    private fun bundled(family: FontFamily.Bundled, weight: Int): Typeface = try {
+        val w = weight.coerceIn(family.minWeight, family.maxWeight)
+        Typeface.Builder(ctx.assets, family.file)
+            .setFontVariationSettings("'wght' $w")
+            .setWeight(w)
             .build() ?: fallback(weight)
     } catch (_: Throwable) {
         fallback(weight)

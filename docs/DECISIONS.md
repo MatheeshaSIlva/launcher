@@ -1205,3 +1205,18 @@ Made without the owner (T-011); nothing on screen changes today (no component in
 - **A shape clip's GPU work is done before a component shows** (an off-screen frame at its preparation, completion
   observed); its benefit on first use is not measured.
 - **A child cannot be larger than its box** (the layout keeps children within their parent's bounds): known, unchanged.
+
+## D-104: The design language's typefaces are bundled (2026-11-12, owner) [owner]
+
+The owner: "yes, use the fonts in figma, as it follows the design language." Read from Figma (draft 4 and the
+Components page's text styles): **IBM Plex Sans** for text (display SemiBold 32, title SemiBold 22, heading SemiBold 17,
+body Regular 15, body-strong Medium 15, small Regular 13, caption Regular 12) and **JetBrains Mono** for figures and
+labels (wordmark Medium 17, numeral Medium 28, value Regular 14, code Regular 13, label Medium 11; the island at rest:
+Regular 13 on a 20 px line). Six stray Inter texts on draft 4 are left-overs, not the language.
+- Bundled unmodified from Google's fonts repository (google/fonts, `ofl/ibmplexsans`, `ofl/jetbrainsmono`): the upright
+  variable files (`IBMPlexSansVariable.ttf` 537 KB, weight 100-700, width kept at 100; `JetBrainsMonoVariable.ttf`
+  187 KB, weight 100-800), each with its OFL 1.1 text, in `engine/src/main/assets/fonts/`. Italics not bundled (the
+  design uses none). "Plex" is a reserved font name: the file is never modified or subset under that name.
+- Font ids `plex-sans` and `jetbrains-mono` (`FontFamily.Bundled`), usable wherever a family id is (themes' text
+  styles, KDL `text`'s `font`). Inter stays bundled for the launcher as built until its views go.
+- Both go on the licences page (with Inter, AOSP's icons and Material Symbols).
