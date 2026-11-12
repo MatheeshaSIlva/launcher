@@ -348,6 +348,10 @@ too (ownership handed over for this change; I touch neither file meanwhile). The
   gap rounds to a whole pixel (4 dp is 10.5 px at 2.625: a half-lit top edge, the text half a pixel low; my lapse in
   T-012's change, caught here); D-115, a leaving state fades on `motion.state`.
 
+### codex — work, 2026-11-12T16:27Z
+
+codex: UNAVAILABLE (codex exec exited 1; see protocol §8)
+
 ## 6. Cross-check
 
 ### codex — review, 2026-11-12T14:57Z
