@@ -51,13 +51,14 @@ import kotlin.math.roundToInt
  *   and the bundled face rolls by character ([RollEligibility.shapedAlike]);
  * - **reduced motion:** a change lands at once;
  * - **looks:** the pill cropped at the Figma export's size (`island/idle.png`, 347 × 84 at 2.625) for `tools/fidelity/diff.py`.
- * The roll's curve is the role the design language gives `motion.text.roll` (120 ms, cubic-bezier(0.23, 1, 0.32, 1)),
- * written in place of `roll=#true`: the engine's test package carries no launcher preset; the preset's value is the JVM's
- * test (`EngineRolesTest`).
+ * - **the real preset:** the shipped file as it is (`roll=#true`), the launcher's motion preset loaded ([Design.init], the
+ *   app's assets in the test package): `motion.text.roll` resolves to the design language's 120 ms cubic-bezier(0.23, 1,
+ *   0.32, 1), and the rolls above run on it; a live 24-hour to 12-hour change rolls too;
+ * - **the texts' places:** each text's ink edges against draft 4's own numbers (the pill's top + 6 dp, a 20 dp line,
+ *   14 dp from the left and 12 dp from the right, the face's metrics), within 1 px.
  *   adb shell am instrument -w -e mode component-island dev.launcher.engine.test/dev.launcher.engine.adb.AdbProofInstrumentation
  */
 class IslandProof(private val instrumentation: Instrumentation, private val cutout: String = "emu01") {
-    private val ROLL = "roll=\"cubic-bezier(0.23,1,0.32,1) 120ms\""
     private val ctx get() = instrumentation.targetContext
 
     private fun sh(cmd: String): String =
@@ -66,7 +67,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
     private fun def(): ComponentDef {
         val text = ctx.assets.open("kdl/components/island.kdl").bufferedReader().use { it.readText() }
         check("roll=#true" in text) { "island.kdl does not roll its texts (roll=#true)" }
-        return when (val r = Validator(TokenCheck { false }).load(KdlParser.parse(text.replace("roll=#true", ROLL)))) {
+        return when (val r = Validator(TokenCheck { false }).load(KdlParser.parse(text))) {
             is ReadResult.Ok -> r.component
             is ReadResult.Invalid -> error("island.kdl: " + r.diagnostics.joinToString { "${it.span.line}:${it.span.col} ${it.message}" })
         }
@@ -74,7 +75,12 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
 
     fun run(result: Bundle) {
         Fonts.init(ctx)
+        dev.launcher.app.design.Design.init(ctx)
         val errors = ArrayList<String>()
+        val role = dev.launcher.engine.ui.motion.PresetMotion.curve("motion.text.roll")
+        val wanted = dev.launcher.app.design.Curve.Ease(0.23f, 1f, 0.32f, 1f, 120f)
+        if (role != wanted) errors += "motion.text.roll is $role in preset '${dev.launcher.app.design.Design.motionName}', not $wanted"
+        result.putString("preset", "motion '${dev.launcher.app.design.Design.motionName}': motion.text.roll = $role")
         val rotation = sh("settings get system user_rotation").trim()
         val auto = sh("settings get system accelerometer_rotation").trim()
         try {
@@ -117,6 +123,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
                 "${"%.1f".format(w)} x ${"%.1f".format(h)}), centre off D-102's point with the 8 dp gap by (${"%.3f".format(g.cx - ex)}, ${"%.3f".format(g.cy - ey)}) px; " +
                 "clearance ${s.clearance(shot)}")
             s.clearanceErrors(shot, "21:40 64", errors)
+            result.putString("places", s.places(shot, g, errors))
             // The Figma export's frame: 347 x 84 at 2.625, centred on the pill.
             val fw = (132 * density).roundToInt(); val fh = (32 * density).roundToInt()
             val x0 = (g.cx - fw / 2f).roundToInt(); val y0 = (g.cy - fh / 2f).roundToInt()
@@ -153,6 +160,15 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             check(frames in 2..59) { "${c.name}: the roll ran $frames frames" }
             lines += "${c.name}: $frames frames, closest ${"%.1f".format(worst)} px"
         }
+        // The clock's setting changed while shown: 13:05 becomes 1:05 (a length change: the whole string rolls).
+        session(d, at(13, 5), 64, hour24 = true) { s ->
+            instrumentation.runOnMainSync { s.view.setProp("hour24", Value.Bool.FALSE) }
+            s.drawn()
+            var frames = 0
+            while (s.frames.held != null && frames < 60) { s.step(); s.clearanceErrors(s.capture(), "24 to 12-hour frame ${frames + 1}", errors); frames++ }
+            check(frames in 2..59) { "24 to 12-hour: the roll ran $frames frames" }
+            lines += "13:05 to 1:05 (24 to 12-hour, live): $frames frames"
+        }
         result.putString("rolls", lines.joinToString("; "))
     }
 
@@ -175,7 +191,8 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
         val density = ctx.resources.displayMetrics.density
         val asset = Typeface.Builder(ctx.assets, "fonts/JetBrainsMonoVariable.ttf").setFontVariationSettings("'wght' 400").setWeight(400).build()
         val drawn = time ?: return run { errors += "typeface: no time ink captured" }
-        val faces = listOf("JetBrains Mono (asset)" to asset, "system monospace" to Typeface.MONOSPACE, "system sans" to Typeface.DEFAULT)
+        val inter = Typeface.Builder(ctx.assets, "fonts/InterVariable.ttf").setFontVariationSettings("'wght' 400").setWeight(400).build()
+        val faces = listOf("JetBrains Mono (asset)" to asset, "Inter (asset)" to inter, "system monospace" to Typeface.MONOSPACE, "system sans" to Typeface.DEFAULT)
         val scores = faces.map { (n, f) -> n to compare(drawn, ink(render("21:40", f, 13 * density))) }
         val mine = scores[0].second
         if (mine > 0.06) errors += "typeface: the time differs from the asset's JetBrains Mono by $mine"
@@ -333,6 +350,49 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             }
             if (time == null && lr >= 0) time = ink(b, ll, lr + 1, (g.cy - half).toInt(), (g.cy + half).toInt())
             return (if (lr >= 0) intArrayOf(ll, lr) else null) to (if (rr >= 0) intArrayOf(rl, rr) else null)
+        }
+
+        /**
+         * Each text's ink box (threshold 90 of red over the pill) against draft 4's numbers, worked out from the face's
+         * own metrics: the line box 20 dp tall at the pill's top + 6 dp with the text centred in it (Figma's), the time's
+         * ink from the left padding plus its first glyph's bearing, the battery's ink ending at the right padding less its
+         * last glyph's trailing space.
+         */
+        fun places(b: Bitmap, g: Geometry, errors: MutableList<String>): String {
+            val d = ctx.resources.displayMetrics.density
+            val face = Typeface.Builder(ctx.assets, "fonts/JetBrainsMonoVariable.ttf").setFontVariationSettings("'wght' 400").setWeight(400).build()
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = face; textSize = 13 * d }
+            val fm = p.fontMetrics
+            val left = g.cx - 66 * d; val right = g.cx + 66 * d; val top = g.cy - 16 * d
+            val baseline = top + 6 * d + (20 * d - (fm.descent - fm.ascent)) / 2f - fm.ascent
+            fun bounds(s: String) = android.graphics.Rect().also { p.getTextBounds(s, 0, s.length, it) }
+            val t = bounds("21:40"); val bt = bounds("64")
+            val bw = p.measureText("64")
+            val want = listOf(
+                floatArrayOf(left + 14 * d + t.left, baseline + t.top, left + 14 * d + t.right, baseline + t.bottom),
+                floatArrayOf(right - 12 * d - bw + bt.left, baseline + bt.top, right - 12 * d - bw + bt.right, baseline + bt.bottom))
+            val got = boxes(b, g)
+            val out = ArrayList<String>()
+            for ((k, name) in listOf("time", "battery").withIndex()) {
+                val w = want[k]
+                val o = got[k] ?: return "no $name ink".also { errors += it }
+                // Pixel edges of a threshold box: the ink's left is at the pixel's left, its right one past the last pixel.
+                val diff = floatArrayOf(o[0] - w[0], o[1] - w[1], o[2] + 1 - w[2], o[3] + 1 - w[3])
+                if (diff.any { abs(it) > 1f }) errors += "$name ink off draft 4's place by ${diff.joinToString { "%.2f".format(it) }} px (left, top, right, bottom)"
+                out += "$name off by ${diff.joinToString { "%.2f".format(it) }}"
+            }
+            return out.joinToString("; ") + " px (left, top, right, bottom)"
+        }
+
+        private fun boxes(b: Bitmap, g: Geometry): List<IntArray?> {
+            val half = 16 * ctx.resources.displayMetrics.density
+            val box = arrayOf(intArrayOf(Int.MAX_VALUE, Int.MAX_VALUE, -1, -1), intArrayOf(Int.MAX_VALUE, Int.MAX_VALUE, -1, -1))
+            for (y in (g.cy - half).toInt() until (g.cy + half).toInt()) for (x in 0 until b.width) {
+                if ((b.getPixel(x, y) shr 16 and 255) < 90) continue
+                val r = box[if (x < g.cx) 0 else 1]
+                r[0] = minOf(r[0], x); r[1] = minOf(r[1], y); r[2] = maxOf(r[2], x); r[3] = maxOf(r[3], y)
+            }
+            return box.map { if (it[2] >= 0) it else null }
         }
 
         fun minGap(b: Bitmap): Float {

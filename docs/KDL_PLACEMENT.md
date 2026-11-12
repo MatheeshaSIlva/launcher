@@ -27,5 +27,17 @@ moving on screen (its layout, an ancestor's, a scroll) is no motion: the root st
 anchor, and a motion already running goes on. Only the view's root is placed: a fallback
 root's `place` takes effect when fallback rendering exists.
 
+`place-gap` (T-012) is a literal length (`(dp)8`, `(pt)`, `(px)` or a number in pt) on a root with
+`place="cutout"`: the root's top never comes nearer the screen's top edge than that. A camera high on the screen
+then leaves the root lower than centred on it (its centre below the camera's); a camera low enough changes nothing.
+The gap is measured from the screen, not the host (a host lower on the screen still keeps it from the screen's top).
+Without a cutout the root's place comes from the fallback line as before, with the same floor. Without `place-gap`
+D-102's rule is unchanged (a root may stand partly above the screen). It is refused on a child or variant override
+(`place-root-only`), on a root not placed on the camera (`place-gap-needs-cutout`) and as a binding (`not-bindable`).
+
+```kdl
+box place="cutout" place-gap=(dp)8 width=(dp)132 height=(dp)32 radius="full"
+```
+
 This component anchor is separate from surface summon zones, which come in E3.
 Other refusal codes are `place-root-only`, `not-bindable` and `wrong-type`.

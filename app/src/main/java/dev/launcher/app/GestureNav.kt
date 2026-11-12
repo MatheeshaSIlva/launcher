@@ -577,9 +577,9 @@ object GestureNav : NavHost {
                         // The engine's KDL bar in place of StatusBarView (E2 slice 6), kept across starts; the same shade is
                         // detached and attached again for it (each attachment makes its own KDL bar).
                         "kdl" -> {
-                            // --es component status-bar|island (T-012); none named keeps the one chosen before.
+                            // --es component status-bar|island (T-012); none named is the status bar.
                             val c = i.getStringExtra("component")
-                            if (c != null && !dev.launcher.app.statusbar.KdlBar.setComponent(app, c)) {
+                            if (!dev.launcher.app.statusbar.KdlBar.setComponent(app, c)) {
                                 AppLog.log("[statusbar] test: no KDL component '$c' (${dev.launcher.app.statusbar.KdlBar.COMPONENTS.keys.joinToString()}); unchanged")
                                 return@post
                             }

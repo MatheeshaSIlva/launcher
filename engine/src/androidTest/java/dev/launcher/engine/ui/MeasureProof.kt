@@ -72,9 +72,14 @@ class MeasureProof(private val instrumentation: Instrumentation) {
             SystemClock.sleep(300)
             instrumentation.waitForIdleSync()
             failure?.let { throw it }
-            val shown = v!!.read("n")
-            check(shown == Value.Num(last.toDouble()) || shown == Value.Null) { "the view ended at $shown, not $last" }
-            result.putString("measure", "40 frames whose children changed between composition and measure: no exception")
+            // Drawn at the last state: as many 10 px boxes, 4 px apart, as it shows (red columns of a software draw).
+            val shot = android.graphics.Bitmap.createBitmap(400, 40, android.graphics.Bitmap.Config.ARGB_8888)
+            instrumentation.runOnMainSync { v!!.view.draw(android.graphics.Canvas(shot)) }
+            var red = 0
+            for (x in 0 until shot.width) if ((0 until shot.height).any { y -> val p = shot.getPixel(x, y); (p shr 16 and 255) > 200 && (p shr 8 and 255) < 60 }) red++
+            val expected = 10 * minOf(last, 4)
+            check(red == expected) { "the view ended with $red red columns, expected $expected (n = $last)" }
+            result.putString("measure", "40 frames whose children changed between composition and measure: no exception; ended drawing $red px of boxes for n = $last")
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(old)
             instrumentation.runOnMainSync { v?.dispose(); activity.finish() }

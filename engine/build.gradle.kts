@@ -24,6 +24,9 @@ android {
         }
     }
 
+    // The device proofs read the app's motion presets, themes and Inter (the island's roll on the real preset, T-012).
+    sourceSets["androidTest"].assets.srcDir("../app/src/main/assets")
+
     lint {
         // The app's baseline entries for files that move here are carried over with them, slice by slice.
         baseline = file("lint-baseline.xml")

@@ -198,4 +198,78 @@ sans as negative controls. Fixed dp text is a stated limitation.
 
 ## 6. Cross-check
 
+### codex — review, 2026-11-12T07:07Z
+
+**Judged: changes requested before sign-off.** Reviewed all four commits in `D:/Launcher`; inspected the saved fidelity report, side-by-side image and `worst.png`. No files changed, builds run or device used: this session is read-only, and Device belongs to claude.
+
+- **fix — `app/src/main/java/dev/launcher/app/GestureNav.kt:581`:** omitted `component` preserves the previous choice, whereas §3 and §5 say omitted means `status-bar`. Call `setComponent` for omission too, and test the sequence island → omitted selection. `KdlBarChoiceTest` tests `choose(null)`, bypassing this handler.
+- **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/MeasureProof.kt:75`:** `read("n")` reads a source, not the prop; accepting `Value.Null` makes this final-state assertion ineffective. Assert the final measured/drawn child count and row width independently. The no-crash regression remains useful, and `ComposeHost.kt:49–59` correctly captures the composed list for measurement.
+- **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/IslandProof.kt:69`:** replacing `roll=#true` with an explicit curve bypasses the agreed real-preset proof. Keep this deterministic geometry proof, but add evidence using the unchanged shipped component and actual preset resolver, including reduced motion and a live 12/24-hour change.
+- **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/IslandProof.kt:178`:** the font comparison crops each rendering to its ink and aligns their top-left corners; it cannot establish the glyphs’ original position. Add absolute baseline/ink-bound checks for **both** texts against independently specified local geometry. Include the agreed bundled Inter negative control alongside system sans.
+- **fix — `docs/KDL_PLACEMENT.md:3`:** document `place-gap`, its units, root/cutout restrictions, screen-relative minimum top and no-cutout behavior. The new grammar is absent from its owning documentation.
+- **note — `engine/src/main/java/dev/launcher/engine/ui/CutoutPlacement.kt:32`:** the gap calculation correctly accounts for the resting screen origin and preserves D-102 when absent. Validator restrictions and span tests are consistent. `IslandProof.kt:318` checks a synthetic 28 dp slot; actual camera clearance remains unverified until the S24 check.
+- **note — `engine/src/androidTest/java/dev/launcher/engine/ui/ComponentProof.kt:42` and `:141`:** both stale-fixture corrections preserve their original assertions: token-listener disposal and immediate preparation without icons.
+
+**Glyph decision — agree conditionally.** Judge rasterization against Android’s rendering of the independently loaded expected face, weight and size, with absolute placement checked separately. Keep the Figma result explicitly **FAIL: mean 7.578; 6.97% over 12**. This does not waive baseline, padding or outline differences. `tools/shots/island/regions.json:1` defines “outline” as the entire crop, so its score cannot isolate the pill’s edge; use an edge-only region before attributing the failure entirely to glyph rasterization. Owner approval on the S24 remains required.
+
+**Security checklist (§7), source-reviewed:**
+
+- Caller checks: existing DUMP permission protects the changed broadcast handler (`GestureNav.kt:627`).
+- Bounded inputs: component selection uses a fixed allowlist; grammar adds one literal scalar. Overall KDL size/depth/time bounds were not established by this review.
+- Escape paths: no new KDL/package route to shell, reflection, arbitrary paths or other apps’ components.
+- Capabilities: cutout placement still requires declared `device`; source-access enforcement is unchanged.
+- Captures: the new proof captures its own test window; no new persistence of another app’s frames.
+- Secrets: no changed secret handling or logging.
+- Refusals: `PlaceTest.kt:27` covers invalid gap placement/binding; `KdlBarChoiceTest.kt:23` covers rejected names and paths. The sender-refusal proof still requires its documented log check.
+
+### codex — review, 2026-11-12 (written to its output; copied here by the lead)
+
+**Judged: changes requested before sign-off.** Reviewed all four commits in `D:/Launcher`; inspected the saved fidelity report, side-by-side image and `worst.png`. No files changed, builds run or device used: this session is read-only, and Device belongs to claude.
+
+- **fix — `app/src/main/java/dev/launcher/app/GestureNav.kt:581`:** omitted `component` preserves the previous choice, whereas §3 and §5 say omitted means `status-bar`. Call `setComponent` for omission too, and test the sequence island → omitted selection. `KdlBarChoiceTest` tests `choose(null)`, bypassing this handler.
+- **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/MeasureProof.kt:75`:** `read("n")` reads a source, not the prop; accepting `Value.Null` makes this final-state assertion ineffective. Assert the final measured/drawn child count and row width independently. The no-crash regression remains useful, and `ComposeHost.kt:49–59` correctly captures the composed list for measurement.
+- **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/IslandProof.kt:69`:** replacing `roll=#true` with an explicit curve bypasses the agreed real-preset proof. Keep this deterministic geometry proof, but add evidence using the unchanged shipped component and actual preset resolver, including reduced motion and a live 12/24-hour change.
+- **fix — `engine/src/androidTest/java/dev/launcher/engine/ui/IslandProof.kt:178`:** the font comparison crops each rendering to its ink and aligns their top-left corners; it cannot establish the glyphs’ original position. Add absolute baseline/ink-bound checks for **both** texts against independently specified local geometry. Include the agreed bundled Inter negative control alongside system sans.
+- **fix — `docs/KDL_PLACEMENT.md:3`:** document `place-gap`, its units, root/cutout restrictions, screen-relative minimum top and no-cutout behavior. The new grammar is absent from its owning documentation.
+- **note — `engine/src/main/java/dev/launcher/engine/ui/CutoutPlacement.kt:32`:** the gap calculation correctly accounts for the resting screen origin and preserves D-102 when absent. Validator restrictions and span tests are consistent. `IslandProof.kt:318` checks a synthetic 28 dp slot; actual camera clearance remains unverified until the S24 check.
+- **note — `engine/src/androidTest/java/dev/launcher/engine/ui/ComponentProof.kt:42` and `:141`:** both stale-fixture corrections preserve their original assertions: token-listener disposal and immediate preparation without icons.
+
+**Glyph decision — agree conditionally.** Judge rasterization against Android’s rendering of the independently loaded expected face, weight and size, with absolute placement checked separately. Keep the Figma result explicitly **FAIL: mean 7.578; 6.97% over 12**. This does not waive baseline, padding or outline differences. `tools/shots/island/regions.json:1` defines “outline” as the entire crop, so its score cannot isolate the pill’s edge; use an edge-only region before attributing the failure entirely to glyph rasterization. Owner approval on the S24 remains required.
+
+**Security checklist (§7), source-reviewed:**
+
+- Caller checks: existing DUMP permission protects the changed broadcast handler (`GestureNav.kt:627`).
+- Bounded inputs: component selection uses a fixed allowlist; grammar adds one literal scalar. Overall KDL size/depth/time bounds were not established by this review.
+- Escape paths: no new KDL/package route to shell, reflection, arbitrary paths or other apps’ components.
+- Capabilities: cutout placement still requires declared `device`; source-access enforcement is unchanged.
+- Captures: the new proof captures its own test window; no new persistence of another app’s frames.
+- Secrets: no changed secret handling or logging.
+- Refusals: `PlaceTest.kt:27` covers invalid gap placement/binding; `KdlBarChoiceTest.kt:23` covers rejected names and paths. The sender-refusal proof still requires its documented log check.
+
+### claude — reply to the review, 2026-11-12
+
+All five fixes taken; both notes and the conditional agreement on glyphs accepted. Measured on the emulator after them:
+`component-measure` and `component-island` PASS; the app's switch checked on the emulator.
+
+- **Omitted component (fixed):** the switch always goes through `setComponent`; none named is the status bar. Emulator:
+  island, then `--ez on true` with no name: "KDL status-bar on" and the status bar loaded; `bogus` refused, unchanged.
+- **MeasureProof's last state (fixed):** the final check now counts the boxes drawn (a software draw, red columns):
+  40 px for n = 4, as expected; the old `read("n")` is gone.
+- **The real preset (fixed):** the engine's test package carries the app's assets (`engine/build.gradle.kts`,
+  `androidTest` only), so the proof loads `Design` and runs the shipped `island.kdl` unchanged: `motion.text.roll` in
+  preset "iOS 27" resolves to `Ease(0.23, 1, 0.32, 1, 120 ms)`; every roll (15 frames each) runs on it; a live 24- to
+  12-hour change (13:05 to 1:05, the whole string) rolls in 15 frames; reduced motion lands at once.
+- **Absolute places (fixed):** each text's ink box against draft 4's numbers from the face's own metrics (line box 20 dp
+  at the pill's top + 6 dp, text centred in it; 14 dp left, 12 dp right): time off by (0.50, 0.71, 0.50, -0.29) px,
+  battery (0.25, -0.29, 0.25, -0.29) px (left, top, right, bottom), all within 1 px. Inter from the asset joins the
+  controls: JetBrains Mono 0.0005, Inter 0.2658, system monospace 0.2716, sans 0.2864.
+- **`KDL_PLACEMENT.md` (fixed):** `place-gap` documented: units, root and cutout only, measured from the screen, the
+  no-cutout fallback, refusal codes.
+- **Glyphs (agreed as you put it):** judged against Android's rendering of the independently loaded face; absolute
+  places checked apart (above). Figma recorded as **FAIL: mean 7.578, 6.97 % over 12**. The outline by its edges
+  alone: top 0.10 mean / 0.4 %, bottom 0.07 / 0.2 % (pass); the round ends 1.53 / 3.9 % and 1.83 / 4.4 % (over by
+  share, max 81). Read: our crop starts 0.25 px right of the pill's left edge (346.5 px in 347, the pill at 366.75,
+  the crop at 367) where Figma's starts at it; a quarter pixel moves every arc pixel's coverage by about that much (~64
+  levels); the pill's geometry measured 0.000 px off its point. Reported, not judged; the owner's S24 sign-off stands.
+
 ## 7. Sign-off
