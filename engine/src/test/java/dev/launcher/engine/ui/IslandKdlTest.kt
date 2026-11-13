@@ -227,6 +227,16 @@ class IslandKdlTest {
         assertEquals(Value.Str("#8A8A8A"), others.value("color"))
     }
 
+    /** Codex, T-015 sign-off: reduced motion turned on redraws the elastic blob at once, at rest. */
+    @Test fun reducedMotionRedrawsTheElasticBlobAtRest() {
+        val h = host(arriving = true, mode = "detailed")
+        var redraws = 0
+        h.root.redraw = { redraws++ }
+        h.snapMotion()
+        assertTrue("redrawn", redraws >= 1)
+        assertTrue("at rest", h.root.elastic.atRest && !h.root.elastic.joined)
+    }
+
     /** T-015: detailed mode: the pill keeps its own state; the banner's shape grows below it and its content shows. */
     @Test fun detailedModeGrowsTheBannerBelowAndLeavesThePillAlone() {
         val density = 2.625f

@@ -105,6 +105,24 @@ class BlobElasticTest {
         }
     }
 
+    /** Codex, T-015 sign-off: motion reduced mid-rebound leaves nothing stretched. */
+    @Test fun resetPutsEverythingAtRestApartInItsOwnColour() {
+        val e = BlobElastic()
+        var t = 0L
+        val glass = 0xFF121212.toInt()
+        e.step(pill, bud(20f).copy(color = glass), 16f, t); t += frame
+        repeat(8) { e.step(pill, bud(38f).copy(color = glass), 16f, t); t += frame }     // 6 px apart: pulled, joined
+        assertTrue("stretched first", e.parent > 0f)
+        e.reset()
+        assertEquals(0f, e.parent, 0f); assertEquals(0f, e.bud, 0f)
+        assertFalse(e.joined)
+        assertTrue(e.atRest)
+        val d = e.deform(listOf(pill, bud(44f).copy(color = glass)))
+        assertEquals("nothing stretched", pill, d[0])
+        assertEquals("its own colour", glass, d[1].color)
+        assertEquals("no neck", 2, d.size)
+    }
+
     @Test fun withNoBudNothingMoves() {
         val e = BlobElastic()
         assertFalse(e.step(pill, null, 16f, 0))

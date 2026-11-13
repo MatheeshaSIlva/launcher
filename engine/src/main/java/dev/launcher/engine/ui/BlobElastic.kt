@@ -73,6 +73,14 @@ class BlobElastic {
         return !atRest
     }
 
+    /** At rest at once, apart, the bud in its own colour (motion reduced: nothing stretched may stay on screen). */
+    fun reset() {
+        parent = 0f; bud = 0f; vParent = 0f; vBud = 0f
+        targetParent = 0f; targetBud = 0f
+        joined = false; gap = Float.NaN; last = Long.MIN_VALUE
+        tint = 1f; targetTint = 1f
+    }
+
     private fun integrate(dt: Float, toParent: Float, toBud: Float) {
         if (dt <= 0f) return
         val w = (2f * Math.PI.toFloat() * FREQUENCY)

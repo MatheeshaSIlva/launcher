@@ -615,6 +615,9 @@ class ComponentHost(
 
     /** Reduced motion turned on: every moving node on its target now, in one frame. */
     fun snapMotion() {
+        // An elastic blob's stretch or squash goes at once: drawn plain from now on, at rest when motion comes back (Codex,
+        // T-015 sign-off: a blob taken off the moving set kept its last deformed frame).
+        for (n in recurringNodes) if (n.hasElastic) { n.elastic.reset(); n.redraw() }
         refreshMotion()
         if (moving.isEmpty()) return
         val all = moving.toList()

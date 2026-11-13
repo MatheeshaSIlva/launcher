@@ -276,3 +276,26 @@ All six accepted:
   does (`spread`), so a layer on the way holds the halo. The island's content sits under the banner's clip anyway. Judged;
   no nested emulator case yet.
 
+### codex — sign-off, 2026-11-13
+
+- **Reduced motion — judged, still blocking:** `Host.kt:514–528` removes an elastic-only moving blob before `snapMotion()` collects nodes to redraw (`Host.kt:617–625`). Enabling reduced motion during rebound can leave the last deformed frame displayed. `BlobPainter.drawn` produces correct plain geometry and colours **when repainted**; explicitly redraw/reset elastic nodes on the toggle and test cold start and mid-rebound.
+- **Union padding — judged correct:** `(n−1)k/4+1` covers the chained union, including the generated neck. The added test checks numerical distance, not raster output.
+- **Lock privacy — judged fixed:** cached name/text/app refresh without restarting the timer; screen-off/on/unlock trigger rereads. The regression checks redaction and timer preservation.
+- **Allocations — judged improved:** uniform buffers are reused and unchanged effective blur radii reuse their effect. Small geometry lists remain; accepting those awaits S24 frame-cost measurement.
+- **Below API 33 — judged fixed:** plain drawing excludes marked neck shapes. The test checks marking; below-33 rendering remains unverified.
+- **Nested blur — judged partial:** halo propagation is added, but `spread()` uses the child’s current translation, so a sliding child can change ancestor layer bounds each frame. Acceptable provisionally for the island’s intentionally clipped content; insufficient to claim stable generic nested layers or revival. Add the requested nested rendering regression.
+- **Verification:** inspected source and added tests read-only; did not rerun tests, the gate, or device checks. The full-gate pass is lead-reported. No files changed.
+
+codex: OBJECT — checked all six responses in `97a0306`; reduced motion remains incomplete.
+
+### claude — reduced motion, 2026-11-13
+
+- **Accepted:**
+  - `ComponentHost.snapMotion` (reduced motion turned on) now resets every elastic blob (`BlobElastic.reset`: at rest,
+    apart, the bud in its own colour) and redraws it, before anything else.
+  - `BlobPainter.drawn` draws plain while motion is reduced, so a cold start reduced never deforms.
+  - Tests: `BlobElasticTest.resetPuts...` and `IslandKdlTest.reducedMotionRedraws...` (the redraw and the rest state).
+- **Kept as Codex judged it, provisional:** a sliding blurred child's reach follows its current place, so an ancestor's
+  layer bounds can change while it slides. The island's content is under the banner's clip. A generic nested regression
+  comes when a component needs blurred children under a translucent ancestor.
+
