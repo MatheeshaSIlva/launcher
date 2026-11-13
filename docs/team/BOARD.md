@@ -2,6 +2,10 @@
 
 **Now:** E2.13a, 13b and 13c merged (T-009, T-010, T-011; D-099 to D-103). E2.14a merged and signed off by the owner on the S24 (T-012; D-104 to D-107: pure black, 4 dp from the top). E2.14b merged (T-013; D-114 to D-116): the media island, springy and staged. Codex is out for the week; the lead works solo by the owner's choice (D-116), Codex reviews on its return. E2.14c-1 merged (T-014): notification (minimal) and charging on the island, by rank; assumptions listed in its thread for the owner. E2.14c-2 (T-015): detailed notifications, three concepts in Figma for the owner; detailed notifications (concept B) merged; the owner's S24 look open. Open with the owner: Q-003 (Android 10 clip fallback) and the S24 check of 13b (the punch hole, upright and turned). Earlier context: direction changed (D-092): iOS and Pixel scrapped, a default theme of our own, settings are what creators offer.
 
+**Process (D-119, owner 2026-11-14):** design first (`.claude/skills/design-first`, the egm plugin); targeted tests between
+milestones; the full check, the egm and Codex reviews and the merge at milestones only. First milestone: the status pill
+(its design doc written from what is built). Open: the shade as one milestone or one per section (ask at E3).
+
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
 **Device:** claude (none in use)
 **Last milestone review:** none yet (the first is due at the end of E2)
@@ -37,7 +41,7 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 | T-011 | E2.13c: rounded shapes that morph their size and corners | `threads/T-011-e2-13c-shapes.md` | claude (lead), codex | `team/claude/e2-13c-shapes`, `team/codex/e2-13c-shapes` | DONE, merged (D-103); Q-003 open with the owner |
 | T-017 | E2.14e part 1: the island comes and goes with the bar (full-screen apps, the transient show) | `threads/T-017-e2-14e-surface.md` | claude (solo, D-116) | `team/claude/e2-14c2-blob` | part 1 DONE, merged; the pull waits for E3 |
 | T-016 | E2.14d: decode text (scramble and settle) | `threads/T-016-e2-14d-decode.md` | claude (solo, D-116) | `team/claude/e2-14c2-blob` | DONE, merged |
-| T-015 | E2.14c-2: detailed notifications (a banner growing out of the island as a blob); the `blob` primitive | `threads/T-015-e2-14c2-detailed.md` | claude (solo, D-116) | `team/claude/e2-14c2-blob` | DONE, merged: concept B (the owner's), the island grows a banner that sags and pinches off; the owner's S24 look open |
+| T-015 | E2.14c-2: detailed notifications (a banner growing out of the island as a blob); the `blob` primitive | `threads/T-015-e2-14c2-detailed.md` | claude (solo, D-116) | `team/claude/e2-14c2-blob`, `team/claude/e2-14c2-detailed` | IN PROGRESS: the fluid drop, opaque banner, close fixed, conversations and replacements (Codex AGREE on each round); merged to `9f7e3fc`/`3052f52`, the replacement work on the branch until the status pill's milestone (D-119) |
 | T-014 | E2.14c-1: notification (minimal) and charging on the island, the ranking | `threads/T-014-e2-14c-arrivals.md` | claude (solo, D-116) | `team/claude/e2-14c-arrivals` | DONE, merged; the owner's S24 check and assumption review open |
 | T-013 | E2.14b: the `media` source and the island's media state (owner: bars loop while playing; a pause goes back at once) | `threads/T-013-e2-14b-media.md` | claude (lead), codex | `team/claude/e2-14b-media`, `team/codex/e2-14b-media` | DONE, merged (D-114 to D-116); the owner saw it on the S24; Codex's review pending (out for the week) |
 | T-012 | E2.14a: the island at rest | `threads/T-012-e2-14a-island.md` | claude (lead), codex | `team/claude/e2-14a-island`, `team/codex/e2-14a-island` | DONE, merged, signed off by the owner on the S24 (D-104 to D-107) |

@@ -1305,3 +1305,19 @@ artifact itself is unchanged (the owner meant the Figma prototype, which is revi
 motion faster, toward the design language (the swell, the break and the content in about 0.45 s; content on `dur-move`
 and `ease-out` with `dur-stagger`, out on `dur-state` and `ease-in`), its banner's corners `radius-lg` and held while it
 closes, its type `body-strong`, `small` and `caption` in `ink`, `ink-2` and `muted`.
+
+## D-119: Design first; heavy checks at milestones (2026-11-14, owner) [owner]
+
+The owner: "how about we combine it with a code-review and only carry out the tests on significant milestones? (when the
+status pill is complete, for each shade and panel etc.)", then "we'll install the plugin and set it up to be
+automatically used when required", choosing option A (the lead's skill runs it) on the direction page
+(https://claude.ai/artifact/8Vj4j9UqDUwBjL9skDZGWt, `docs/team/workflow-direction.html`). The process is the
+`design-first` skill (`.claude/skills/design-first/SKILL.md`), on the installed Elephant-Goldfish (egm) plugin:
+- Every element: brainstorm and concepts, the owner's direction, a design doc (`docs/designs/`), a fresh-context design
+  review, the owner's approval, then the build.
+- Between milestones: only the tests for what changed (targeted Gradle tests, `CHECK_FAST=1`), emulator frames when
+  motion changes. No full `scripts/check.sh`, no Codex review round, no merge after each fix.
+- At a milestone, in order: egm's drift report; a fresh code review (`egm-codebase-details`, `egm-design`) and Codex's
+  review and sign-off; the full check once and the S24's frame stats; the owner's S24 sign-off; the merge into `engine`.
+- The status pill is the first milestone: its design doc is written from what is built.
+- Open: whether the shade is one milestone or one per section (asked at E3's start).

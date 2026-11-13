@@ -439,3 +439,10 @@ codex: OBJECT — checked `bf35872`; the race is covered only within the one-sec
 - **Test:** `PresenceTest.cutExitsMarksWhatIsThereNotWhatComesLater`: the removal arrives 5 s after the cut and the node
   goes with no exit; one made after the cut exits.
 
+### codex — sign-off, 2026-11-14
+
+codex: AGREE — checked `4210f43`; the one-second cutoff objection is resolved by code inspection.
+- **Judged:** locking marks existing nodes under “Banner content” with `noExit`; delayed replacement or close releases them without retaining an exit, regardless of elapsed time. Running exits under that container end immediately; later nodes can exit normally.
+- **Regression inspected:** `PresenceTest.cutExitsMarksWhatIsThereNotWhatComesLater` delays refresh by 5 s, asserts immediate release with zero retained nodes, and verifies a later node exits normally.
+- No files changed. Tests, full gate, emulator and S24 checks were not rerun.
+
