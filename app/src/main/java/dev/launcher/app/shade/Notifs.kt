@@ -164,14 +164,9 @@ object Notifs {
         // in a group), their last message as the text, their photo as the picture.
         val messages = messagesOf(x)
         if (messages.isNotEmpty()) {
-            val last = messages.last()
-            val convo = x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)
-            val sender = last.second
-            if (convo != null && sender != null && convo.toString() != sender.toString()) { title = convo; sub = sender }
-            else if (sender != null) title = sender
-            text = if (messages.size > 1) messages.takeLast(4).joinToString("\n") { it.first.toString() } else last.first
-            latest = if (sub != null && sub == sender) "$sender: ${last.first}" else last.first
-            last.third?.let { avatar = it }
+            val c = Conversations.of(title, sub, x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE), messages.map { it.first to it.second })
+            title = c.title; sub = c.sub; text = c.text; latest = c.latest
+            messages.last().third?.let { avatar = it }
         }
         Item(
             key = sbn.key,
