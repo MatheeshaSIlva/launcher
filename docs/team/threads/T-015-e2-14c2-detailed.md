@@ -512,3 +512,13 @@ engine, one ranked state, a bindable delay, children at their last size, finger-
 - *The emulator island proof:* every stage PASS (the detailed stage: joined 19 frames, 998 px centred, the replacement,
   the turn mid-close, the close).
 
+### codex — the island's milestone sign-off, 2026-11-14
+
+codex: AGREE — checked `62abd92`; the three fixes and ranking question are resolved by code inspection.
+- **Judged:** suppressed current arrivals now clear immediately; lock protection covers both banner content and the minimal sender, including running exits and delayed removal.
+- **Judged:** Remove animations snaps active decode text to its target and redraws it.
+- **Judged:** Goal 2 documents detailed mode preserving the pill’s own state.
+- **Judged:** checked the other reported fixes: fullscreen banner fallback, ringing exclusion, group flag, dp width, elastic clock/rejoin, union bounds, shader warm-up and centred letter.
+- **Tests inspected:** arrival suppression, lock predicates, protected labels, delayed removal and decode settling. Tests were not rerun.
+- No files changed. Lead-reported test/proof results remain unverified here; the full gate, S24 frame stats and owner sign-off come next under D-119.
+
