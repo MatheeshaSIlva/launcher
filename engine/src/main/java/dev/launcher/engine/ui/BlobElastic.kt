@@ -161,10 +161,10 @@ class BlobElastic {
     companion object {
         /**
          * How much of the gap each edge is drawn across while joined: the parent (the pill) most, so it visibly stretches;
-         * the neck that shows is 1 - both of the gap, so it breaks past twice the union's reach.
+         * the neck that shows is 1 - both of the gap (0.46), so it breaks past about twice the union's reach.
          */
-        const val PULL_PARENT = 0.36f
-        const val PULL_BUD = 0.3f
+        const val PULL_PARENT = 0.32f
+        const val PULL_BUD = 0.22f
         /** The neck's width as it starts (of the narrower shape) and at the break (of the reach). */
         const val NECK_WIDE = 0.5f
         const val NECK_THIN = 0.3f

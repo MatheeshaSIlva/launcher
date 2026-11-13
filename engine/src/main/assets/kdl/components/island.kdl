@@ -104,7 +104,7 @@ component "island" version="0.7.0" {
       // sliding and out of a blur. Going back plays it the other way. The banner is the design language's glass tint
       // (#121212 at 76 %) with shadow-float and a hairline from the blob; the solid pill and the glass banner blend
       // across the neck. Text on it: ink and ink-2 only.
-      box width="{(notifications.arriving && @mode == 'detailed') ? 380dp : 0dp}" height="{(notifications.arriving && @mode == 'detailed') ? 76dp : 0dp}" radius="{(notifications.arriving && @mode == 'detailed') ? 26dp : 0dp}" translate-y="{(notifications.arriving && @mode == 'detailed') ? 60dp : 12dp}" fill="#C2121212" transition="size cubic-bezier(0.35, 0.3, 0.45, 1) 950ms, radius spring(0.38, 0.85), place cubic-bezier(0.8, 0, 0.25, 1) 700ms" label="Banner" {
+      box width="{(notifications.arriving && @mode == 'detailed') ? 380dp : 0dp}" height="{(notifications.arriving && @mode == 'detailed') ? 76dp : 0dp}" radius="{(notifications.arriving && @mode == 'detailed') ? 26dp : 0dp}" translate-y="{(notifications.arriving && @mode == 'detailed') ? 52dp : 12dp}" fill="#C2121212" transition="size cubic-bezier(0.35, 0.3, 0.45, 1) 950ms, radius spring(0.38, 0.85), place cubic-bezier(0.8, 0, 0.25, 1) 700ms" label="Banner" {
         box width=(dp)36 height=(dp)36 radius="full" fill="#1FFFFFFF" translate-x=(dp)16 translate-y=(dp)20 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur spring(0.5, 0.88) delay(620ms)" exit="fade blur 120ms" label="Mark" {
           text "{notifications.arrival.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" translate-x=(dp)13 translate-y=(dp)8 label="Mark letter"
         }

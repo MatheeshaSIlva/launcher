@@ -183,3 +183,24 @@ more and then the notification appears with a slide and blur."
 - **Judged (to review):** the curves, the 280 ms colour turn, and the slide's side and distance.
 - **Not yet:** the S24 look and frame cost, and the backdrop blur under the glass (E3).
 
+### owner — S24, 2026-11-13
+
+"there's no blur behind the notification banner (bg blur); there's a weird big shadow to it, which I did not ask you to
+do; the notification banner could be a bit closer to the pill. it seems just a bit too far"
+
+### claude — blur, no shadow, closer, 2026-11-13
+
+- **No shadow:** the blob's shader draws no shadow any more. The glass keeps its 1 dp hairline at 6 % white.
+- **Closer:** the banner rests 20 dp under the pill (it was 28; `translate-y` 52 dp). To keep the break, the pull is
+  softer (the pill 32 % of the gap, the banner 22 %). It still breaks, at about 0.52 s. Measured on the emulator: joined
+  for 33 frames, then parted.
+- **The live blur behind the banner:**
+  - *Engine:* `ComponentHost.onGlass` reports, at every frame they change, where the blobs show glass (each shape whose
+    fill is translucent, and how much: none while the drop is still the pill's colour).
+  - *Shade (`KdlGlass`):* a view that draws nothing, just under the KDL bar. It is kept on that shape: its size set in
+    place, moved by translation. It asks One UI's view blur (`SamsungBlur`) for the design language's glass, a 24 dp
+    blur with 1.2 x saturation and the shape's radius, its strength following the glass amount.
+  - *Elsewhere:* where a phone has no view blur, nothing changes (the other phones' live blur is E3's glass work).
+- **Not verified:** the blur itself. It shows only on the S24 (check with `dumpsys SurfaceFlinger`, "Blur Regions"),
+  and the phone was locked.
+

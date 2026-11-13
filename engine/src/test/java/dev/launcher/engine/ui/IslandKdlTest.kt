@@ -236,7 +236,7 @@ class IslandKdlTest {
         val banner = h.root.labelled("Banner")
         assertEquals(380f * density, banner.length("width"))
         assertEquals(76f * density, banner.length("height"))
-        assertEquals(60f * density, banner.length("translate-y"))
+        assertEquals(52f * density, banner.length("translate-y"))
         assertEquals(Value.Str("#C2121212"), banner.value("fill"))
         assertEquals(Value.Bool.TRUE, h.root.value("elastic"))
         assertEquals(listOf("Mark", "Banner sender", "Banner text", "Banner time"), banner.children.map { (it.value("label") as Value.Str).value })

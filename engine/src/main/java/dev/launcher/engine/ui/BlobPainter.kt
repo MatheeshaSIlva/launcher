@@ -12,14 +12,14 @@ import dev.launcher.engine.expr.Value
  * `blob`'s painter (T-015): the smooth union of its direct `box` children's shapes, each where its layout and motion have
  * it this frame at the radius it shows, joined within `smooth`. Each shape is filled with its own box's `fill` (else the
  * blob's): where two join, their colours blend by the same weights that join them, so a solid shape and a translucent one
- * meet in a gradient across the neck. A translucent shape is glass (the design language): `shadow-float` under it
- * (12 dp down, 32 dp soft, 55 % black) and a 1 dp hairline at 6 % white on its edge. With `elastic`, the shapes stretch,
+ * meet in a gradient across the neck. A translucent shape is glass (the design language): a 1 dp hairline at 6 % white
+ * on its edge, and the host's live blur under it ([ComponentHost.onGlass]); no shadow (owner, 2026-11-13). With `elastic`, the shapes stretch,
  * snap and squash as they part ([BlobElastic]). Its boxes draw no fill of their own ([BoxPainter]); its other children
  * draw over it as usual.
  *
  * Android 13 and later: an AGSL shader (each rounded rectangle's signed distance, a polynomial smooth minimum, the edge
- * antialiased over one pixel of distance) on a rectangle around the shapes and their shadow. Earlier: the shapes drawn
- * plainly in their colours, no neck, no shadow. At most [MAX_SHAPES] shapes (the first ones; the rest draw plainly).
+ * antialiased over one pixel of distance) on a rectangle around the shapes. Earlier: the shapes drawn plainly in their
+ * colours, no neck. At most [MAX_SHAPES] shapes (the first ones; the rest draw plainly).
  */
 class BlobPainter : Painter {
     /** One child's shape in the blob's px: its rectangle, radius and colour (ARGB). */
@@ -42,7 +42,7 @@ class BlobPainter : Painter {
         val k = smooth(node)
         val joined = all.take(MAX_SHAPES)
         if (Build.VERSION.SDK_INT >= 33 && (k > 0f && joined.size > 1 || joined.any { Color.alpha(it.color) < 255 }))
-            drawJoined(canvas, joined, k, node.dp(12.0), node.dp(32.0), node.dp(1.0))
+            drawJoined(canvas, joined, k, node.dp(1.0))
         else joined.forEach { plain(canvas, it) }
         all.drop(MAX_SHAPES).forEach { plain(canvas, it) }
     }
@@ -54,7 +54,7 @@ class BlobPainter : Painter {
     }
 
     @RequiresApi(33)
-    private fun drawJoined(canvas: Canvas, shapes: List<Shape>, k: Float, shadowY: Float, shadowBlur: Float, hair: Float) {
+    private fun drawJoined(canvas: Canvas, shapes: List<Shape>, k: Float, hair: Float) {
         val rs = (shader as? RuntimeShader) ?: RuntimeShader(SKSL).also { shader = it }
         val rects = FloatArray(MAX_SHAPES * 4)
         val radii = FloatArray(MAX_SHAPES)
@@ -70,16 +70,13 @@ class BlobPainter : Painter {
         rs.setFloatUniform("colors", colors)
         rs.setFloatUniform("count", shapes.size.toFloat())
         rs.setFloatUniform("k", k.coerceAtLeast(0.001f))
-        rs.setFloatUniform("shadowY", shadowY)
-        rs.setFloatUniform("shadowBlur", shadowBlur)
         rs.setFloatUniform("hair", hair)
         paint.shader = rs
         paint.color = Color.WHITE
-        // The neck reaches past the shapes by at most k / 4; a glass shape's shadow by its offset and softness.
-        val glass = shapes.any { Color.alpha(it.color) < 255 }
-        val pad = maxOf(k / 4f, if (glass) shadowBlur else 0f) + 1f
+        // The neck reaches past the shapes by at most k / 4.
+        val pad = k / 4f + 1f
         canvas.drawRect(shapes.minOf { it.left } - pad, shapes.minOf { it.top } - pad,
-            shapes.maxOf { it.right } + pad, shapes.maxOf { it.bottom } + pad + if (glass) shadowY else 0f, paint)
+            shapes.maxOf { it.right } + pad, shapes.maxOf { it.bottom } + pad, paint)
         paint.shader = null
     }
 
@@ -87,6 +84,9 @@ class BlobPainter : Painter {
         const val MAX_SHAPES = 4
 
         fun smooth(n: HostNode) = (n.length("smooth") ?: 0f).coerceIn(0f, 512f)
+
+        /** How much a shape of [argb] is glass (0: solid, 1: at a quarter of its light gone or more), as the shader has it. */
+        fun glassOf(argb: Int): Float = ((1f - Color.alpha(argb) / 255f) * 4f).coerceIn(0f, 1f)
 
         private fun color(v: Value): Int? = when (v) {
             is Value.Color -> v.argb
@@ -115,7 +115,7 @@ class BlobPainter : Painter {
         /**
          * The union with colours: each rounded rectangle's signed distance (Inigo Quilez's `sdRoundBox`), joined by the
          * polynomial smooth minimum over k, its colour blended by the same weight; covered where the distance is under half a
-         * pixel. Glass (alpha under 1) adds a soft shadow below (distance of the glass shapes moved down) and a hairline.
+         * pixel. Glass (alpha under 1) adds a hairline.
          * Uniform arrays indexed by the loop's own index only (AGSL, CLAUDE.md).
          */
         internal const val SKSL = """
@@ -124,8 +124,6 @@ uniform float radii[4];
 uniform float4 colors[4];
 uniform float count;
 uniform float k;
-uniform float shadowY;
-uniform float shadowBlur;
 uniform float hair;
 
 float box(float2 p, float4 r, float rad) {
@@ -138,7 +136,6 @@ float box(float2 p, float4 r, float rad) {
 half4 main(float2 p) {
     float d = 1e5;
     float4 col = float4(0.0);
-    float ds = 1e5;
     for (int i = 0; i < 4; i++) {
         if (float(i) >= count) { break; }
         float di = box(p, rects[i], radii[i]);
@@ -148,7 +145,6 @@ half4 main(float2 p) {
             d = mix(di, d, h) - k * h * (1.0 - h);
             col = mix(colors[i], col, h);
         }
-        if (colors[i].a < 0.999) { ds = min(ds, box(p - float2(0.0, shadowY), rects[i], radii[i])); }
     }
     float cover = clamp(0.5 - d, 0.0, 1.0);
     float glass = clamp((1.0 - col.a) * 4.0, 0.0, 1.0);
@@ -157,9 +153,6 @@ half4 main(float2 p) {
     float4 fill = float4(mix(col.rgb, float3(1.0), rim / max(col.a, 0.001)), col.a) ;
     float a = fill.a * cover;
     float4 outp = float4(fill.rgb * a, a);
-    // The shadow under glass, outside the shape: 55 % black, soft over shadowBlur.
-    float sh = 0.55 * (1.0 - smoothstep(-shadowBlur * 0.25, shadowBlur, ds));
-    outp += float4(0.0, 0.0, 0.0, sh) * (1.0 - a);
     return half4(outp);
 }
 """
