@@ -160,8 +160,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     /** It shows itself once its first frame is ready, unless the handover still waits (then the wait's end shows it). */
     private var kdlWaiting = false
-    /** The live blur under the KDL bar's glass, while it is there. */
-    private var kdlGlass: dev.launcher.app.statusbar.KdlGlass? = null
     private var kdlReady = false
 
     private fun makeKdlBar() {
@@ -175,11 +173,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         kdlBar = k
         try {
             root.addView(k.view, root.indexOfChild(bar) + 1, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-            // The live blur under its glass (T-015), just under it.
-            val glass = dev.launcher.app.statusbar.KdlGlass(ctx)
-            root.addView(glass, root.indexOfChild(k.view), FrameLayout.LayoutParams(1, 1))
-            kdlGlass = glass
-            k.onGlass = { g -> glass.update(g) }
         } catch (t: Throwable) {
             AppLog.log("[kdl] not added: ${t.javaClass.simpleName}")
             dropKdlBar()
@@ -189,8 +182,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun dropKdlBar() {
         val k = kdlBar ?: return
         kdlBar = null
-        k.onGlass = null
-        kdlGlass?.let { g -> kdlGlass = null; g.clear(); root.removeView(g) }
         try { root.removeView(k.view) } finally { k.dispose() }
     }
     private val backdrop = BackdropView(ctx)

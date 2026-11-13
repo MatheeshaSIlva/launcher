@@ -832,7 +832,10 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             lines += "joined for $joined of 180 frames (${gapSeen.joinToString("")}); banner $bw px, centred; content ink $ink"
             // Back: it merges into the pill again, nothing left under it.
             s.arrive(null)
-            repeat(120) { s.step() }
+            for (k in 1..120) {
+                s.step()
+                if (k in 3..72 step 3) save("detailed-back-$k.png", Bitmap.createBitmap(s.capture(), (ex - 200 * density).toInt().coerceAtLeast(0), (pillTop - 4 * density).toInt(), minOf((400 * density).toInt(), b.width), (145 * density).toInt()))
+            }
             val after = s.capture()
             if (dark(after, ex.toInt(), bannerRow)) errors += "after it went, the banner is still under the pill"
             if (dark(after, ex.toInt(), gapRow)) errors += "after it went, something hangs under the pill"

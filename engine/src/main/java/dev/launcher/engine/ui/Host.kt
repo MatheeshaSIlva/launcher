@@ -141,9 +141,6 @@ class HostNode internal constructor(
     /** Where its parent last placed it, in whole px (overlay parents realign exits). */
     internal var placedX = 0
     internal var placedY = 0
-    /** The root only: where its Compose layout put it in the view, in whole px (the fraction is on its translation). */
-    internal var viewX = 0
-    internal var viewY = 0
     private var lastPlaceX = 0f
     private var lastPlaceY = 0f
     internal fun release() {
@@ -537,46 +534,14 @@ class ComponentHost(
 
     fun invalidateAll() { epoch.intValue++ }
 
-    /**
-     * Where its blobs show glass (T-015), in the component's px, at every frame they change: the host lays the system's
-     * live blur there, under the component (a blur the engine draws itself would see only the component). Null: nobody asks.
-     */
-    var onGlass: ((List<Glass>) -> Unit)? = null
-    private var lastGlass: List<Glass> = emptyList()
-
-    /** One glass shape: its rectangle and radius, and how much of it is glass (0..1, from its fill's opacity). */
-    data class Glass(val left: Float, val top: Float, val right: Float, val bottom: Float, val radius: Float, val amount: Float)
-
-    private fun reportGlass() {
-        val f = onGlass ?: return
-        val out = ArrayList<Glass>()
-        for (n in recurringNodes) {
-            if (!n.hasElastic || n.hidden.value) continue
-            var ox = 0f; var oy = 0f
-            var p: HostNode? = n
-            while (p != null) {
-                ox += p.motion.drawX + if (p.parent == null) p.viewX else p.placedX
-                oy += p.motion.drawY + if (p.parent == null) p.viewY else p.placedY
-                p = p.parent
-            }
-            for (s in BlobPainter.drawn(n, BlobPainter.shapes(n))) {
-                val amount = BlobPainter.glassOf(s.color)
-                if (amount > 0f && s.right > s.left && s.bottom > s.top)
-                    out += Glass(ox + s.left, oy + s.top, ox + s.right, oy + s.bottom, s.radius, amount * n.motion.alpha)
-            }
-        }
-        if (out != lastGlass) { lastGlass = out; f(out) }
-    }
-
     /** Moves every moving node to [frameTimeNanos] and asks for a frame to show it; false once all have settled. */
     fun step(frameTimeNanos: Long): Boolean {
         refreshMotion(frameTimeNanos)
-        if (moving.isEmpty()) { reportGlass(); return false }
+        if (moving.isEmpty()) return false
         val done = ArrayList<HostNode>()
         moving.removeAll { n -> !n.step(frameTimeNanos).also { n.redraw(); if (!it && n.isLeaving) done += n } }
         done.forEach(::finishExit)
         spread()
-        reportGlass()
         requestFrame()
         return moving.isNotEmpty()
     }

@@ -209,3 +209,37 @@ do; the notification banner could be a bit closer to the pill. it seems just a b
   - a screenshot over the wallpaper shows the grain smoothed under the glass, edges aligned, no shadow.
 - **Not measured yet:** the frame cost on the S24.
 
+### owner — S24, 2026-11-13
+
+"the close animation is broken. the notification banner becomes squared and the text goes off. also, speed up the
+animation to better match the design language. the blur doesn't work either. we'll scrap the blur idea and go back to
+opaque background for the whole theme. revise the theme and also do a little bit of a touch up to make it more consistent
+with the design language." (Then: the theme to revise is the Figma prototype, not the design-language artifact.)
+
+### claude — the close, speed, opaque, 2026-11-13 (D-118)
+
+- **The close, found from frames at exact steps on the emulator (`detailed-back-*`):**
+  - *Square corners:* the banner's radius sprang to 0 at once while its size took 0.95 s. The radius is now a steady
+    16 dp (`radius-lg`); the shape clamps it to half its height while small, so the drop stays round.
+  - *The text going off:* closed, the banner is laid out at no size on the camera, so its left edge moved to the
+    middle in the close's first frame and the content with it (190 dp right). The content now sits in a box held back by
+    half the banner while closed. The banner also clips it as it shrinks.
+- **Faster:**
+  - *The drop:* size 480 ms, sinking 380 ms.
+  - *The elastic:* 4.5 Hz, damping 0.32; the drop's colour turn 160 ms.
+  - *The content:* in on `dur-move` (220 ms) and `ease-out`, `dur-stagger` (24 ms) apart, from 300 ms; out on
+    `dur-state` (120 ms) and `ease-in`.
+  - *Measured on the emulator:* the pill swells by 0.15 s, breaks at about 0.28 s (joined 18 frames), and the content is
+    in by about 0.45 s. The close merges into the pill by about 0.3 s.
+- **Opaque:**
+  - the banner is `surface` (#121212); its mark is a `surface-2` tile at `radius-sm`;
+  - the text is `body-strong` 15 in `ink`, `small` 13 in `ink-2`, and the time `caption` 12 in `muted` (Plex, no longer
+    mono);
+  - the live blur (`KdlGlass`, `ComponentHost.onGlass`) and the blob's glass edge are taken out;
+  - `DEFAULT_LAYOUT_PLAN.md`: opaque surfaces, no glass, no shadows, for the whole default layout.
+- **Tests:**
+  - *JVM:* `IslandKdlTest` (the content's hold-back), and `BlobElasticTest` (the squash counted from the break: the
+    quicker spring squashes while the bud still moves).
+  - *Emulator:* the island proof PASSES, every stage.
+- **Not done:** the Figma prototype's revision (the Figma connector needs the owner to sign in again).
+

@@ -237,14 +237,18 @@ class IslandKdlTest {
         assertEquals(380f * density, banner.length("width"))
         assertEquals(76f * density, banner.length("height"))
         assertEquals(52f * density, banner.length("translate-y"))
-        assertEquals(Value.Str("#C2121212"), banner.value("fill"))
+        assertEquals(Value.Str("#121212"), banner.value("fill"))
         assertEquals(Value.Bool.TRUE, h.root.value("elastic"))
-        assertEquals(listOf("Mark", "Banner sender", "Banner text", "Banner time"), banner.children.map { (it.value("label") as Value.Str).value })
+        val content = banner.labelled("Banner content")
+        assertEquals("the content at the banner's left edge", 0f, content.length("translate-x"))
+        assertEquals(listOf("Mark", "Banner sender", "Banner text", "Banner time"), content.children.map { (it.value("label") as Value.Str).value })
         // Minimal mode: the banner's shape rests at no size at the pill's top (no part in the union), empty.
         val m = host(units = Units(3f, density), arriving = true).root.labelled("Banner")
         assertEquals(0f, m.length("width"))
         assertEquals(0f, m.length("height"))
         assertEquals(12f * density, m.length("translate-y"))
-        assertEquals(listOf<HostNode>(), m.children)
+        // Closed, laid out on the camera: the content is held back by half the banner, where its left edge was.
+        assertEquals(-190f * density, m.labelled("Banner content").length("translate-x"))
+        assertEquals(listOf<HostNode>(), m.labelled("Banner content").children)
     }
 }

@@ -31,7 +31,7 @@ class BlobElastic {
     /**
      * How far the bud shows its own colour (0: the parent's, 1: its own). Joined, it is part of the parent's body and
      * takes its colour (owner, 2026-11-13: "the status pill itself should grow"); parted, it turns to its own over
-     * [TINT_MS] (the solid pill's drop becoming the glass banner), and back as it joins again.
+     * [TINT_MS] (the pill's drop becoming the banner), and back as it joins again.
      */
     var tint = 0f; private set
     private var targetTint = 0f
@@ -95,7 +95,7 @@ class BlobElastic {
      * [shapes] as they draw: the parent's bottom edge down by its stretch, the bud's top edge up by its, areas kept; and,
      * while they are joined across a gap, a neck between them: a third shape from inside the parent's bottom to inside
      * the bud's top, wide as it starts and thinning to a thread as the neck that shows nears the break (the waist of a
-     * dividing cell), its colour halfway between theirs (the union blends it into both: solid to glass).
+     * dividing cell), its colour halfway between theirs (the union blends it into both).
      */
     fun deform(shapes: List<BlobPainter.Shape>): List<BlobPainter.Shape> {
         if (shapes.size < 2) return shapes
@@ -168,10 +168,10 @@ class BlobElastic {
         /** The neck's width as it starts (of the narrower shape) and at the break (of the reach). */
         const val NECK_WIDE = 0.5f
         const val NECK_THIN = 0.3f
-        const val FREQUENCY = 3.0f
-        const val DAMPING = 0.26f
+        const val FREQUENCY = 4.5f
+        const val DAMPING = 0.32f
         /** How long the parted bud takes to turn from the parent's colour to its own (judged). */
-        const val TINT_MS = 280f
+        const val TINT_MS = 160f
         private const val MAX_DT = 1f / 30f
         private const val SUB = 1f / 240f
         private const val EPS = 0.05f

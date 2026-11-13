@@ -198,7 +198,6 @@ class ComponentView(
                     // change moves it on its place transition if it declares one (Codex, 13a-1 review and sign-off).
                     host.root.placed(left, top, 0.5f, 0.5f)
                     p.place(wholeX.toInt(), whole.toInt())
-                    host.root.viewX = wholeX.toInt(); host.root.viewY = whole.toInt()
                 }
             }
         }
@@ -381,11 +380,6 @@ class ComponentView(
     private val onDispose = ArrayList<() -> Unit>()
 
     /** [f] runs once at [dispose] (what the window registered for this component: observers, listeners). */
-    /** Where its blobs show glass, at every frame it changes (see [ComponentHost.onGlass]); on the view's thread. */
-    var onGlass: ((List<ComponentHost.Glass>) -> Unit)?
-        get() = host.onGlass
-        set(v) { host.onGlass = v }
-
     fun addOnDispose(f: () -> Unit) { if (disposed) f() else onDispose += f }
 
     /** Stops everything this component started (sources, tokens, recomposer, lifecycle); once, and safe before attaching. */

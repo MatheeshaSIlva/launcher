@@ -34,7 +34,8 @@ class BlobElasticTest {
         val breakGap = log.zipWithNext().first { (a, b) -> a.third && !b.third }.second.first
         assertTrue("it broke late, the gap well past half of smooth (8 px): $breakGap", breakGap > 16f)
         // Held there: it springs back past its rest (squash) and settles.
-        var least = 0f
+        // The squash counts from the break on (a quick spring squashes while the bud still moves).
+        var least = log.dropWhile { it.third }.minOf { it.second }.coerceAtMost(0f)
         var settled = -1
         for (i in 0 until 240) {
             e.step(pill, bud(72f), 16f, t); t += frame

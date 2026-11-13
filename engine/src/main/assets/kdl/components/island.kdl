@@ -16,7 +16,7 @@
 // while locked). `mode` "detailed" (a banner that grows out of the island) comes with E2.14c-2 and shows as minimal now.
 // The island comes and goes with the bar (E2.14e): an app that goes full screen hides it (a quick fade and shrink), a
 // swipe from the top shows it for a moment (a soft spring back), as the stock bar does.
-component "island" version="0.7.0" {
+component "island" version="0.8.0" {
   props {
     hour24 type=bool default=#true
     title-scroll type=bool default=#true
@@ -96,21 +96,26 @@ component "island" version="0.7.0" {
       }
       // The detailed notification (T-015; owner, 2026-11-13: "it should work exactly like a fluid would"): a second shape
       // that rests at no size inside the pill, 12 dp down (an empty shape takes no part in the union; two on one place
-      // would swell it by a quarter of `smooth`). On an arrival it fills like a droplet: the pill swells as one body,
-      // wider and longer (the size grows from the start, the drop barely moving), then gets heavy and sinks (a curve
-      // that starts slowly and then lets go). The blob is elastic: the pill stretches toward the drop and the neck holds
-      // and thins (tension) until it breaks, about 0.5 s in, the drop three quarters grown; both snap back past their
-      // rest (squash) and settle while the drop grows the rest of the way into the banner. Then its content comes in,
-      // sliding and out of a blur. Going back plays it the other way. The banner is the design language's glass tint
-      // (#121212 at 76 %) with shadow-float and a hairline from the blob; the solid pill and the glass banner blend
-      // across the neck. Text on it: ink and ink-2 only.
-      box width="{(notifications.arriving && @mode == 'detailed') ? 380dp : 0dp}" height="{(notifications.arriving && @mode == 'detailed') ? 76dp : 0dp}" radius="{(notifications.arriving && @mode == 'detailed') ? 26dp : 0dp}" translate-y="{(notifications.arriving && @mode == 'detailed') ? 52dp : 12dp}" fill="#C2121212" transition="size cubic-bezier(0.35, 0.3, 0.45, 1) 950ms, radius spring(0.38, 0.85), place cubic-bezier(0.8, 0, 0.25, 1) 700ms" label="Banner" {
-        box width=(dp)36 height=(dp)36 radius="full" fill="#1FFFFFFF" translate-x=(dp)16 translate-y=(dp)20 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur spring(0.5, 0.88) delay(620ms)" exit="fade blur 120ms" label="Mark" {
+      // would swell it by a quarter of `smooth`). On an arrival it fills like a droplet: the pill swells as one body (the
+      // drop takes the pill's colour while joined), gets heavy and sinks; the blob is elastic, so the pill stretches
+      // toward it and the neck holds and thins until it breaks, about 0.3 s in; both snap back past their rest and
+      // settle while the drop turns to its own colour and grows into the banner. Then its content slides in out of a
+      // blur, 24 ms apart (`dur-move` on `ease-out`, `dur-stagger`). Going back: the content leaves first (`dur-state` on
+      // `ease-in`), clipped by the banner as it shrinks, and the drop merges into the pill. Opaque (owner, 2026-11-13: no
+      // glass, no shadow in the default theme): `surface`, its corners `radius-lg`, held while it shrinks (a radius that
+      // left first squared the card). Text: `body-strong` in `ink`, `small` in `ink-2`, the time `caption` in `muted`;
+      // the mark a `surface-2` tile at `radius-sm`.
+      box width="{(notifications.arriving && @mode == 'detailed') ? 380dp : 0dp}" height="{(notifications.arriving && @mode == 'detailed') ? 76dp : 0dp}" radius=(dp)16 translate-y="{(notifications.arriving && @mode == 'detailed') ? 52dp : 12dp}" fill="#121212" clip=#true transition="size cubic-bezier(0.35, 0.3, 0.45, 1) 480ms, place cubic-bezier(0.8, 0, 0.25, 1) 380ms" label="Banner" {
+        // The content keeps its place while the banner closes: closed, the banner is laid out at no size on the camera, so
+        // its left edge moves to the middle at once; the content is held back by half the banner (it went right otherwise).
+        box width=(dp)380 height=(dp)76 translate-x="{(notifications.arriving && @mode == 'detailed') ? 0dp : -190dp}" label="Banner content" {
+        box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" translate-x=(dp)16 translate-y=(dp)20 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(300ms)" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Mark" {
           text "{notifications.arrival.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" translate-x=(dp)13 translate-y=(dp)8 label="Mark letter"
         }
-        text "{notifications.arrival.name}" font="plex-sans" size=(dp)14 weight=500 color="#F2F2F2" width=(dp)250 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)16 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur spring(0.5, 0.88) delay(650ms)" exit="fade blur 120ms" label="Banner sender"
-        text "{notifications.arrival.text}" font="plex-sans" size=(dp)13 weight=400 color="#C4C4C4" width=(dp)280 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)38 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur spring(0.5, 0.88) delay(690ms)" exit="fade blur 120ms" label="Banner text"
-        text "now" font="jetbrains-mono" size=(dp)11 weight=400 color="#C4C4C4" translate-x=(dp)336 translate-y=(dp)18 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade blur spring(0.5, 0.9) delay(690ms)" exit="fade blur 120ms" label="Banner time"
+        text "{notifications.arrival.name}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" width=(dp)250 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)15 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(324ms)" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Banner sender"
+        text "{notifications.arrival.text}" font="plex-sans" size=(dp)13 weight=400 color="#C4C4C4" width=(dp)284 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)40 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(348ms)" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Banner text"
+        text "now" font="plex-sans" size=(dp)12 weight=400 color="#8A8A8A" translate-x=(dp)340 translate-y=(dp)18 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(348ms)" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Banner time"
+        }
       }
     }
   }

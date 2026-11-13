@@ -13,12 +13,12 @@ commands, settings, the apply moment) keep draft 2's numbers and design.
 | Screen | Surface | Engine needs | Launcher code to reuse |
 | --- | --- | --- | --- |
 | Island, at rest and live (states, volume) | `shade`, its `status` slot | cutout-aware placement; one floating shape everywhere (no docked form, D-098); width and height springs; states from sources; decode text | the KDL bar (slices 6-12), `StatusBarView`'s cutout maths, charging and sharing watchers |
-| Panel grown from the island (03-07) | `shade` | the island morphing into the panel (one rounded shape changing size and radius); finger-driven progress (`sheet` preset); a stack of pages swiped sideways (page 1: time, Controls with four toggles and brightness, the playing song, the two newest notifications without buttons; Today; System) with the row-or-page swipe rule (D-098); Controls and Notifications each growing into a full panel of their own, the full Notifications panel with no pages; a slider; toggles (white when on, a terracotta tap animation); a reusable paging and gesture-arbitration mechanism (E4 and E5 use it too); input and action dispatch; glass | `ControlState`, `Controls` (torch, timer, media volume), `Notifs` (open, cancel, send), `Media` (controls), `LiveBlur` and `MaterialPainter` for the glass |
+| Panel grown from the island (03-07) | `shade` | the island morphing into the panel (one rounded shape changing size and radius); finger-driven progress (`sheet` preset); a stack of pages swiped sideways (page 1: time, Controls with four toggles and brightness, the playing song, the two newest notifications without buttons; Today; System) with the row-or-page swipe rule (D-098); Controls and Notifications each growing into a full panel of their own, the full Notifications panel with no pages; a slider; toggles (white when on, a terracotta tap animation); a reusable paging and gesture-arbitration mechanism (E4 and E5 use it too); input and action dispatch; opaque surfaces | `ControlState`, `Controls` (torch, timer, media volume), `Notifs` (open, cancel, send), `Media` (controls) |
 | Power (10) | `recents` | the recents blob morphing into Power and back; Lock at a tap; Restart and Power off held until the fill completes (a release before that cancels); actions `power.lock`, `power.restart`, `power.off` | the shell service (verify `svc power` as shell uid on the S24 before E5 promises them) |
 | Volume on the island (11, 12) | `shade` | global volume key interception; per-stream volume and output device (`audio`, `media.volume`) | `Controls` reads and sets media volume; `Shade` forwards volume keys while its focus holder is active. New: global interception, other streams, output devices |
-| Home (01) | `home` | the wallpaper edge to edge (no frame, D-098); a clock widget; a glass dock of pinned apps | `home/`, `Wallpaper`, `apps/` |
-| Launcher (11; typing 13, 14) | `drawer` | grows out of the dock with the finger, in glass; most-used; A to Z with a fast index; search above the keyboard; `>` commands | `drawer/`, the app index, `LaunchStats` (the launcher's own frequency and recency, not device-wide usage), IME insets handling |
-| Recents (08, 09) and app swipes | `recents` | the solid gesture pill morphing into a glass blob and back; app icons with names swiped sideways, the selected one centred and ringed in `signal`; the screen behind showing the selected app's picture (on the GPU only, never kept); tap opens, a flick up closes that app, clear all; the power button; up = home, hold = recents, along the bottom = switch | `GestureNav`, the card window, `switcher/` (host, input, physics and the snapshot path kept and re-checked for the new interactions; the drawing rewritten as a KDL `deck` primitive, ENGINE_SPEC's, presented as the strip) |
+| Home (01) | `home` | the wallpaper edge to edge (no frame, D-098); a clock widget; an opaque dock of pinned apps | `home/`, `Wallpaper`, `apps/` |
+| Launcher (11; typing 13, 14) | `drawer` | grows out of the dock with the finger, opaque; most-used; A to Z with a fast index; search above the keyboard; `>` commands | `drawer/`, the app index, `LaunchStats` (the launcher's own frequency and recency, not device-wide usage), IME insets handling |
+| Recents (08, 09) and app swipes | `recents` | the solid gesture pill morphing into an opaque blob and back; app icons with names swiped sideways, the selected one centred and ringed in `signal`; the screen behind showing the selected app's picture (on the GPU only, never kept); tap opens, a flick up closes that app, clear all; the power button; up = home, hold = recents, along the bottom = switch | `GestureNav`, the card window, `switcher/` (host, input, physics and the snapshot path kept and re-checked for the new interactions; the drawing rewritten as a KDL `deck` primitive, ENGINE_SPEC's, presented as the strip) |
 | Settings (7) | the app itself, not a surface | the settings app in the design language; rows from the active packages' props | `settings/` is scrapped (D-092); `SettingsActivity` shell only |
 | Apply moment (17) | all | an engine-owned transition between layouts | `motion/transition` |
 | Lock (draft 1) | not available | none | Android owns it |
@@ -31,14 +31,12 @@ Names follow the spec's Sources and Actions; nothing here creates a competing na
   Power), as engine geometry: paths reusable by any component, bounded shape count and drawing area, GPU path warmed, clipping
   and hit regions defined, behaviour below Android 13 defined. Draft 4 docks nothing, so concave joins are no longer needed
   (D-098); a smooth union (AGSL) only if a later design asks for it.
-- **Glass.** The design language's plain frost (blur 24 dp, saturation 1.2, tint 76 %, no refraction, `shadow-float` under it)
-  as a material on those shapes, through `MaterialPainter` and the live blur the launcher already proved (`LiveBlur`,
-  Samsung's view blur, the shade's own picture where Android does not blur); the opaque surface colour where blur is
-  unavailable. On what floats over content only: the panel, recents, Power, the launcher, the dock. The island and the pill
-  are solid black, never glass. Cards inside glass are translucent fills, never glass on glass; text on glass is `ink` and
-  `ink-2` only. A morphing glass shape keeps a stable backing allocation (a layer resized every frame churns the GPU cache,
-  Part 2 of `CLAUDE.md`) and live glass never sits under a clip or a fading alpha (`LAUNCHER_AUDIT.md`): the chosen blur
-  route is verified for both.
+- **Opaque surfaces, no glass, no shadows** (owner, 2026-11-13, D-118: "we'll scrap the blur idea and go back to opaque
+  background for the whole theme"). What floats over content (the panel, recents, Power, the launcher, the dock, banners) is
+  an opaque surface from the design language: `surface` for panels, sheets and banners, `surface-2` for the controls and
+  cards inside them, separated by surface steps and never by a shadow. The island and the pill are solid black. Text is
+  `ink`, `ink-2` and `muted` by role. No live blur and no backdrop picture are drawn for the default layout (the engine's
+  glass tiers stay for creators' layouts).
 - **`signal` (terracotta), one meaning** (D-098): live or selected only: levels, the current page, the selected app, the
   power-off hold, the playing song's button, the next event, a nearly full disk, the notification count, the clock's minutes,
   and the tap animation on a control tile (active tiles themselves stay white). Each step's inventory lists its uses.
@@ -77,10 +75,10 @@ StatusBarView as the engine's parity test (D-092), and the island against golden
 | E2.15 | Fixtures and goldens: the old bar's parity suite and the island's | `diff.py` on both |
 | E2.16 | Hot reload keeping state | reload test |
 | E2.17 | Exit on the S24: the island over apps and home, pulls and idle | at most 1 dropped frame in 100 at 120 Hz, idle under 1 ms |
-| E3 | The panel: the island morphing into it, the `sheet` pull, summon and presentation config, the paging and gesture-arbitration mechanism, sections growing into their own panels and back, toggles with the tap animation, brightness, media, notifications with open, dismiss and actions, Today, System; glass; volume on the island; a second fill of one panel proving mixing; banners kept until the island carries calls and alarms | the shade's inventory as a checklist of functions; the swipe rule's tests (direction decided after 12 dp; sideways from a notification row moves and clears it; sideways elsewhere changes page; a pull that drifts sideways still closes; the full Notifications panel never pages; a section opened and closed mid-motion reverses); S24 frame bound with glass on; the owner |
+| E3 | The panel: the island morphing into it, the `sheet` pull, summon and presentation config, the paging and gesture-arbitration mechanism, sections growing into their own panels and back, toggles with the tap animation, brightness, media, notifications with open, dismiss and actions, Today, System; opaque surfaces; volume on the island; a second fill of one panel proving mixing; banners kept until the island carries calls and alarms | the shade's inventory as a checklist of functions; the swipe rule's tests (direction decided after 12 dp; sideways from a notification row moves and clears it; sideways elsewhere changes page; a pull that drifts sideways still closes; the full Notifications panel never pages; a section opened and closed mid-motion reverses); S24 frame bound; the owner |
 | Settings track | the settings app in the design language; prop metadata and persistence; built-in packages' rows; engine pages | the owner on the S24, after E3 (D-096) |
-| E4 | Home (no frame), clock, glass dock, the launcher rising from the dock in glass, A to Z, search over the keyboard, `>` commands; the apply moment | the owner; S24 frame bound on the launcher rise with glass on |
-| E5 | Recents and Power: the solid pill morphing into the glass blob and back, the strip (the KDL `deck` primitive), the selected app's picture behind, tap to open, flick up to close, clear all, Power with Lock and its holds; the proven host, input and physics kept and re-checked for these interactions, the switcher's drawing replaced on the nav thread, the thread question answered by measurement (spec step 5) | the handover pill to blob and back, interrupted mid-way, with no doubled pill and no step in brightness (frames at exact steps); the S24 frame bound with glass on, as the launcher's switcher today |
+| E4 | Home (no frame), clock, opaque dock, the launcher rising from the dock, A to Z, search over the keyboard, `>` commands; the apply moment | the owner; S24 frame bound on the launcher rise |
+| E5 | Recents and Power: the solid pill morphing into the opaque blob and back, the strip (the KDL `deck` primitive), the selected app's picture behind, tap to open, flick up to close, clear all, Power with Lock and its holds; the proven host, input and physics kept and re-checked for these interactions, the switcher's drawing replaced on the nav thread, the thread question answered by measurement (spec step 5) | the handover pill to blob and back, interrupted mid-way, with no doubled pill and no step in brightness (frames at exact steps); the S24 frame bound, as the launcher's switcher today |
 
 Each slice about 200 changed production lines; a slice that grows is split, not stretched.
 
@@ -103,9 +101,6 @@ the settings app after E3 (D-096). Still open:
 
 ## 5. Risks
 
-- Glass over a live app (recents, the panel over apps) costs SurfaceFlinger and the GPU on every frame of a pull; the S24's
-  composite is already 6-8 ms with the App Switcher open (Part 2 of `CLAUDE.md`). Measured in E3 against the frame bound;
-  the fallback is the opaque surface colour, which the design language already names.
 - Banners: hiding the stock shade suppresses heads-up and full-screen intents. The existing banners stay active, for every shade
   fill, until the island proves equivalent handling of calls and alarms; only then does the island replace them.
 - The island over apps sits where the status bar was: an app that hides the status bar (video) hides the island too (as the bar

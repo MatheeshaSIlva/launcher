@@ -1293,3 +1293,15 @@ notification appears with a slide and a blur. Built (T-015):
   layer held at one size through the motion). The content enters with `fade slide blur`, 620 to 690 ms in.
 Judged by the lead (to review): the curves, the 280 ms colour turn, the slide's side and distances. Not yet: the backdrop
 blur under the glass (E3).
+
+## D-118: The default theme is opaque: no glass, no blur, no shadows (2026-11-13, owner) [owner]
+
+The owner, after the banner's live blur on the S24: "we'll scrap the blur idea and go back to opaque background for the
+whole theme". Every surface of the default layout that floats over content (the island's banner, the panel, recents,
+Power, the launcher, the dock) is an opaque design-language surface (`surface`, with `surface-2` inside), separated by
+surface steps, with no shadow. `DEFAULT_LAYOUT_PLAN.md` says so; the engine's glass tiers stay for creators' layouts.
+Taken out: the island's live blur (`KdlGlass`, the engine's glass report) and the blob's glass edge. The design-language
+artifact itself is unchanged (the owner meant the Figma prototype, which is revised separately). Also on the island: its
+motion faster, toward the design language (the swell, the break and the content in about 0.45 s; content on `dur-move`
+and `ease-out` with `dur-stagger`, out on `dur-state` and `ease-in`), its banner's corners `radius-lg` and held while it
+closes, its type `body-strong`, `small` and `caption` in `ink`, `ink-2` and `muted`.
