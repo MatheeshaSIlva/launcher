@@ -150,3 +150,36 @@ mitosis transition."
   - JVM `BlobElasticTest`: stretch, a late break, squash, rest, colours kept, the neck.
 - **Not yet:** the backdrop blur behind the banner (Samsung's view blur under it, E3's glass work). The glass is the
   tint without blur for now; the frost comes next.
+
+### owner — 2026-11-13
+
+"I changed my mind about the way the notification banner separates. the banner should not grow first, then separate. it
+should work exactly like a fluid would. adding more to a droplet will grow it until tension breaks and separates into two
+droplets. the status pill itself should grow until it becomes too heavy, break into two and the banner part grows a bit
+more and then the notification appears with a slide and blur."
+
+### claude — the fluid drop, 2026-11-13 (D-117)
+
+- **The drop is the pill while joined (`BlobElastic.tint`):** joined, the second shape takes the pill's solid colour, so
+  the union reads as the pill itself swelling. After the break it turns to the glass tint over 280 ms (and back when it
+  joins again). This also keeps the glass shadow away until the drop has parted (it showed under the pill before).
+- **The timing (`island.kdl` 0.7.0):**
+  - *Size:* grows from the first frame on `cubic-bezier(0.35, 0.3, 0.45, 1) 950ms`.
+  - *Sinking:* on `cubic-bezier(0.8, 0, 0.25, 1) 700ms`, barely moving at first.
+  - *The sequence:* the pill swells wider and longer, gets heavy, sinks; the neck holds and thins, and it breaks at about
+    0.45 s with the drop three quarters grown. Both squash, and the drop grows the rest of the way into the banner.
+- **`slide` and `blur` presence effects (engine):**
+  - `slide` comes in from the start side by 16 pt.
+  - `blur` comes out of an 8 pt radius (`RenderEffect` on the node's RenderNode, Android 12 and later), its layer held
+    at one size through the motion.
+  - The mark, the sender, the text and "now" enter with `fade slide blur` ("now" without the slide) at 620 to 690 ms,
+    and leave with `fade blur 120ms`.
+- **Measured on the emulator:**
+  - *The island proof's `detailed` stage:* joined for 26 frames (about 260 to 470 ms), then parted. The banner ends at
+    998 px, centred; the content shows; nothing is left under the pill after it goes. Every other stage still passes.
+  - *Frames:* `tools/shots/det2/fluid.png`, 50 ms apart.
+  - *JVM:* `NodeMotionTest` (slide and blur arrive and end sharp on their place), `MotionGrammarTest`, and
+    `BlobElasticTest` (joined, the drop takes the pill's colour; parted, its own).
+- **Judged (to review):** the curves, the 280 ms colour turn, and the slide's side and distance.
+- **Not yet:** the S24 look and frame cost, and the backdrop blur under the glass (E3).
+

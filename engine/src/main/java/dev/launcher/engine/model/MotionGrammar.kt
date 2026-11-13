@@ -106,7 +106,7 @@ object MotionGrammar {
             }
             if (presence) {
                 // `delay(Nms)` is a presence word (T-013); any other use of "delay" is not supported yet.
-                val later = Regex("(?<![A-Za-z0-9_.-])(?:slide|blur|delay)(?![A-Za-z0-9_.-])").find(DELAY.replace(inspected) { " ".repeat(it.value.length) })
+                val later = Regex("(?<![A-Za-z0-9_.-])delay(?![A-Za-z0-9_.-])").find(DELAY.replace(inspected) { " ".repeat(it.value.length) })
                 if (later != null) {
                     error("motion-not-supported", "'${later.value}' is not yet supported in E2 motion", later.range.first, later.value.length)
                     return false
@@ -177,7 +177,7 @@ object MotionGrammar {
                 }
             }
             if (selected.isEmpty()) {
-                error("motion-no-effect", "Presence needs at least one of fade, grow, scale or rise", rest?.range?.first ?: text.length, rest?.value?.length ?: 0)
+                error("motion-no-effect", "Presence needs at least one of fade, grow, scale, rise, slide or blur", rest?.range?.first ?: text.length, rest?.value?.length ?: 0)
                 return null
             }
             val curve = rest?.let { curve(text.substring(it.range.first), it.range.first) }

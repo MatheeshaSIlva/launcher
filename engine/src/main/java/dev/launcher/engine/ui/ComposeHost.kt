@@ -177,7 +177,7 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
         val frame = n.frame
         val m = n.motion
         // The envelope of a moving size: one size for the whole motion (grown only at an interruption), never cut.
-        val e = if (m.envelope == null && n.outset() == 0f && n.rollReach() == null && n.childReach == null) null else n.drawBounds()
+        val e = if (m.envelope == null && n.outset() == 0f && m.blur == 0f && m.blurReach == 0f && n.rollReach() == null && n.childReach == null) null else n.drawBounds()
         val left = e?.let { floor(it[0]).toInt() } ?: 0
         val top = e?.let { floor(it[1]).toInt() } ?: 0
         if (e == null) frame.setPosition(0, 0, w, h) else frame.setPosition(left, top, ceil(e[2]).toInt(), ceil(e[3]).toInt())
@@ -185,6 +185,7 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
         frame.pivotY = h / 2f - top
         frame.translationX = m.drawX; frame.translationY = m.drawY
         frame.alpha = m.alpha; frame.scaleX = m.scale; frame.scaleY = m.scale
+        applyBlur(frame, m.blur)
         frame.setUseCompositingLayer(n.value("layer") == Value.Bool.TRUE, null)
         frame.clipToBounds = false
         own.clipToBounds = false

@@ -107,13 +107,15 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     val x = Track(); val y = Track()
     val width = Track(); val height = Track()
     val alpha = Track(); val scale = Track()
-    private val tracks = listOf(x, y, width, height, alpha, scale)
+    /** Its blur radius (px; 0 at rest): only `enter blur` and `exit blur` move it (T-015). */
+    val blur = Track()
+    private val tracks = listOf(x, y, width, height, alpha, scale, blur)
     private var layoutX = Float.NaN
     private var layoutY = Float.NaN
     private var layoutW = 0f
     private var layoutH = 0f
     /** What its bindings asked at its last placement: where a revival turns back to. */
-    private val targets = FloatArray(6)
+    private val targets = FloatArray(7)
     /** On its way out (`exit`): no longer laid out, shown at its last place until it settles. */
     var leaving = false; private set
     /** The tracks its exit drives while it leaves. */
@@ -156,7 +158,7 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
             y.shift(layoutY + layoutH * ay - (placeY + h * ay), place, now)
         }
         layoutX = placeX; layoutY = placeY; layoutW = w; layoutH = h
-        floatArrayOf(translateX, translateY, w, h, opacity, scale).copyInto(targets)
+        floatArrayOf(translateX, translateY, w, h, opacity, scale, 0f).copyInto(targets)
         // While it leaves, the tracks its exit drives keep the exit's values; the others follow as before (Codex: the root,
         // placed while it leaves, had its fade cancelled).
         fun Track.follow(to: Float, c: Curve?) { if (this !in exiting) to(to, c, now) }
@@ -165,6 +167,7 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         width.follow(w, size); height.follow(h, size)
         alpha.follow(opacity, curve(MotionChannel.OPACITY))
         this.scale.follow(scale, curve(MotionChannel.SCALE))
+        blur.follow(0f, null)
         return moving
     }
 
@@ -180,6 +183,7 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         var busy = false
         for (t in listOf(x, y, width, height)) busy = t.step(now, PIXEL) or busy
         busy = alpha.step(now, 1f / 255) or busy
+        busy = blur.step(now, BLUR_EPSILON) or busy
         busy = scale.step(now, PIXEL / max(1f, max(width.target, height.target))) or busy
         roll?.let { busy = it.step(now, rollEpsilon) or busy }
         busy = radius.step(now, PIXEL / 4) or busy
@@ -207,7 +211,8 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
 
     /**
      * Arrives (after its first placement): each effect starts from its `enter` value. [rise] is how far below its place a
-     * rising node starts, [alongX] whether its parent lays it out along x (a row: `grow` is its width), else its height.
+     * rising node starts (and how far before it a sliding one, [BLUR_FROM] of it how blurred a blurring one), [alongX]
+     * whether its parent lays it out along x (a row: `grow` is its width), else its height.
      */
     fun enter(rise: Float, alongX: Boolean, now: Long = context.now()): Boolean {
         val p = spec.enter ?: return false
@@ -250,6 +255,8 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         PresenceEffect.SCALE -> scale to SCALE_FROM
         PresenceEffect.RISE -> y to targets[1] + rise
         PresenceEffect.GROW -> if (alongX) width to 0f else height to 0f
+        PresenceEffect.SLIDE -> x to targets[0] - rise * SLIDE_OF_RISE
+        PresenceEffect.BLUR -> blur to rise * BLUR_FROM
     }
 
     /** Every track on its target at once (reduced motion turned on mid-motion). */
@@ -262,5 +269,10 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         const val PIXEL = 0.5f
         /** Where `scale` arrives from and leaves to (judged: a small step, as the design language's sheets arrive). */
         const val SCALE_FROM = 0.85f
+        /** `slide` comes from its start side by twice the rise (16 pt), `blur` out of a radius of the rise (8 pt). Judged. */
+        const val SLIDE_OF_RISE = 2f
+        const val BLUR_FROM = 1f
+        /** A blur under a tenth of a pixel is none. */
+        const val BLUR_EPSILON = 0.1f
     }
 }

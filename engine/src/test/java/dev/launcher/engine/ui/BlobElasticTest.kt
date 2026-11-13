@@ -67,10 +67,25 @@ class BlobElasticTest {
         var t = 0L
         val a = pill.copy(color = 0xFF000000.toInt()); val b = bud(20f).copy(color = 0xC2121212.toInt())
         e.step(a, b, 16f, t); t += frame
-        repeat(30) { e.step(a, bud(44f).copy(color = b.color), 16f, t); t += frame }
-        val d = e.deform(listOf(a, bud(44f).copy(color = b.color)))
+        // Parted (56 px apart): each keeps its own colour once the bud has turned.
+        repeat(60) { e.step(a, bud(88f).copy(color = b.color), 16f, t); t += frame }
+        val d = e.deform(listOf(a, bud(88f).copy(color = b.color)))
         assertEquals(a.color, d[0].color)
         assertEquals(b.color, d[1].color)
+    }
+
+    @Test fun joinedTheBudIsThePillsColourAndTurnsToItsOwnAfterTheBreak() {
+        val e = BlobElastic()
+        var t = 0L
+        val black = 0xFF000000.toInt(); val glass = 0xC2121212.toInt()
+        val a = pill.copy(color = black)
+        e.step(a, bud(20f).copy(color = glass), 16f, t); t += frame
+        assertEquals("joined: one body, the pill's colour", black, e.deform(listOf(a, bud(20f).copy(color = glass)))[1].color)
+        e.step(a, bud(80f).copy(color = glass), 16f, t); t += frame
+        val mid = e.deform(listOf(a, bud(80f).copy(color = glass)))[1].color
+        assertTrue("just parted: on its way, not there yet", mid != glass)
+        repeat(40) { e.step(a, bud(80f).copy(color = glass), 16f, t); t += frame }
+        assertEquals("parted: its own", glass, e.deform(listOf(a, bud(80f).copy(color = glass)))[1].color)
     }
 
     @Test fun withNoBudNothingMoves() {

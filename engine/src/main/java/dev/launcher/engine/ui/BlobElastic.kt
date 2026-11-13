@@ -28,9 +28,17 @@ class BlobElastic {
     /** Where each edge is drawn to now (its pull while joined, else 0). */
     private var targetParent = 0f
     private var targetBud = 0f
+    /**
+     * How far the bud shows its own colour (0: the parent's, 1: its own). Joined, it is part of the parent's body and
+     * takes its colour (owner, 2026-11-13: "the status pill itself should grow"); parted, it turns to its own over
+     * [TINT_MS] (the solid pill's drop becoming the glass banner), and back as it joins again.
+     */
+    var tint = 0f; private set
+    private var targetTint = 0f
 
-    /** At rest: no stretch, no speed, nothing pulling. */
-    val atRest get() = abs(parent - targetParent) < EPS && abs(bud - targetBud) < EPS && abs(vParent) < EPS_V && abs(vBud) < EPS_V
+    /** At rest: no stretch, no speed, nothing pulling, the colour where it goes. */
+    val atRest get() = abs(parent - targetParent) < EPS && abs(bud - targetBud) < EPS && abs(vParent) < EPS_V && abs(vBud) < EPS_V &&
+        tint == targetTint
 
     /**
      * The shapes now ([top]: the parent, [below]: the bud, null when it has no size) and the union's reach ([smooth]);
@@ -49,6 +57,9 @@ class BlobElastic {
             if (!joined && shown < reach * 0.5f) joined = true
             else if (joined && shown > reach) joined = false
         }
+        targetTint = if (!gap.isNaN() && !joined) 1f else 0f
+        val step = if (dt > 0f) dt * 1000f / TINT_MS else 0f
+        tint = if (tint < targetTint) min(targetTint, tint + step) else max(targetTint, tint - step)
         val pulled = joined && gap > 0f
         targetParent = if (pulled) PULL_PARENT * gap else 0f
         targetBud = if (pulled) PULL_BUD * gap else 0f
@@ -87,12 +98,12 @@ class BlobElastic {
      * dividing cell), its colour halfway between theirs (the union blends it into both: solid to glass).
      */
     fun deform(shapes: List<BlobPainter.Shape>): List<BlobPainter.Shape> {
-        if (shapes.size < 2 || (parent == 0f && bud == 0f && !(joined && gap > 0f))) return shapes
+        if (shapes.size < 2) return shapes
         val out = shapes.toMutableList()
         val p = stretch(shapes[0], parent, down = true)
         // The bud is held back as one piece by the neck (a wide card's whole top edge lifting reads as a lid); after the
         // break it drops past its place and comes back, squashed and stretched by its own speed.
-        val b = held(shapes[1], bud)
+        val b = held(shapes[1], bud).let { it.copy(color = lerp(p.color, it.color, smooth(tint))) }
         out[0] = p
         out[1] = b
         if (joined && gap > 0f && !gap.isNaN() && reach > 0f) {
@@ -118,10 +129,17 @@ class BlobElastic {
     }
 
     /** Halfway between two ARGB colours, channel by channel. */
-    private fun mix(a: Int, b: Int): Int {
-        fun ch(s: Int) = (((a ushr s) and 255) + ((b ushr s) and 255)) / 2
+    private fun mix(a: Int, b: Int): Int = lerp(a, b, 0.5f)
+
+    /** [a] toward [b] by [k], channel by channel. */
+    private fun lerp(a: Int, b: Int, k: Float): Int {
+        if (k <= 0f) return a
+        if (k >= 1f) return b
+        fun ch(s: Int) = Math.round(((a ushr s) and 255) * (1f - k) + ((b ushr s) and 255) * k)
         return (ch(24) shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
     }
+
+    private fun smooth(k: Float) = k * k * (3f - 2f * k)
 
     private fun stretch(s: BlobPainter.Shape, e: Float, down: Boolean): BlobPainter.Shape {
         val h = s.bottom - s.top
@@ -152,6 +170,8 @@ class BlobElastic {
         const val NECK_THIN = 0.3f
         const val FREQUENCY = 3.0f
         const val DAMPING = 0.26f
+        /** How long the parted bud takes to turn from the parent's colour to its own (judged). */
+        const val TINT_MS = 280f
         private const val MAX_DT = 1f / 30f
         private const val SUB = 1f / 240f
         private const val EPS = 0.05f

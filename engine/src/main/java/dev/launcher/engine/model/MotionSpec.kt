@@ -9,7 +9,8 @@ sealed class CurveSpec {
     data class Literal(val curve: Curve) : CurveSpec()
 }
 data class Transition(val channels: Set<MotionChannel>, val curve: CurveSpec?, val span: Span)
-enum class PresenceEffect { FADE, GROW, SCALE, RISE }
+/** SLIDE: in from its start side by a short step; BLUR: out of a blur (T-015). */
+enum class PresenceEffect { FADE, GROW, SCALE, RISE, SLIDE, BLUR }
 /** [delayMs]: how long it holds its start before moving (`delay(80ms)`, 0..[MAX_DELAY_MS]; T-013). */
 data class Presence(val effects: Set<PresenceEffect>, val curve: CurveSpec?, val span: Span, val delayMs: Float = 0f) {
     companion object { const val MAX_DELAY_MS = 1000f }

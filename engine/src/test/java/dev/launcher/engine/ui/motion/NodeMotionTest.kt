@@ -5,6 +5,8 @@ import dev.launcher.engine.kdl.Span
 import dev.launcher.engine.model.CurveSpec
 import dev.launcher.engine.model.MotionChannel
 import dev.launcher.engine.model.NodeMotionSpec
+import dev.launcher.engine.model.Presence
+import dev.launcher.engine.model.PresenceEffect
 import dev.launcher.engine.model.Transition
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -178,5 +180,20 @@ class NodeMotionTest {
             assertTrue(m.update(0f, b, 0f, 0f, 10f, 10f, 1f, 1f, 0))
             assertEquals("shown at $a", a, b + m.y.value, 1e-4f)
         }
+    }
+
+    @Test fun slideAndBlurArriveFromTheStartSideOutOfABlurAndEndSharpOnTheirPlace() {
+        val enter = Presence(setOf(PresenceEffect.SLIDE, PresenceEffect.BLUR), CurveSpec.Literal(spring), span)
+        val m = NodeMotion(NodeMotionSpec(emptyList(), null, enter = enter), MotionContext(now = { 0L }))
+        m.update(0f, 0f, 5f, 0f, 10f, 10f, 1f, 1f, 0)
+        assertEquals("sharp at rest", 0f, m.blur.value, 0f)
+        assertTrue(m.enter(rise = 8f, alongX = false, now = 0))
+        assertEquals("before its place by twice the rise", 5f - 16f, m.x.value, 0f)
+        assertEquals("blurred by the rise", 8f, m.blur.value, 0f)
+        val blur = m.run(m.blur, 0)
+        assertTrue("the blur only clears", blur.zipWithNext().all { (a, b) -> maxOf(0f, b.second) <= maxOf(0f, a.second) + 1e-3f })
+        assertEquals(0f, blur.last().second, 0f)
+        assertEquals("on its place", 5f, m.x.value, 0f)
+        assertFalse(m.moving)
     }
 }

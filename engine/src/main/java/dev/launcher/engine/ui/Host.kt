@@ -67,6 +67,10 @@ class Motion internal constructor(private val apply: (Motion) -> Unit, private v
     /** Set by the node's own placement and motion, whose drawing applies them: no callback, no frame request. */
     internal fun alphaOf(v: Float) { shownAlpha = v }
     internal fun scaleOf(v: Float) { shownScale = v }
+    /** Its blur radius now (px; 0: none): an `enter blur` or `exit blur` (T-015). */
+    internal var blur = 0f
+    /** The most it blurs over its blur's whole motion: its layer keeps one size meanwhile (a new size a frame is a new image). */
+    internal var blurReach = 0f
     internal fun place(x: Float, y: Float) { offsetX = x; offsetY = y; applyTranslation() }
     /** The node's place contribution: its declared translate and, while it moves, where layout had it before (13a-1). */
     internal var placeX = 0f
@@ -314,7 +318,7 @@ class HostNode internal constructor(
         if (shownState() != before) redraw()
     }
 
-    private fun shownState() = listOf(motion.placeX, motion.placeY, motion.alpha, motion.scale, motion.drawnWidth, motion.drawnHeight)
+    private fun shownState() = listOf(motion.placeX, motion.placeY, motion.alpha, motion.scale, motion.drawnWidth, motion.drawnHeight, motion.blur)
 
     /** New in its parent (not its component's first build): it arrives with its `enter`. */
     internal var arriving = false
@@ -342,6 +346,8 @@ class HostNode internal constructor(
         val m = nodeMotion ?: return
         motion.placeX = m.x.value; motion.placeY = m.y.value
         motion.alphaOf(m.alpha.value.coerceIn(0f, 1f)); motion.scaleOf(m.scale.value)
+        motion.blur = m.blur.value.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f
+        motion.blurReach = if (m.blur.moving) maxOf(m.blur.high, m.blur.low, 0f) else 0f
         val sized = m.width.moving || m.height.moving
         motion.drawnWidth = if (sized) m.width.value.coerceAtLeast(0f) else Float.NaN
         motion.drawnHeight = if (sized) m.height.value.coerceAtLeast(0f) else Float.NaN
@@ -366,7 +372,8 @@ class HostNode internal constructor(
      */
     internal fun drawBounds(): FloatArray {
         val e = motion.envelope ?: floatArrayOf(0f, 0f, exactWidth, exactHeight)
-        val o = outset()
+        // A blur reaches past what it blurs by about twice its radius: the layer must hold it (T-015).
+        val o = outset() + maxOf(motion.blur, motion.blurReach) * 2f
         val r = rollReach()
         val own = if (r == null) { if (o == 0f) e else floatArrayOf(e[0] - o, e[1] - o, e[2] + o, e[3] + o) }
             else floatArrayOf(e[0] - o - r[0], e[1] - o - r[1], e[2] + o + r[0], e[3] + o + r[1])
@@ -393,6 +400,7 @@ class HostNode internal constructor(
     val motion = Motion({ m ->
         frame.translationX = m.drawX; frame.translationY = m.drawY
         frame.alpha = m.alpha; frame.scaleX = m.scale; frame.scaleY = m.scale
+        applyBlur(frame, m.blur)
     }, requestFrame)
 
     /** An attribute's current value (an argument under its schema name: text's `content`, icon's `symbol`). */
@@ -833,4 +841,11 @@ class ComponentHost(
         is KdlValue.Bool -> Value.Bool.of(v.value)
         is KdlValue.Null -> Value.Null
     }
+}
+
+/** [radius] px of blur on [node] (Android 12 and later; none earlier, and none under [NodeMotion.BLUR_EPSILON]). */
+internal fun applyBlur(node: android.graphics.RenderNode, radius: Float) {
+    if (android.os.Build.VERSION.SDK_INT < 31) return
+    node.setRenderEffect(if (radius < dev.launcher.engine.ui.motion.NodeMotion.BLUR_EPSILON) null
+        else android.graphics.RenderEffect.createBlurEffect(radius, radius, android.graphics.Shader.TileMode.DECAL))
 }

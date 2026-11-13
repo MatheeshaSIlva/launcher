@@ -327,8 +327,8 @@ class MotionGrammarTest {
             }
         }
         for (key in listOf("enter", "exit")) for (curve in curves) {
-            val p = (if (key == "enter") spec("fade-up grow scale $curve", key).enter
-                else spec("fade-up grow scale $curve", key).exit)!!
+            val p = (if (key == "enter") spec("fade-up grow scale slide blur $curve", key).enter
+                else spec("fade-up grow scale slide blur $curve", key).exit)!!
             assertEquals(PresenceEffect.entries.toSet(), p.effects)
             assertEquals(if (curve.isEmpty()) null else spec("place $curve").transitions.single().curve, p.curve)
         }
@@ -375,8 +375,7 @@ class MotionGrammarTest {
             Triple("opacity", "motion-presence-channel", "opacity"),
             Triple("value", "motion-presence-channel", "value"),
             Triple("fade value", "motion-presence-channel", "value"),
-            Triple("slide", "motion-not-supported", "slide"),
-            Triple("fade blur", "motion-not-supported", "blur"),
+            Triple("slide-up", "motion-unknown-effect", "slide-up"),
             Triple("rotate", "motion-not-supported", "rotate"),
             Triple("keyframes", "motion-not-supported", "keyframes"),
             Triple("stagger", "motion-not-supported", "stagger"),

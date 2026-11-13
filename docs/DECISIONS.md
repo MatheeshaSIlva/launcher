@@ -1279,3 +1279,17 @@ Codex's weekly usage is spent (protocol §8). The owner chose to merge E2.14b in
 for the lead to carry on alone, each step checked the same way (tests, emulator proofs, the full gate, the owner on the
 S24). Codex reviews all of it when it is back; what it finds is fixed then. Codex's sub-tasks of T-013 (presence delay,
 the size motion's layout) were done by the lead.
+
+## D-117: The detailed notification parts as a fluid drop (2026-11-13, owner) [owner + lead]
+
+The owner, after the first mitosis on the S24: the banner must not grow and then separate; "it should work exactly like a
+fluid would": the pill itself grows until it is too heavy, breaks into two, the banner part grows a bit more, then the
+notification appears with a slide and a blur. Built (T-015):
+- `blob elastic`: while joined, the drop is part of the pill's body and takes its colour; after the break it turns to its
+  own (the glass tint) over 280 ms, and back when it joins again. The stretch, neck, late break and squash stay.
+- `island.kdl` 0.7.0: the drop's size grows from the start on `cubic-bezier(0.35, 0.3, 0.45, 1) 950ms` while it sinks on
+  `cubic-bezier(0.8, 0, 0.25, 1) 700ms` (slow, then letting go): it breaks at about 0.45 s, three quarters grown.
+- Presence effects `slide` (in from the start side, 16 pt) and `blur` (out of an 8 pt radius, Android 12 and later; a
+  layer held at one size through the motion). The content enters with `fade slide blur`, 620 to 690 ms in.
+Judged by the lead (to review): the curves, the 280 ms colour turn, the slide's side and distances. Not yet: the backdrop
+blur under the glass (E3).

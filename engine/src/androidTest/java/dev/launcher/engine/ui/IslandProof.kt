@@ -812,7 +812,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
                 val g = dark(b, ex.toInt(), gapRow)
                 if (g) joined++
                 gapSeen += if (g) 1 else 0
-                if (k in listOf(4, 10, 16, 24, 32, 40, 48, 56, 64, 72, 90, 120) || k in 34..60 step 2) save("detailed-$k.png", Bitmap.createBitmap(b, (ex - 200 * density).toInt().coerceAtLeast(0), (pillTop - 4 * density).toInt(), minOf((400 * density).toInt(), b.width), (130 * density).toInt()))
+                if (k in 6..150 step 6) save("detailed-$k.png", Bitmap.createBitmap(b, (ex - 200 * density).toInt().coerceAtLeast(0), (pillTop - 4 * density).toInt(), minOf((400 * density).toInt(), b.width), (145 * density).toInt()))
             }
             val b = s.capture()
             // While the banner grows from the pill's top the island swells; at rest the pill is 132 dp again.
