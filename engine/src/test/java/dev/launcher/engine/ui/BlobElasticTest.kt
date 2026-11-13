@@ -61,6 +61,7 @@ class BlobElasticTest {
         assertTrue("the bud is held back: its top moves up", d[1].top < 40f)
         assertTrue("and its bottom too (held as one piece)", d[1].bottom < 116f)
         assertTrue("a neck joins them while joined across the gap", d.size == 3)
+        assertTrue("marked as the neck (not drawn plainly below Android 13)", d[2].neck && !d[0].neck && !d[1].neck)
     }
 
     @Test fun deformKeepsEachShapesColour() {
@@ -87,6 +88,21 @@ class BlobElasticTest {
         assertTrue("just parted: on its way, not there yet", mid != glass)
         repeat(40) { e.step(a, bud(80f).copy(color = glass), 16f, t); t += frame }
         assertEquals("parted: its own", glass, e.deform(listOf(a, bud(80f).copy(color = glass)))[1].color)
+    }
+
+    /** Codex, T-015 review: each smooth minimum may swell the union by k / 4, chained over the shapes. */
+    @Test fun theDrawnAreaCoversTheUnionsSwellForEveryShapeCount() {
+        // Coincident shapes, the worst case: the chained smooth minimum's distance at x px outside them.
+        fun outside(n: Int, k: Float, x: Float): Float {
+            var d = x
+            repeat(n - 1) { val h = (0.5f + 0.5f * (x - d) / k).coerceIn(0f, 1f); d = x * (1 - h) + d * h - k * h * (1 - h) }
+            return d
+        }
+        for (n in 2..BlobPainter.MAX_SHAPES) {
+            val k = 16f
+            val pad = BlobPainter.pad(n, k)
+            assertTrue("$n shapes: nothing drawn at the pad's edge (${outside(n, k, pad)})", outside(n, k, pad) >= 0.5f)
+        }
     }
 
     @Test fun withNoBudNothingMoves() {

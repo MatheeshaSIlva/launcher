@@ -71,6 +71,8 @@ class Motion internal constructor(private val apply: (Motion) -> Unit, private v
     internal var blur = 0f
     /** The most it blurs over its blur's whole motion: its layer keeps one size meanwhile (a new size a frame is a new image). */
     internal var blurReach = 0f
+    /** The blur its RenderNode was last given (NaN: none yet): a new effect only when it changes (Codex, T-015 review). */
+    internal var appliedBlur = Float.NaN
     internal fun place(x: Float, y: Float) { offsetX = x; offsetY = y; applyTranslation() }
     /** The node's place contribution: its declared translate and, while it moves, where layout had it before (13a-1). */
     internal var placeX = 0f
@@ -400,7 +402,7 @@ class HostNode internal constructor(
     val motion = Motion({ m ->
         frame.translationX = m.drawX; frame.translationY = m.drawY
         frame.alpha = m.alpha; frame.scaleX = m.scale; frame.scaleY = m.scale
-        applyBlur(frame, m.blur)
+        applyBlur(frame, m)
     }, requestFrame)
 
     /** An attribute's current value (an argument under its schema name: text's `content`, icon's `symbol`). */
@@ -557,7 +559,8 @@ class ComponentHost(
         before.forEach { it.childReach = null }
         val now = LinkedHashSet<HostNode>()
         for (n in moving) {
-            if (n.rollReach() == null) continue
+            // A rolling text's glyphs, or a blur's halo (Codex, T-015 review): a layer on the way holds them.
+            if (n.rollReach() == null && n.motion.blurReach == 0f) continue
             var c = n
             var b = n.drawBounds()
             while (true) {
@@ -843,9 +846,15 @@ class ComponentHost(
     }
 }
 
-/** [radius] px of blur on [node] (Android 12 and later; none earlier, and none under [NodeMotion.BLUR_EPSILON]). */
-internal fun applyBlur(node: android.graphics.RenderNode, radius: Float) {
+/**
+ * [m]'s blur on [node] (Android 12 and later; none earlier, and none under [NodeMotion.BLUR_EPSILON]), set only when it
+ * changed since the last time.
+ */
+internal fun applyBlur(node: android.graphics.RenderNode, m: Motion) {
     if (android.os.Build.VERSION.SDK_INT < 31) return
-    node.setRenderEffect(if (radius < dev.launcher.engine.ui.motion.NodeMotion.BLUR_EPSILON) null
+    val radius = if (m.blur < dev.launcher.engine.ui.motion.NodeMotion.BLUR_EPSILON) 0f else m.blur
+    if (radius == m.appliedBlur) return
+    m.appliedBlur = radius
+    node.setRenderEffect(if (radius == 0f) null
         else android.graphics.RenderEffect.createBlurEffect(radius, radius, android.graphics.Shader.TileMode.DECAL))
 }

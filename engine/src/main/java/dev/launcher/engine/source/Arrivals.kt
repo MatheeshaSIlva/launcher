@@ -62,7 +62,10 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
         } else current?.let { c ->
             val still = list.firstOrNull { it.key == c.id }
             current = if (still == null) { clear?.invoke(); clear = null; null }
-                else c.copy(others = list.count { it.alerts && it.key != c.id })
+                // What it shows is read again each time (locked: the app's name, no text; Codex, T-015 review), its
+                // time kept.
+                else c.copy(name = still.name.take(MAX_NAME), others = list.count { it.alerts && it.key != c.id },
+                    text = still.text.take(MAX_TEXT), app = still.app.take(MAX_NAME))
         }
         if (current != before) changed()
     }

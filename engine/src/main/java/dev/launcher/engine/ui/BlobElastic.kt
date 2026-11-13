@@ -115,7 +115,7 @@ class BlobElastic {
             val bottom = b.top + min(b.bottom - b.top, reach * 2f) * 0.35f
             if (w > 0f && bottom > top) {
                 val cx = (p.left + p.right) / 2f
-                out.add(2, BlobPainter.Shape(cx - w / 2f, top, cx + w / 2f, bottom, min(w, bottom - top) / 2f, mix(p.color, b.color)))
+                out.add(2, BlobPainter.Shape(cx - w / 2f, top, cx + w / 2f, bottom, min(w, bottom - top) / 2f, mix(p.color, b.color), neck = true))
             }
         }
         return out

@@ -21,8 +21,26 @@ class KdlArrivals(private val ctx: Context, private val handler: Handler) {
     private val own = ctx.packageName
     private val changed: () -> Unit = ::read
 
+    /**
+     * The phone locking or unlocking reads the list again, so what shows is redacted at once (Codex, T-015 review). The
+     * screen going off counts as locked (the lock itself may come later); the screen coming on asks the keyguard.
+     */
+    private var screenOff = false
+    private val lockWatch = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, i: android.content.Intent) {
+            screenOff = i.action == android.content.Intent.ACTION_SCREEN_OFF
+            read()
+        }
+    }
+
     init {
         Notifs.addListener(handler, changed)
+        val f = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_SCREEN_OFF); addAction(android.content.Intent.ACTION_SCREEN_ON)
+            addAction(android.content.Intent.ACTION_USER_PRESENT)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(lockWatch, f, null, handler, Context.RECEIVER_NOT_EXPORTED)
+        else ctx.registerReceiver(lockWatch, f, null, handler)
         read()
     }
 
@@ -32,7 +50,7 @@ class KdlArrivals(private val ctx: Context, private val handler: Handler) {
             (i.pkg != own || i.sbn.notification.channelId == dev.launcher.app.Badges.TEST_CHANNEL)
 
     private fun read() {
-        val locked = try { keyguard.isKeyguardLocked } catch (_: Throwable) { true }
+        val locked = screenOff || try { keyguard.isKeyguardLocked } catch (_: Throwable) { true }
         tracker.update(Notifs.items.map { i ->
             val app = AppInfo.labelIfRead(i.pkg) ?: ""
             val name = if (locked) app else (i.title ?: i.text)?.toString().orEmpty()
@@ -44,6 +62,7 @@ class KdlArrivals(private val ctx: Context, private val handler: Handler) {
 
     fun dispose() {
         Notifs.removeListener(changed)
+        try { ctx.unregisterReceiver(lockWatch) } catch (_: Throwable) { }
         tracker.dispose()
     }
 }

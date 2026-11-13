@@ -32,6 +32,18 @@ class ArrivalsTest {
         assertEquals(2, changes)
     }
 
+    /** Codex, T-015 review: locked mid-arrival, what shows is redacted at once, and the arrival keeps its time. */
+    @Test fun lockedWhileShowingTheNameAndTextAreRedactedAndTheTimerKept() {
+        t.update(emptyList())
+        t.update(listOf(Candidate("b", 2, true, false, "Kasun", "See you at 7", "Messages")))
+        assertEquals("See you at 7", t.arrival()!!.text)
+        // The same notification, read again while locked: the app's name, no text.
+        t.update(listOf(Candidate("b", 2, true, false, "Messages", "", "Messages")))
+        assertEquals(NotifArrival("b", "Messages", 0, "", "Messages"), t.arrival())
+        assertEquals("the arrival's time kept", 1, timers.size)
+        assertEquals(0, cancelled)
+    }
+
     @Test fun silentOnesAndUnchangedOnesDoNotArrive() {
         t.update(emptyList())
         t.update(listOf(c("quiet", 1, alerts = false)))

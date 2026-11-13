@@ -21,11 +21,16 @@ import dev.launcher.engine.expr.Value
  * colours, no neck. At most [MAX_SHAPES] shapes (the first ones; the rest draw plainly).
  */
 class BlobPainter : Painter {
-    /** One child's shape in the blob's px: its rectangle, radius and colour (ARGB). */
-    data class Shape(val left: Float, val top: Float, val right: Float, val bottom: Float, val radius: Float, val color: Int = 0)
+    /** One child's shape in the blob's px: its rectangle, radius and colour (ARGB); [neck]: the elastic's bridge (joins only). */
+    data class Shape(val left: Float, val top: Float, val right: Float, val bottom: Float, val radius: Float, val color: Int = 0,
+        val neck: Boolean = false)
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var shader: Any? = null
+    /** The shader's uniforms, reused (Codex, T-015 review: three arrays a repaint). */
+    private val rects = FloatArray(MAX_SHAPES * 4)
+    private val radii = FloatArray(MAX_SHAPES)
+    private val colors = FloatArray(MAX_SHAPES * 4)
 
     override fun key(node: HostNode): Any {
         val raw = shapes(node)
@@ -42,8 +47,9 @@ class BlobPainter : Painter {
         val joined = all.take(MAX_SHAPES)
         if (Build.VERSION.SDK_INT >= 33 && k > 0f && joined.size > 1)
             drawJoined(canvas, joined, k)
-        else joined.forEach { plain(canvas, it) }
-        all.drop(MAX_SHAPES).forEach { plain(canvas, it) }
+        // Plainly, the elastic's neck is not drawn (it would be a bridge that vanishes at the break: Codex, T-015 review).
+        else joined.forEach { if (!it.neck) plain(canvas, it) }
+        all.drop(MAX_SHAPES).forEach { if (!it.neck) plain(canvas, it) }
     }
 
     private fun plain(canvas: Canvas, s: Shape) {
@@ -55,9 +61,7 @@ class BlobPainter : Painter {
     @RequiresApi(33)
     private fun drawJoined(canvas: Canvas, shapes: List<Shape>, k: Float) {
         val rs = (shader as? RuntimeShader) ?: RuntimeShader(SKSL).also { shader = it }
-        val rects = FloatArray(MAX_SHAPES * 4)
-        val radii = FloatArray(MAX_SHAPES)
-        val colors = FloatArray(MAX_SHAPES * 4)
+        rects.fill(0f); radii.fill(0f); colors.fill(0f)
         shapes.forEachIndexed { i, s ->
             rects[i * 4] = s.left; rects[i * 4 + 1] = s.top; rects[i * 4 + 2] = s.right; rects[i * 4 + 3] = s.bottom
             radii[i] = s.radius
@@ -71,8 +75,9 @@ class BlobPainter : Painter {
         rs.setFloatUniform("k", k.coerceAtLeast(0.001f))
         paint.shader = rs
         paint.color = Color.WHITE
-        // The neck reaches past the shapes by at most k / 4.
-        val pad = k / 4f + 1f
+        // Each smooth minimum swells the union past its shapes by at most k / 4, and they chain: (n - 1) k / 4 (Codex,
+        // T-015 review: three coincident shapes reached 5.6 px past them at k 16, beyond a single k / 4).
+        val pad = pad(shapes.size, k)
         canvas.drawRect(shapes.minOf { it.left } - pad, shapes.minOf { it.top } - pad,
             shapes.maxOf { it.right } + pad, shapes.maxOf { it.bottom } + pad, paint)
         paint.shader = null
@@ -80,6 +85,9 @@ class BlobPainter : Painter {
 
     companion object {
         const val MAX_SHAPES = 4
+
+        /** How far past its [count] shapes a union over [k] may draw (px): (n - 1) k / 4, and a pixel. */
+        fun pad(count: Int, k: Float) = (count - 1).coerceAtLeast(1) * k / 4f + 1f
 
         fun smooth(n: HostNode) = (n.length("smooth") ?: 0f).coerceIn(0f, 512f)
 
@@ -105,7 +113,9 @@ class BlobPainter : Painter {
         }
 
         /** What draws: [raw] as the elastic has them now (stretched, squashed), or as they are. */
-        fun drawn(n: HostNode, raw: List<Shape>): List<Shape> = if (n.hasElastic) n.elastic.deform(raw) else raw
+        fun drawn(n: HostNode, raw: List<Shape>): List<Shape> =
+            // With motion reduced the elastic is not stepped: the shapes as they are, each in its own colour (Codex).
+            if (n.hasElastic && !n.motionContext.reduced()) n.elastic.deform(raw) else raw
 
         /**
          * The union with colours: each rounded rectangle's signed distance (Inigo Quilez's `sdRoundBox`), joined by the

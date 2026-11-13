@@ -185,7 +185,7 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
         frame.pivotY = h / 2f - top
         frame.translationX = m.drawX; frame.translationY = m.drawY
         frame.alpha = m.alpha; frame.scaleX = m.scale; frame.scaleY = m.scale
-        applyBlur(frame, m.blur)
+        applyBlur(frame, m)
         frame.setUseCompositingLayer(n.value("layer") == Value.Bool.TRUE, null)
         frame.clipToBounds = false
         own.clipToBounds = false
