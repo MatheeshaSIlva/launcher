@@ -355,3 +355,10 @@ codex: OBJECT — fix the group-prefix false positive in `055f8e2`.
   the sender's name, which shows no prefix. The last failed before the fix.
 - **Test option bounds:** `TEST_NOTIFY`'s messages stay unbounded, as a DUMP-protected test hook (adb only).
 
+### codex — sign-off, 2026-11-14
+
+codex: AGREE — checked `a7bbaba`; the group-prefix objection is resolved by code inspection.
+- **Judged:** `Conversations.of` decides the group prefix from the conversation title and sender, independently of subtitle. `Notifs.read` calls it only with nonempty messages.
+- **Tests inspected:** `ConversationTest` covers direct chat, group prefix, and matching-subtitle false positives with both absent and sender-matching conversation titles.
+- No files changed. Tests, full gate, emulator and S24 checks were not rerun.
+
