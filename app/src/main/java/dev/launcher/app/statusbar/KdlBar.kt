@@ -29,6 +29,19 @@ object KdlBar {
     /** The island's notification modes (T-015): the user's choice once settings come from packages; adb until then. */
     val MODES = setOf("minimal", "detailed")
     fun mode(ctx: Context): String = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(MODE, null)?.takeIf { it in MODES } ?: "minimal"
+
+    /**
+     * The mode the island shows on Android [sdk]: the detailed banner needs Android 13's shader for its liquid parting, so
+     * below 13 it is the minimal pill (owner, 2026-11-14, D-120: "13+ only").
+     */
+    fun shownMode(mode: String, sdk: Int = android.os.Build.VERSION.SDK_INT): String =
+        if (mode == "detailed" && sdk < DETAILED_MIN_SDK) "minimal" else mode
+    const val DETAILED_MIN_SDK = 33
+
+    /** The detailed banner's width (dp) on a screen [widthDp] wide: 380, or the screen less 16 dp each side. */
+    fun bannerWidth(widthDp: Float): Float = minOf(BANNER_DP, widthDp - 2 * GUTTER_DP).coerceAtLeast(0f)
+    private const val BANNER_DP = 380f
+    private const val GUTTER_DP = 16f
     /** False (nothing changed) for a mode that is not one of [MODES]. */
     fun setMode(ctx: Context, mode: String): Boolean {
         if (mode !in MODES) return false
@@ -107,7 +120,7 @@ object KdlBar {
         }
         // E2.14e: the island comes and goes with the bar (an app full screen hides it; a swipe from the top shows it).
         if (island) {
-            view.setProp("mode", Value.Str(mode(ctx)))
+            view.setProp("mode", Value.Str(shownMode(mode(ctx))))
             view.setProp("shown", Value.Bool.of(bar.shownForApps))
             bar.onShown = { s -> if (!view.isDisposed) view.setProp("shown", Value.Bool.of(s)) }
             view.addOnDispose { bar.onShown = null }
@@ -124,6 +137,8 @@ object KdlBar {
             if (view.isDisposed) return
             view.setUnit(dev.launcher.app.design.Scale.unitPx(ctx))
             view.centreY = bar.timeBaseline - TextPainter.CAP * bar.timeSize / 2f
+            if (island && bar.width > 0) view.setProp("banner-width",
+                Value.Num(bannerWidth(bar.width / dev.launcher.app.design.Scale.unitPx(ctx)).toDouble(), "dp"))
             view.deriveAgain()
         }
         val layout = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }

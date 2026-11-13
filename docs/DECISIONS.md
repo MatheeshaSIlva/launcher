@@ -1321,3 +1321,18 @@ automatically used when required", choosing option A (the lead's skill runs it) 
   review and sign-off; the full check once and the S24's frame stats; the owner's S24 sign-off; the merge into `engine`.
 - The status pill is the first milestone: its design doc is written from what is built.
 - Open: whether the shade is one milestone or one per section (asked at E3's start).
+
+## D-120: The island's milestone: detailed on Android 13+, privacy in the app until E3 (2026-11-14, owner + lead) [owner + lead]
+
+From the status pill's design review (`docs/designs/reviews/status-pill/goldfish_review_report.md`):
+- **Owner:** the detailed banner is in this milestone on Android 13 and later only. Below 13 the detailed mode shows the
+  minimal pill, because the liquid parting needs Android 13's shader (`KdlBar.shownMode`).
+- **Owner:** the lock-screen privacy rule stays in the app for this milestone and moves into the engine in E3, when the
+  shade needs the same rule. Creators' islands before E3 are not covered (none exist).
+- **Lead, decided without the owner:**
+  - Locked, the island follows Android's rules: nothing for a `VISIBILITY_SECRET` notification, or with the phone's
+    lock-screen notifications off (`KdlArrivals.lockedShows`); otherwise the app's name only, as before.
+  - The banner fits the screen: 380 dp or the screen less 16 dp each side (`KdlBar.bannerWidth`; 379 dp on the S24).
+  - The elastic's numbers stay constants in `BlobElastic.kt`, a deviation from the spec's Precision rule until they are
+    exposed as attributes (no later than E5, when the pill morphs into recents).
+  - Accessibility comes with input dispatch (E3); its announcements will follow the lock rule.

@@ -56,14 +56,29 @@ class KdlArrivals(private val ctx: Context, private val handler: Handler) {
         val locked = screenOff || try { keyguard.isKeyguardLocked } catch (_: Throwable) { true }
         if (locked && !wasLocked) onLocked?.invoke()
         wasLocked = locked
+        // The phone's own setting: notifications on the lock screen at all (unreadable: shown, still redacted).
+        val showOnLock = !locked || try {
+            android.provider.Settings.Secure.getInt(ctx.contentResolver, "lock_screen_show_notifications", 1) != 0
+        } catch (_: Throwable) { true }
         tracker.update(Notifs.items.map { i ->
             val app = AppInfo.labelIfRead(i.pkg) ?: ""
             val name = if (locked) app else (i.title ?: i.text)?.toString().orEmpty()
             // While locked the banner says only which app (owner: "hide the name when locked"; its text too).
             // A conversation: its newest message alone (the shade keeps the last few, one a line).
             val text = if (locked || i.title == null) "" else (i.latest ?: i.text)?.toString().orEmpty()
-            ArrivalTracker.Candidate(i.key, i.postTime, alerts(i), i.onlyAlertOnce, name, text, app)
+            ArrivalTracker.Candidate(i.key, i.postTime, alerts(i) && (!locked || lockedShows(i.lockVisibility, showOnLock)),
+                i.onlyAlertOnce, name, text, app)
         })
+    }
+
+    companion object {
+        /**
+         * Whether a notification arrives on the island while the phone is locked (D-120): not when the phone's setting
+         * shows no notifications on the lock screen, nor one its app marks secret (`VISIBILITY_SECRET`: not even its
+         * name). Every other one shows its app's name only.
+         */
+        fun lockedShows(lockVisibility: Int, showOnLock: Boolean): Boolean =
+            showOnLock && lockVisibility != android.app.Notification.VISIBILITY_SECRET
     }
 
     fun dispose() {

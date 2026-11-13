@@ -34,7 +34,7 @@ class IslandKdlTest {
         val env = object : Env {
             override fun state(name: String) = Value.Null
             override fun prop(name: String) = when (name) {
-                "hour24" -> Value.Bool.of(hour24); "title-scroll" -> Value.Bool.TRUE; "mode" -> Value.Str(mode); "shown" -> Value.Bool.TRUE
+                "hour24" -> Value.Bool.of(hour24); "title-scroll" -> Value.Bool.TRUE; "mode" -> Value.Str(mode); "shown" -> Value.Bool.TRUE; "banner-width" -> Value.Num(380.0, "dp")
                 else -> Value.Null
             }
             override fun token(key: String) = Value.Null
@@ -68,7 +68,7 @@ class IslandKdlTest {
         val c = component()
         assertEquals("island", c.name)
         assertEquals(listOf("device", "time", "battery", "media", "notifications"), c.uses.sources.map { it.name })
-        assertEquals(listOf("hour24", "title-scroll", "mode", "shown"), c.props.map { it.name })
+        assertEquals(listOf("hour24", "title-scroll", "mode", "banner-width", "shown"), c.props.map { it.name })
         // The island is a blob (T-015): the pill and the banner's shape, filled as one, the pill on the camera.
         val island = host().root
         assertEquals("blob", island.view.primitive)

@@ -9,6 +9,30 @@ import java.io.File
 
 /** T-012: the developer switch shows only allowlisted components, each with a file that ships. */
 class KdlBarChoiceTest {
+    /** D-120: the detailed banner needs Android 13; below it the minimal pill shows. */
+    @Test fun detailedModeIsMinimalBelowAndroid13() {
+        assertEquals("minimal", KdlBar.shownMode("detailed", 32))
+        assertEquals("detailed", KdlBar.shownMode("detailed", 33))
+        assertEquals("minimal", KdlBar.shownMode("minimal", 35))
+    }
+
+    /** The banner fits the screen: 380 dp, or the screen less 16 dp each side. */
+    @Test fun bannerFitsNarrowScreens() {
+        assertEquals(380f, KdlBar.bannerWidth(430f), 0f)
+        assertEquals("the S24 (411 dp): 16 dp each side", 379f, KdlBar.bannerWidth(411f), 0f)
+        assertEquals(328f, KdlBar.bannerWidth(360f), 0f)
+        assertEquals(0f, KdlBar.bannerWidth(20f), 0f)
+    }
+
+    /** D-120: locked, Android's own rules: nothing for a secret notification or with the lock screen's notifications off. */
+    @Test fun lockedArrivalsFollowAndroidsRules() {
+        val arrivals = dev.launcher.app.statusbar.KdlArrivals
+        assertTrue(arrivals.lockedShows(android.app.Notification.VISIBILITY_PRIVATE, true))
+        assertTrue(arrivals.lockedShows(android.app.Notification.VISIBILITY_PUBLIC, true))
+        assertEquals(false, arrivals.lockedShows(android.app.Notification.VISIBILITY_SECRET, true))
+        assertEquals(false, arrivals.lockedShows(android.app.Notification.VISIBILITY_PRIVATE, false))
+    }
+
     @Test fun noNameIsTheStatusBar() {
         assertEquals(KdlBar.STATUS_BAR, KdlBar.choose(null))
         assertEquals(KdlBar.STATUS_BAR, KdlBar.choose(""))
