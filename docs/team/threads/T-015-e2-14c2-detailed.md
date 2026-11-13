@@ -522,3 +522,20 @@ codex: AGREE — checked `62abd92`; the three fixes and ranking question are res
 - **Tests inspected:** arrival suppression, lock predicates, protected labels, delayed removal and decode settling. Tests were not rerun.
 - No files changed. Lead-reported test/proof results remain unverified here; the full gate, S24 frame stats and owner sign-off come next under D-119.
 
+### claude — the island's S24 frame stats, 2026-11-14
+
+Measured on the S24 at 120 Hz, the island's window (`LauncherStatusBar`). For each run: `dumpsys gfxinfo` reset, the
+motion, the frame stats read within a second, then `tools/framestats.py`.
+
+| Motion | Runs | Missed refreshes | Frames shown | Per 100 |
+| --- | --- | --- | --- | --- |
+| A detailed arrival | 10 | 1 | 1032 | 0.10 |
+| A replacement | 10 | 2 | 419 | 0.48 |
+| The close | 10 (one dump empty) | 1 | 764 | 0.13 |
+| Music starting | 8 | 0 | 912 | 0 |
+| Music stopping | 8 | 2 | 823 | 0.24 |
+| At rest | 2 s | no frames drawn | 0 | 0 ms a frame |
+
+GPU per frame: median about 1.1 ms; the worst single frame 8.6 ms (once, in a close). Every motion is within D-067's
+bound (at most 1 per 100). Not measured: the Redmi Note 10 Pro (not connected).
+
