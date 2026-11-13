@@ -72,16 +72,26 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
             seq++
             val replacing = current != null
             current = NotifArrival(newest.key, oneLine(newest.name, MAX_NAME), list.count { it.alerts && it.key != newest.key },
-                oneLine(newest.text, MAX_TEXT), newest.app.take(MAX_NAME), seq, replacing)
+                oneLine(newest.text, MAX_TEXT), cut(newest.app, MAX_NAME), seq, replacing)
             clear?.invoke()
             clear = after(HOLD_MS) { clear = null; current = null; changed() }
         } else current?.let { c ->
             val still = list.firstOrNull { it.key == c.id }
-            current = if (still == null) { clear?.invoke(); clear = null; null }
+            // Gone, or no longer allowed to show (a secret one, or lock-screen notifications off, as the phone locks:
+            // Codex, the island's milestone): it ends at once.
+            current = if (still == null || !still.alerts) { clear?.invoke(); clear = null; null }
                 // What it shows is read again each time (locked: the app's name, no text; Codex, T-015 review), its
                 // time kept.
-                else c.copy(name = oneLine(still.name, MAX_NAME), others = list.count { it.alerts && it.key != c.id },
-                    text = oneLine(still.text, MAX_TEXT), app = still.app.take(MAX_NAME))
+                else {
+                    val name = oneLine(still.name, MAX_NAME)
+                    val text = oneLine(still.text, MAX_TEXT)
+                    // What it shows changed (locked or unlocked, an update of it): another message, so the banner plays
+                    // the old one leaving and this one arriving, not a swap in one frame (the milestone's review).
+                    val again = name != c.name || text != c.text
+                    if (again) seq++
+                    c.copy(name = name, others = list.count { it.alerts && it.key != c.id }, text = text,
+                        app = cut(still.app, MAX_NAME), seq = if (again) seq else c.seq, replaced = c.replaced || again)
+                }
         }
         if (current != before) changed()
     }
@@ -105,7 +115,14 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
          * [s] as one line of at most [max] characters: every run of white space, line breaks included, one space (an
          * island's line drew several messages' breaks as nothing, the words run together: owner, 2026-11-14).
          */
-        fun oneLine(s: String, max: Int): String = s.take(max * 2).replace(SPACES, " ").trim().take(max)
+        fun oneLine(s: String, max: Int): String = cut(s.take(max * 2).replace(SPACES, " ").trim(), max)
+
+        /** [s] to at most [max] characters, never between the two halves of one (an emoji cut in two: the review). */
+        fun cut(s: String, max: Int): String {
+            if (s.length <= max) return s
+            val end = if (max > 0 && Character.isHighSurrogate(s[max - 1])) max - 1 else max
+            return s.substring(0, end)
+        }
         private val SPACES = Regex("\\s+")
     }
 }

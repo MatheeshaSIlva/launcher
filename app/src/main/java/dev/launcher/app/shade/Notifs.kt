@@ -164,7 +164,8 @@ object Notifs {
         // in a group), their last message as the text, their photo as the picture.
         val messages = messagesOf(x)
         if (messages.isNotEmpty()) {
-            val c = Conversations.of(title, sub, x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE), messages.map { it.first to it.second })
+            val c = Conversations.of(title, sub, x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE), messages.map { it.first to it.second },
+                if (x.containsKey(Notification.EXTRA_IS_GROUP_CONVERSATION)) x.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION) else null)
             title = c.title; sub = c.sub; text = c.text; latest = c.latest
             messages.last().third?.let { avatar = it }
         }

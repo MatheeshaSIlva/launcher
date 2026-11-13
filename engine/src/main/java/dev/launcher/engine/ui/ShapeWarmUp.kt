@@ -60,7 +60,8 @@ object ShapeWarmUp {
                     rs.setFloatUniform("count", 2f)
                     rs.setFloatUniform("k", 12f)
                     rs.setFloatUniform("colors", floatArrayOf(0f, 0f, 0f, 1f, 0.07f, 0.07f, 0.07f, 0.76f) + FloatArray(8))
-                    c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), Paint().apply { shader = rs })
+                    // With BlobPainter's own flags, so the GPU pipeline warmed is the one it draws with (review).
+                    c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = rs })
                 }
                 node.endRecording()
                 renderer = HardwareRenderer()

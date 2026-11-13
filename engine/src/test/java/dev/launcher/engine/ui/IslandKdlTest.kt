@@ -228,6 +228,21 @@ class IslandKdlTest {
         assertEquals(Value.Str("#8A8A8A"), others.value("color"))
     }
 
+    /**
+     * The nodes the app protects at a lock (`KdlBar.PRIVATE`: "Banner content", "Notification") are in the island: a
+     * rename would silently drop the protection (Codex, the island's milestone).
+     */
+    @Test fun theLockProtectedNodesExist() {
+        val h = host(arriving = true, mode = "detailed")
+        fun all(n: HostNode): List<HostNode> = listOf(n) + n.children.flatMap(::all)
+        val labels = all(h.root).mapNotNull { (it.value("label") as? Value.Str)?.value }
+        assertTrue("Banner content" in labels)
+        assertTrue("Notification" in labels)
+        // Under them: the banner's sender and text, and the minimal pill's sender.
+        val minimal = host(arriving = true).pill.labelled("Notification")
+        assertTrue(all(minimal).any { it.value("label") == Value.Str("Sender") })
+    }
+
     /** Codex, T-015 sign-off: reduced motion turned on redraws the elastic blob at once, at rest. */
     @Test fun reducedMotionRedrawsTheElasticBlobAtRest() {
         val h = host(arriving = true, mode = "detailed")

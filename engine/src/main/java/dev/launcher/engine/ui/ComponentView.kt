@@ -252,8 +252,8 @@ class ComponentView(
         set(v) { if (!disposed && v != centre.floatValue) { centre.floatValue = v; applied() } }
 
     /** A prop's value from the window (the clock's 12/24 h, the bar's tone), bindings reading it evaluated again; nothing once disposed (a delivery queued before can still come). */
-    /** Every exit still running ends now ([ComponentHost.endExits]); on the view's thread. */
-    fun endExits() { if (!disposed) host.endExits() }
+    /** Every node exits as usual again ([ComponentHost.restoreExits]); on the view's thread. */
+    fun restoreExits() { if (!disposed) host.restoreExits() }
 
     /** [ComponentHost.cutExits] under every node labelled [label]; on the view's thread. */
     fun cutExits(label: String) {

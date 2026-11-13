@@ -22,6 +22,8 @@ class BlobElastic {
     private var vParent = 0f
     private var vBud = 0f
     var joined = false; private set
+    /** Joined while still moving from a break: easing onto the pull, not snapping to it. */
+    private var catching = false
     private var last = Long.MIN_VALUE
     private var gap = Float.NaN
     private var reach = 0f
@@ -54,7 +56,7 @@ class BlobElastic {
             val shown = gap - parent - bud
             // Joined while the neck shows (the shapes overlap or sit within the union's reach); once apart, they join
             // again only when they come back within it.
-            if (!joined && shown < reach * 0.5f) joined = true
+            if (!joined && shown < reach * 0.5f) { joined = true; catching = abs(parent) > CATCH_EPS || abs(bud) > CATCH_EPS }
             else if (joined && shown > reach) joined = false
         }
         targetTint = if (!gap.isNaN() && !joined) 1f else 0f
@@ -66,10 +68,18 @@ class BlobElastic {
         if (pulled) {
             // Joined, the two are one body: the stretch follows the pull at once (a spring lagging behind it let the neck
             // break before anything had stretched: measured on the emulator, under 1 px). Its speed is kept for the snap.
-            if (dt > 0f) { vParent = (targetParent - parent) / dt; vBud = (targetBud - bud) / dt }
-            parent = targetParent
-            bud = targetBud
-        } else integrate(dt, targetParent, targetBud)
+            if (catching) {
+                // Just joined (again): the stretch eases onto the pull from where it is, on a stiff spring, so a squash
+                // still running does not jump to the pull in one frame (review: a jump as the banner merged back).
+                integrate(dt, targetParent, targetBud, CATCH_FREQUENCY, 1f)
+                if (abs(parent - targetParent) < CATCH_EPS && abs(bud - targetBud) < CATCH_EPS) catching = false
+            } else {
+                // A step a fraction of a millisecond long would give a wild speed (review): kept from the last real one.
+                if (dt >= MIN_DT) { vParent = (targetParent - parent) / dt; vBud = (targetBud - bud) / dt }
+                parent = targetParent
+                bud = targetBud
+            }
+        } else integrate(dt, targetParent, targetBud, FREQUENCY, DAMPING)
         return !atRest
     }
 
@@ -77,15 +87,15 @@ class BlobElastic {
     fun reset() {
         parent = 0f; bud = 0f; vParent = 0f; vBud = 0f
         targetParent = 0f; targetBud = 0f
-        joined = false; gap = Float.NaN; last = Long.MIN_VALUE
+        joined = false; catching = false; gap = Float.NaN; last = Long.MIN_VALUE
         tint = 1f; targetTint = 1f
     }
 
-    private fun integrate(dt: Float, toParent: Float, toBud: Float) {
+    private fun integrate(dt: Float, toParent: Float, toBud: Float, frequency: Float, damping: Float) {
         if (dt <= 0f) return
-        val w = (2f * Math.PI.toFloat() * FREQUENCY)
+        val w = (2f * Math.PI.toFloat() * frequency)
         val k = w * w
-        val c = 2f * DAMPING * w
+        val c = 2f * damping * w
         // Semi-implicit Euler in a few sub-steps (stable at any frame rate up to MAX_DT).
         val n = max(1, (dt / SUB).toInt() + 1)
         val h = dt / n
@@ -181,6 +191,11 @@ class BlobElastic {
         /** How long the parted bud takes to turn from the parent's colour to its own (judged). */
         const val TINT_MS = 160f
         private const val MAX_DT = 1f / 30f
+        /** A step shorter than this gives no speed of its own. */
+        private const val MIN_DT = 0.002f
+        /** The stiff spring a rejoin eases onto the pull with (judged: settles within about 60 ms), and its rest. */
+        private const val CATCH_FREQUENCY = 12f
+        private const val CATCH_EPS = 0.5f
         private const val SUB = 1f / 240f
         private const val EPS = 0.05f
         private const val EPS_V = 0.5f

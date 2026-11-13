@@ -110,6 +110,8 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     /** Its blur radius (px; 0 at rest): only `enter blur` and `exit blur` move it (T-015). */
     val blur = Track()
     private val tracks = listOf(x, y, width, height, alpha, scale, blur)
+    /** Stepped each frame without a new list (the review). */
+    private val placeAndSize = arrayOf(x, y, width, height)
     private var layoutX = Float.NaN
     private var layoutY = Float.NaN
     private var layoutW = 0f
@@ -181,7 +183,7 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     /** Every track at [now]; false once all have settled. Scale settles within half a pixel of the node's size. */
     fun step(now: Long): Boolean {
         var busy = false
-        for (t in listOf(x, y, width, height)) busy = t.step(now, PIXEL) or busy
+        for (t in placeAndSize) busy = t.step(now, PIXEL) or busy
         busy = alpha.step(now, 1f / 255) or busy
         busy = blur.step(now, BLUR_EPSILON) or busy
         busy = scale.step(now, PIXEL / max(1f, max(width.target, height.target))) or busy

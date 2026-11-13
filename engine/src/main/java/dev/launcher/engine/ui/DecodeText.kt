@@ -41,6 +41,9 @@ class DecodeText {
         return true
     }
 
+    /** Settled on its target at once (motion reduced mid-way: Codex, the island's milestone). */
+    fun snap() { if (busy) { text = target; busy = false } }
+
     /** The text at [now]; false once it has settled. */
     fun step(now: Long): Boolean {
         if (!busy) return false

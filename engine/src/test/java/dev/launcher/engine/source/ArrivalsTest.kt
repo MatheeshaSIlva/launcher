@@ -39,9 +39,21 @@ class ArrivalsTest {
         assertEquals("See you at 7", t.arrival()!!.text)
         // The same notification, read again while locked: the app's name, no text.
         t.update(listOf(Candidate("b", 2, true, false, "Messages", "", "Messages")))
-        assertEquals(NotifArrival("b", "Messages", 0, "", "Messages", seq = 1), t.arrival())
+        // Another message (its own number), so the banner plays the change rather than swapping it in one frame.
+        assertEquals(NotifArrival("b", "Messages", 0, "", "Messages", seq = 2, replaced = true), t.arrival())
         assertEquals("the arrival's time kept", 1, timers.size)
         assertEquals(0, cancelled)
+    }
+
+    /** Codex, the island's milestone: one showing that may no longer show (locked: secret, or notifications off) ends at once. */
+    @Test fun oneShowingThatMayNoLongerShowEndsAtOnce() {
+        t.update(emptyList())
+        t.update(listOf(Candidate("s", 2, true, false, "Kasun", "secret", "Bank")))
+        assertEquals("Kasun", t.arrival()!!.name)
+        // The phone locks: the same notification is no longer allowed to arrive.
+        t.update(listOf(Candidate("s", 2, false, false, "Bank", "", "Bank")))
+        assertNull(t.arrival())
+        assertEquals("its timer cancelled", 1, cancelled)
     }
 
     /** Owner, 2026-11-14: rapid ones "just popped": each arrival is its own, and one that replaces another says so. */
@@ -66,6 +78,14 @@ class ArrivalsTest {
     }
 
     /** Owner, 2026-11-14: several messages' text ran together on the banner's one line. */
+    /** The review: a cut never splits an emoji. */
+    @Test fun aCutNeverSplitsACharacter() {
+        val s = "ab😀c"
+        assertEquals("ab", ArrivalTracker.cut(s, 3))
+        assertEquals("ab😀", ArrivalTracker.cut(s, 4))
+        assertEquals(s, ArrivalTracker.cut(s, 10))
+    }
+
     @Test fun itsTextIsOneLine() {
         t.update(emptyList())
         t.update(listOf(Candidate("b", 2, true, false, "Kasun\nHome", "On my way\nBe there at 7 \r\n\n  Bring the charger", "Messages")))

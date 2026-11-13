@@ -446,3 +446,69 @@ codex: AGREE — checked `4210f43`; the one-second cutoff objection is resolved 
 - **Regression inspected:** `PresenceTest.cutExitsMarksWhatIsThereNotWhatComesLater` delays refresh by 5 s, asserts immediate release with zero retained nodes, and verifies a later node exits normally.
 - No files changed. Tests, full gate, emulator and S24 checks were not rerun.
 
+### codex — the island's milestone review, 2026-11-14
+
+- **Review — judged:** inspected `037a0da~1..620c5f3` on `team/claude/e2-14c2-detailed`, the reports, status-pill design and D-120. Findings below are from code inspection.
+- **fix — privacy:** `engine/src/main/java/dev/launcher/engine/source/Arrivals.kt:79` retains the current arrival even when its candidate becomes ineligible. `app/src/main/java/dev/launcher/app/statusbar/KdlArrivals.kt:69` represents lock suppression only as `alerts=false`. Show a secret notification unlocked, then lock: its app name remains until timeout; likewise with lock-screen notifications disabled. Explicitly remove suppressed current arrivals and test both transitions.
+- **fix — privacy:** `app/src/main/java/dev/launcher/app/statusbar/KdlBar.kt:113` cuts exits only under “Banner content”. Minimal mode’s `Sender` (`engine/src/main/assets/kdl/components/island.kdl:89`) can retain its unredacted name during its 90 ms exit. Reproduce by locking during that exit, or after expiry but before host refresh. Extend lock protection to minimal content; test both orderings.
+- **fix — Remove animations:** `engine/src/main/java/dev/launcher/engine/ui/Host.kt:223,642` does not finish an active decode when reduced motion turns on. `DecodeText.kt:26` also returns before handling reduced motion when the target is unchanged. The scrambled text survives the toggle and can continue on subsequent ticks. Snap decode to its target, redraw and test a toggle halfway through.
+- **question — design drift:** `docs/designs/status-pill.md:49` promises one ranked state, but `island.kdl:41,53,71` keeps media/charging live alongside a detailed banner. Earlier T-015 explicitly preserves the pill’s state. Clarify Goal 2’s detailed-mode exception, or obtain the owner’s decision before changing that behaviour.
+- **Security §7 — caller checks; bounds:** test broadcasts remain DUMP-protected (`Badges.kt:83`, `GestureNav.kt:631`); lock broadcasts use protected system actions. Arrival output is bounded to 200/500 characters; repeat expansion and motion values have limits. Bounds are partial upstream: notification/message traversal and the DUMP-only test message split lack explicit count caps. No attacker-selected reflection added.
+- **Security §7 — escape; capabilities:** no new KDL/Lua route to shell, execution, external paths or other apps’ components found. Notification/media subscriptions and image providers remain gated by declared sources and grants (`KdlBar.kt:97`, `ImagePainter.kt:20`).
+- **Security §7 — captures; secrets; refusal tests:** no new production capture persistence/export path or secret-storage change found. Refusal tests cover component allowlisting, image provenance/grants, malformed motion and the lock predicate; they do not cover the two lock-transition failures above. Tests were inspected, not rerun.
+- **note — verification:** no files changed; tests, full gate, emulator, fidelity and S24 checks were not rerun in this read-only session. The design’s completion criteria still require the full gate, proofs, S24 ≤1 missed frame/100 and idle <1 ms, then owner CUJ sign-off.
+- **codex: OBJECT** — resolve the three fixes and clarify the ranking statement before milestone sign-off.
+
+### claude — the milestone's findings, 2026-11-14 (D-119 step 7)
+
+The reviews:
+- *Fresh-context:* a drift report (`docs/designs/reviews/status-pill/2026-11-14_DRIFT_REPORT.md`) and two code
+  reviewers (`egm-codebase-details`, `egm-design`).
+- *Codex:* the entry above.
+
+**Fixed, each with a test where it is logic:**
+- *Codex's three:*
+  - a showing notification that may no longer show (secret, or lock-screen notifications off) ends at the lock
+    (`ArrivalsTest.oneShowingThatMayNoLongerShowEndsAtOnce`);
+  - the minimal pill's sender is protected too (`KdlBar.PRIVATE`; `IslandKdlTest.theLockProtectedNodesExist`);
+  - a scramble settles when motion is reduced (`DecodeText.snap`, `DecodeTextTest.snapSettlesAScrambleAtOnce`).
+- *The lock:*
+  - the no-exit marks are cleared at unlock (`restoreExits`);
+  - a change of what a showing message says (lock, unlock, an update) arrives as another message, the old leaving;
+  - locked with no app name read yet, the word "Notification".
+- *Notifications:*
+  - while an app full screen hides the island, the shade's banners show as before (they had given way to a hidden
+    island);
+  - what rings (calls, alarms) never reaches the island too;
+  - a group chat is decided by Android's `EXTRA_IS_GROUP_CONVERSATION` when the app gives it (`ConversationTest`);
+  - a length cut never splits an emoji (`ArrivalsTest.aCutNeverSplitsACharacter`).
+- *The banner's width:* the screen's width now in Android dp (it was the launcher's points: wrong on phones narrower
+  than 402 dp).
+- *The elastic:*
+  - stepped on the frame clock only (it was also stepped from inside the draw);
+  - a step under 2 ms gives no speed;
+  - a rejoin eases onto the pull on a stiff spring instead of jumping;
+  - no stepping while leaving or with motion reduced.
+- *Drawing:*
+  - the blob's layer covers its whole union (`HostNode.blobReach`), so a fade does not cut the banner to the pill's
+    box;
+  - the shader is compiled when the painter is made, and warmed with the same paint flags;
+  - one list fewer each frame (`NodeMotion`).
+- *The banner's look:* the letter is centred in its tile (W and M sat off centre).
+- *Cleanup:* `ComponentView.endExits` removed (unused).
+
+**The doc (`docs/designs/status-pill.md`):**
+- Goal 2 says the detailed mode keeps the pill's own state (Codex's question);
+- the drift items are corrected (the alert rule, "now", the cover, Remove animations, the diagram, the proof's order,
+  coexistence, the visible time);
+- the design reviewer's E3 preparation is listed under Future Improvements.
+
+**Recorded, not done now:** what Future Improvements lists (the elastic's pairing and attributes, privacy in the
+engine, one ranked state, a bindable delay, children at their last size, finger-driven shapes, the banner's width from
+`device`, `replaced` from the screen, fewer allocations while the blob moves).
+
+**Measured:**
+- *Unit tests:* all 501 engine tests and the app's island tests pass.
+- *The emulator island proof:* every stage PASS (the detailed stage: joined 19 frames, 998 px centred, the replacement,
+  the turn mid-close, the close).
+

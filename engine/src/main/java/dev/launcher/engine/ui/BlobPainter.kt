@@ -26,7 +26,8 @@ class BlobPainter : Painter {
         val neck: Boolean = false)
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private var shader: Any? = null
+    /** Compiled when the painter is made (the component's build), never in a shown frame (review). */
+    private var shader: Any? = if (Build.VERSION.SDK_INT >= 33) RuntimeShader(SKSL) else null
     /** The shader's uniforms, reused (Codex, T-015 review: three arrays a repaint). */
     private val rects = FloatArray(MAX_SHAPES * 4)
     private val radii = FloatArray(MAX_SHAPES)

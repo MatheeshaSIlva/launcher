@@ -13,7 +13,8 @@
 // after. Charging (Figma 8:195): 164 dp, the time left of the camera, the level and a bolt in `ok` green right of it, for
 // the plug-in moment (`battery.plugged`, 3 s). A notification (Figma 8:203, the minimal mode): 200 dp, a terracotta dot and
 // the sender left, "+N" in `muted` grey right, for 4 s (`notifications.arrival`; the app's name instead of the sender
-// while locked). `mode` "detailed" (a banner that grows out of the island) comes with E2.14c-2 and shows as minimal now.
+// while locked). `mode` "detailed": a banner parts from the island (E2.14c-2, below; the app passes "minimal" below
+// Android 13, D-120). The design document: docs/designs/status-pill.md.
 // The island comes and goes with the bar (E2.14e): an app that goes full screen hides it (a quick fade and shrink), a
 // swipe from the top shows it for a moment (a soft spring back), as the stock bar does.
 component "island" version="0.10.0" {
@@ -115,8 +116,8 @@ component "island" version="0.10.0" {
         // leaving (`dur-state`, `ease-in`) and the new arriving (owner, 2026-11-14: rapid ones "just popped"). The first comes once
         // the drop has parted;
         box each="{notifications.shown}" as="a" width="{@banner-width}" height=(dp)76 visible="{@mode == 'detailed' && !a.replaced}" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Message" {
-          box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" translate-x=(dp)16 translate-y=(dp)20 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(300ms)" label="Mark" {
-            text "{a.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" translate-x=(dp)13 translate-y=(dp)8 label="Mark letter"
+          box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" align="centre" translate-x=(dp)16 translate-y=(dp)20 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(300ms)" label="Mark" {
+            text "{a.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" label="Mark letter"
           }
           text "{a.name}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" width="{@banner-width - 130dp}" overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)15 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(324ms)" label="Banner sender"
           text "{a.text}" font="plex-sans" size=(dp)13 weight=400 color="#C4C4C4" width="{@banner-width - 96dp}" overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)40 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(348ms)" label="Banner text"
@@ -124,8 +125,8 @@ component "island" version="0.10.0" {
         }
         // one that replaces another comes as the old has gone (its 120 ms), sliding in over the banner already there.
         box each="{notifications.shown}" as="a" width="{@banner-width}" height=(dp)76 visible="{@mode == 'detailed' && a.replaced}" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Next message" {
-          box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" translate-x=(dp)16 translate-y=(dp)20 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(110ms)" label="Mark" {
-            text "{a.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" translate-x=(dp)13 translate-y=(dp)8 label="Mark letter"
+          box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" align="centre" translate-x=(dp)16 translate-y=(dp)20 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(110ms)" label="Mark" {
+            text "{a.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" label="Mark letter"
           }
           text "{a.name}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" width="{@banner-width - 130dp}" overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)15 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(134ms)" label="Banner sender"
           text "{a.text}" font="plex-sans" size=(dp)13 weight=400 color="#C4C4C4" width="{@banner-width - 96dp}" overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)40 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(158ms)" label="Banner text"

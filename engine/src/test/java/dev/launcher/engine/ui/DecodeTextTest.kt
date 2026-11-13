@@ -12,6 +12,19 @@ class DecodeTextTest {
 
     private fun made(start: String) = DecodeText().also { it.configure(start, 400f, "", false, 0) }
 
+    /** Codex, the island's milestone: Remove animations turned on mid-scramble settles the text at once. */
+    @Test fun snapSettlesAScrambleAtOnce() {
+        val d = made("Kasun")
+        d.configure("Kamal", 400f, "", false, 1000 * ms)
+        d.step(1000 * ms + 50 * ms)
+        assertTrue(d.busy)
+        d.snap()
+        assertEquals("Kamal", d.text)
+        assertFalse(d.busy)
+        assertFalse("stays settled", d.step(1000 * ms + 60 * ms))
+        assertEquals("Kamal", d.text)
+    }
+
     @Test fun theFirstTextShowsAtOnce() {
         val d = made("21:40")
         assertEquals("21:40", d.text)

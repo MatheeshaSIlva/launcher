@@ -38,6 +38,9 @@ object KdlBar {
         if (mode == "detailed" && sdk < DETAILED_MIN_SDK) "minimal" else mode
     const val DETAILED_MIN_SDK = 33
 
+    /** The island's nodes that show a notification's sender or text: at a lock, none plays its exit (D-120). */
+    val PRIVATE = listOf("Banner content", "Notification")
+
     /** The detailed banner's width (dp) on a screen [widthDp] wide: 380, or the screen less 16 dp each side. */
     fun bannerWidth(widthDp: Float): Float = minOf(BANNER_DP, widthDp - 2 * GUTTER_DP).coerceAtLeast(0f)
     private const val BANNER_DP = 380f
@@ -110,7 +113,9 @@ object KdlBar {
         // Locked: a message still leaving the banner goes at once, its text with it (the one shown is redacted in place).
         // Every message already on the banner goes at once when removed, however late that comes (Codex, T-015); those
         // arriving while locked (redacted) leave as usual.
-        arrivals?.onLocked = { if (!view.isDisposed) view.cutExits("Banner content") }
+        arrivals?.onLocked = { if (!view.isDisposed) PRIVATE.forEach(view::cutExits) }
+        // Unlocked: what shows plays its exit again (a mark kept made a message vanish in one frame later: the review).
+        arrivals?.onUnlocked = { if (!view.isDisposed) view.restoreExits() }
         // The island takes nothing of StatusBarView's (its colours are its own, it has no notification icons).
         if (!island) view.derive = {
             view.textWidth("Time")?.let { w ->
@@ -138,7 +143,7 @@ object KdlBar {
             view.setUnit(dev.launcher.app.design.Scale.unitPx(ctx))
             view.centreY = bar.timeBaseline - TextPainter.CAP * bar.timeSize / 2f
             if (island && bar.width > 0) view.setProp("banner-width",
-                Value.Num(bannerWidth(bar.width / dev.launcher.app.design.Scale.unitPx(ctx)).toDouble(), "dp"))
+                Value.Num(bannerWidth(bar.width / ctx.resources.displayMetrics.density).toDouble(), "dp"))
             view.deriveAgain()
         }
         val layout = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }

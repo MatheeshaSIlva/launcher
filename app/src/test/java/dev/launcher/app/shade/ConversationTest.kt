@@ -21,6 +21,13 @@ class ConversationTest {
         assertEquals("Dilini: Leaving at 6", s(c.latest))
     }
 
+    /** The review: Android's group flag wins over the title. */
+    @Test fun androidsGroupFlagDecides() {
+        assertEquals("on my way", s(Conversations.of("Kasun", null, "Kasun", listOf("on my way" to "You"), isGroup = false).latest))
+        assertEquals("Kasun: hi", s(Conversations.of("Friends", null, "Friends", listOf("hi" to "Kasun"), isGroup = true).latest))
+        assertEquals("a direct chat with another title", "hi", s(Conversations.of("Work chat", null, "Work chat", listOf("hi" to "Kasun"), isGroup = false).latest))
+    }
+
     /** Codex, T-015: a direct chat whose own sub text equals the sender's name is no group. */
     @Test fun aDirectChatWithASubTextLikeTheSendersNameHasNoPrefix() {
         val c = Conversations.of("Kasun", "Kasun", null, listOf("On my way" to "Kasun"))

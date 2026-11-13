@@ -178,12 +178,12 @@ class HostNode internal constructor(
     internal val hasElastic = view.primitive == "blob" && ((view.attrs["elastic"]?.value as? dev.launcher.engine.model.AttrValue.Literal)?.value as? dev.launcher.engine.kdl.KdlValue.Bool)?.value == true
     internal val elastic by lazy { BlobElastic() }
     private var elasticShapes: List<BlobPainter.Shape>? = null
-    /** Its painter saw [raw] (its shapes as they are): a change starts its clock if it is not running. */
-    internal fun elasticSaw(raw: List<BlobPainter.Shape>) {
-        if (raw == elasticShapes) return
-        elasticShapes = raw
-        recurringChanged()
-    }
+    /**
+     * Its painter saw [raw] (its shapes as they are). Only recorded: the elastic steps on the frame clock alone, in
+     * [ComponentHost.step] (stepped from inside the draw on another clock, its speed at the break depended on when the
+     * draw ran: the milestone's review). Shapes change only while something moves, which runs that clock.
+     */
+    internal fun elasticSaw(raw: List<BlobPainter.Shape>) { elasticShapes = raw }
     private fun stepElastic(now: Long): Boolean {
         val raw = elasticShapes ?: BlobPainter.shapes(this).also { elasticShapes = it }
         return elastic.step(raw.getOrNull(0), raw.getOrNull(1), BlobPainter.smooth(this), now)
@@ -338,7 +338,8 @@ class HostNode internal constructor(
         if (hasLoop) loop.step(now)
         if (hasScroll) scroll.step(now)
         if (hasDecode) decode.step(now)
-        val jelly = hasElastic && stepElastic(now)
+        // The same guards as [recurring] (review: it stepped while leaving or with motion reduced).
+        val jelly = hasElastic && !isLeaving && !motionContext.reduced() && stepElastic(now)
         shown()
         if (jelly) redraw()
         return busy || (hasLoop && loop.busy) || (hasScroll && scroll.busy) || (hasDecode && decode.busy) || jelly
@@ -381,8 +382,22 @@ class HostNode internal constructor(
         val r = rollReach()
         val own = if (r == null) { if (o == 0f) e else floatArrayOf(e[0] - o, e[1] - o, e[2] + o, e[3] + o) }
             else floatArrayOf(e[0] - o - r[0], e[1] - o - r[1], e[2] + o + r[0], e[3] + o + r[1])
-        val c = childReach ?: return own
-        return floatArrayOf(minOf(own[0], c[0]), minOf(own[1], c[1]), maxOf(own[2], c[2]), maxOf(own[3], c[3]))
+        val withBlob = blobReach()?.let { b -> floatArrayOf(minOf(own[0], b[0]), minOf(own[1], b[1]), maxOf(own[2], b[2]), maxOf(own[3], b[3])) } ?: own
+        val c = childReach ?: return withBlob
+        return floatArrayOf(minOf(withBlob[0], c[0]), minOf(withBlob[1], c[1]), maxOf(withBlob[2], c[2]), maxOf(withBlob[3], c[3]))
+    }
+
+    /**
+     * A blob's union where it reaches past its own box (its shapes as drawn, out by the union's margin), or null: a layer
+     * of it (a fade, a blur) must hold the banner too, not cut it to the pill's box (the milestone's review).
+     */
+    internal fun blobReach(): FloatArray? {
+        if (view.primitive != "blob") return null
+        val s = BlobPainter.drawn(this, BlobPainter.shapes(this))
+        if (s.isEmpty()) return null
+        val pad = BlobPainter.pad(s.size, BlobPainter.smooth(this))
+        val b = floatArrayOf(s.minOf { it.left } - pad, s.minOf { it.top } - pad, s.maxOf { it.right } + pad, s.maxOf { it.bottom } + pad)
+        return if (b[0] >= 0f && b[1] >= 0f && b[2] <= exactWidth && b[3] <= exactHeight) null else b
     }
 
     /**
@@ -627,6 +642,12 @@ class ComponentHost(
      * those leaving now end ([endExits]'s way). Nodes made later exit as usual (Codex, T-015: at a lock, a message already
      * shown must not play its exit, its text on screen, however late its removal reaches the host).
      */
+    /** Every node leaves on its exit again (the phone unlocked: what shows must not vanish in one frame later). */
+    fun restoreExits() {
+        fun clear(n: HostNode) { n.noExit = false; n.children.forEach(::clear) }
+        if (!disposed) clear(root)
+    }
+
     fun cutExits(top: HostNode) {
         if (disposed) return
         fun mark(n: HostNode) { n.noExit = true; n.children.forEach(::mark) }
@@ -642,7 +663,11 @@ class ComponentHost(
     fun snapMotion() {
         // An elastic blob's stretch or squash goes at once: drawn plain from now on, at rest when motion comes back (Codex,
         // T-015 sign-off: a blob taken off the moving set kept its last deformed frame).
-        for (n in recurringNodes) if (n.hasElastic) { n.elastic.reset(); n.redraw() }
+        for (n in recurringNodes) {
+            if (n.hasElastic) { n.elastic.reset(); n.redraw() }
+            // A text still scrambling settles on its letters (it kept scrambling: Codex).
+            if (n.hasDecode && n.decode.busy) { n.decode.snap(); n.redraw() }
+        }
         refreshMotion()
         if (moving.isEmpty()) return
         val all = moving.toList()

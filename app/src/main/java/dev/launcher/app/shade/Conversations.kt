@@ -12,11 +12,12 @@ object Conversations {
      * no prefix, whatever that sub text says (Codex, T-015: a sub text equal to the sender's name was read as a group).
      */
     fun of(title: CharSequence?, sub: CharSequence?, convo: CharSequence?,
-        messages: List<Pair<CharSequence, CharSequence?>>): Conversation {
+        messages: List<Pair<CharSequence, CharSequence?>>, isGroup: Boolean? = null): Conversation {
         val (message, sender) = messages.last()
-        val group = convo != null && sender != null && convo.toString() != sender.toString()
+        // Android's own flag when the app gives it (`EXTRA_IS_GROUP_CONVERSATION`), else a title other than the sender's.
+        val group = sender != null && (isGroup ?: (convo != null && convo.toString() != sender.toString()))
         val text = if (messages.size > 1) messages.takeLast(4).joinToString("\n") { it.first.toString() } else message
-        return if (group) Conversation(convo, sender, text, "$sender: $message")
+        return if (group) Conversation(convo ?: title, sender, text, "$sender: $message")
             else Conversation(sender ?: title, sub, text, message)
     }
 }

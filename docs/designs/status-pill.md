@@ -47,7 +47,9 @@ The default layout's design (draft 4, D-098) answers with one floating shape on 
 1.  **One shape on the camera.** Centred on the camera cutout (on the screen's centre without one), 4 dp from the top
     (D-107), pure black (#000000: on OLED a lit near-black shows the camera through it, D-105), at rest 132 x 32 dp.
 2.  **One state at a time, by rank.** A notification arriving outranks charging, which outranks media, which outranks
-    idle (T-014). When a higher state ends, the next lower live state returns.
+    idle (T-014). When a higher state ends, the next lower live state returns. In detailed mode the notification is
+    the banner below the pill, so the pill keeps showing its own state (idle, media or charging) while the banner shows
+    (built so in T-015).
 3.  **Every change moves**, except with the phone's Remove animations on (CUJ 9). Each state change resizes the pill
     on a spring, and its pieces leave and arrive a short beat apart. A motion interrupted mid-way continues from where
     and how fast it was, with no jump.
@@ -104,7 +106,7 @@ Timings are the component's own values; "at once" means in the next frame.
 *   **When**: a media session starts playing.
 *   **Then**:
     *   the pill widens on a soft spring, and the time leaves at once;
-    *   the cover, the title and five terracotta bars arrive in that order, 50 ms apart;
+    *   the cover (when the song has art), the title and five terracotta bars arrive in that order, 50 ms apart;
     *   a long title fades at its end and scrolls slowly;
     *   the pieces stay in fixed slots, so the camera stays clear.
     *   A pause returns to CUJ 1: the pieces leave together, then the time returns.
@@ -118,8 +120,12 @@ Timings are the component's own values; "at once" means in the next frame.
 ### CUJ 4: A notification, minimal mode
 
 *   **Given**: any state; minimal mode (or detailed on Android 12 and below); the phone unlocked.
-*   **When**: a notification that alerts arrives. "Alerts" means its importance makes a sound or a vibration, Do Not
-    Disturb lets it through, and it is not ongoing, a group summary or media.
+*   **When**: a notification that alerts arrives. It alerts when all of these hold:
+    *   its importance makes a sound or a vibration, and Do Not Disturb lets it through;
+    *   it is not ongoing, a group summary, media, or ringing (a call or an alarm, which keeps its banner);
+    *   it has a title or a text;
+    *   it is not the launcher's own, except on its test channel.
+    Without a title, its text takes the sender's place.
 *   **Then**: for 4 s the pill shows a terracotta dot and the sender's name, and "+N" in `muted` grey for the other
     alerting notifications still in the shade; then the state below returns.
 
@@ -131,7 +137,8 @@ Timings are the component's own values; "at once" means in the next frame.
     *   the pill swells downward as one black body, then a drop sinks from it;
     *   the pill stretches toward the drop while a neck between them thins; the neck breaks and both squash and settle;
     *   the drop turns to `surface` (#121212) and grows into the banner, 20 dp under the pill;
-    *   the letter, the sender, one line of the message and "now" slide in out of a blur, one after another.
+    *   the letter, the sender and one line of the message slide in out of a blur, 24 ms apart; "now" fades in out of a
+        blur with the message line.
     *   After 4 s the message fades out; the banner shrinks, its corners staying round and its content staying in
         place (cut off by the shrinking edge); it merges back into the pill.
 
@@ -169,8 +176,8 @@ Timings are the component's own values; "at once" means in the next frame.
 *   **When**: the status bar hides or shows; or any state changes.
 *   **Then**:
     *   *Full screen:* the island fades and shrinks away; a swipe from the top shows it for a moment on a soft spring.
-    *   *Remove animations:* every change happens at once, and the banner and pill draw as plain shapes, nothing
-        stretched.
+    *   *Remove animations:* every change happens at once; the pill and banner are still joined by the union (nothing
+        moves in that), but nothing stretches, no neck forms, and each keeps its own colour.
 
 ## Technical Plan (Architecture)
 
@@ -178,9 +185,9 @@ Timings are the component's own values; "at once" means in the next frame.
  Android                    app (:app)                         engine (:engine)
  -------                    ----------                         ----------------
  BatteryManager ─────────────────────────────────────────► battery ─┐
- MediaSession ──► SessionMedia ──────────────────────────► media ───┤
+ MediaSession ──► SessionMedia (engine) ─────────────────► media ───┤
  clock ──────────────────────────────────────────────────► time ────┼─► SourceBinder ─► ComponentHost ─► ComposeHost
- cutout, insets ─► DeviceDisplayInfo ────────────────────► device ──┤    (values)      (plan, reconcile,  (RenderNodes,
+ cutout, insets ─► DeviceDisplayInfo (engine) ───────────► device ──┤    (values)      (plan, reconcile,  (RenderNodes,
  notifications ─► Notifs ─► KdlArrivals ─► ArrivalTracker ► notifications ┘               presence,       painters:
                   (shade)   (alerts, lock)  (hold, number)                                motion)         BlobPainter +
  KdlBar.make: sources, mode, shown, banner-width, 12/24 h, lock hook ──► ComponentView ◄─┘                BlobElastic)
@@ -233,11 +240,18 @@ Timings are the component's own values; "at once" means in the next frame.
     *   `KdlArrivals` reads the lock state when the screen goes off (counted as locked at once), comes on, or is
         unlocked.
     *   Locked, it gives the app's name and no text, and nothing for the cases of Goal 5.
-    *   At the lock, `KdlBar` marks every node then under the banner's content box as never playing an exit
-        (`ComponentView.cutExits`).
+    *   At the lock, `KdlBar` marks every node then under the banner's content box and under the minimal pill's
+        notification row as never playing an exit (`ComponentView.cutExits`, `KdlBar.PRIVATE`). At unlock the marks
+        are cleared (`restoreExits`).
+    *   A notification already showing that may no longer show (secret, or lock-screen notifications off) ends at
+        once. Any change of what a showing message says (redacted at a lock, restored at unlock, an update) arrives as
+        another message: the old leaves and the new arrives.
 *   **Below Android 13** the detailed mode shows as minimal (D-120): the app passes `minimal` to the component.
-*   **Coexistence.** With the island on, the shade's own notification banners give way to the island, except calls and
-    alarms, which ring as banners (T-014). Merging them into the island is E3.
+*   **Coexistence.** With the island on and showing, the shade's own notification banners give way to the island,
+    except calls and alarms, which ring as banners (T-014). While an app full screen hides the island, the banners show
+    as before. Merging them into the island is E3.
+*   **Visible time.** The 4 s count from the arrival. The detailed banner's message is in place about 0.57 s later, so
+    it reads for about 3.4 s.
 
 ## Alternatives Considered
 
@@ -268,6 +282,22 @@ Timings are the component's own values; "at once" means in the next frame.
 *   **Reason for Rejection**: the owner saw it pop on the S24 (2026-11-14, T-015); one message per arrival replaced it.
 
 --------------------------------------------------------------------------------
+
+## Future Improvements (from the milestone's design review; before or in E3)
+
+*   **The elastic's pairing and numbers as attributes:** name which shape buds from which, the gap along any direction,
+    the neck outside the four-shape budget, and the constants exposed (D-120 records the deviation).
+*   **Lock privacy in the engine** (D-120): any component's nodes reading notification content redacted and cut at a
+    lock, not two labels in the app.
+*   **One ranked state:** a script-free derived value in KDL instead of the rank repeated in about ten expressions.
+*   **A bindable presence `delay`:** one message repeat instead of `Message` and `Next message`.
+*   **Children laid out at the last size while a box's drawn size animates:** the content's hold-back by half the
+    banner goes away.
+*   **A shape driven by finger progress** (the pull, E3), with the elastic stepping on that clock.
+*   **The banner's width from `device`** inside the component, and Android 13 as a capability the engine reports, not
+    a prop the app decides.
+*   **`replaced` from what is on screen:** an arrival while the banner closes waits 300 ms today.
+*   **Fewer allocations while the blob moves:** its shapes are worked out in both the key and the paint each frame.
 
 ## Risks & Mitigations
 
@@ -309,8 +339,9 @@ As built on `team/claude/e2-14c2-detailed` (tasks T-012 to T-017; decisions D-10
 1.  `engine/src/main/assets/kdl/components/island.kdl` (Modify): the states, the rank, the staging, the blob, the banner,
     `banner-width`, and the two message repeats.
 2.  `engine/src/main/java/dev/launcher/engine/ui/BlobPainter.kt` (Create): the union shader, per-shape colours. The
-    margin is (n − 1) × k / 4 + 1 px, where n is the number of shapes and k is `smooth` in px. Plain shapes below
-    Android 13, the elastic's neck left out.
+    margin is (n − 1) × k / 4 + 1 px, where n is the number of shapes (at least two: one shape needs no union) and k is
+    `smooth` in px. The blob's layer covers its whole union (`HostNode.blobReach`), so a fade does not cut the banner.
+    Plain shapes below Android 13, the elastic's neck left out. The shader is compiled when the painter is made.
 3.  `engine/src/main/java/dev/launcher/engine/ui/BlobElastic.kt` (Create): stretch, neck, break, squash, colour turn,
     `reset`.
 4.  `engine/src/main/java/dev/launcher/engine/model/Primitives.kt`, `Validator.kt` (Modify): the `blob` primitive
@@ -380,8 +411,8 @@ As built on `team/claude/e2-14c2-detailed` (tasks T-012 to T-017; decisions D-10
     *   `rest`: size, place, and the camera clear;
     *   `rolls`: digits rolling;
     *   `media` and `media-details`: the media state and its staging;
+    *   `reduced`: Remove animations on the pill (the blob's reduced drawing is checked by `IslandKdlTest`);
     *   `arrivals`: the notification and charging states and their rank;
-    *   `reduced`: Remove animations;
     *   `detailed`: the arrival and break, the banner's width and centre, a replacement, a close turned back by a new
         arrival, and the close.
 *   **The S24, frame stats:** the island's window is `LauncherStatusBar`.
