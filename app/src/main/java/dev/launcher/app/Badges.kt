@@ -41,6 +41,8 @@ object Badges {
         //   with a picture, wider than tall, to check how pictures are cropped and rounded)
         //   (--ez media true: a media session playing, with its art and a media notification, as a music app's: the shade's
         //   media player; --ez playing false pauses it; with --ez cancel true it goes)
+        //   (--es messages 'A|B|C': a conversation (MessagingStyle) of those messages from the title, oldest first, as a
+        //   messaging app posts it; --es group NAME: in a group of that name)
         val notify = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: android.content.Intent) {
                 val nm = c.getSystemService(android.app.NotificationManager::class.java)
@@ -53,6 +55,16 @@ object Badges {
                     .setContentText(i.getStringExtra("text") ?: "A notification that alerts.")
                     .setAutoCancel(true)
                     .apply {
+                        i.getStringExtra("messages")?.let { m ->
+                            val me = android.app.Person.Builder().setName("You").build()
+                            val from = android.app.Person.Builder().setName(i.getStringExtra("title") ?: "Test").build()
+                            val style = android.app.Notification.MessagingStyle(me)
+                            i.getStringExtra("group")?.let { g -> style.setConversationTitle(g); style.setGroupConversation(true) }
+                            val now = System.currentTimeMillis()
+                            val parts = m.split('|')
+                            parts.forEachIndexed { k, text -> style.addMessage(text, now - (parts.size - k) * 1000L, from) }
+                            setStyle(style)
+                        }
                         if (i.getBooleanExtra("avatar", false)) setLargeIcon(android.graphics.drawable.Icon.createWithBitmap(testPicture()))
                         val open = i.getStringExtra("open")?.let { c.packageManager.getLaunchIntentForPackage(it) }
                         // Made like a current app's (target SDK 35+): its creator does not lend the right to start

@@ -55,8 +55,8 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
         }
         val newest = fresh.maxByOrNull { it.postTime }
         if (newest != null) {
-            current = NotifArrival(newest.key, newest.name.take(MAX_NAME), list.count { it.alerts && it.key != newest.key },
-                newest.text.take(MAX_TEXT), newest.app.take(MAX_NAME))
+            current = NotifArrival(newest.key, oneLine(newest.name, MAX_NAME), list.count { it.alerts && it.key != newest.key },
+                oneLine(newest.text, MAX_TEXT), newest.app.take(MAX_NAME))
             clear?.invoke()
             clear = after(HOLD_MS) { clear = null; current = null; changed() }
         } else current?.let { c ->
@@ -64,8 +64,8 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
             current = if (still == null) { clear?.invoke(); clear = null; null }
                 // What it shows is read again each time (locked: the app's name, no text; Codex, T-015 review), its
                 // time kept.
-                else c.copy(name = still.name.take(MAX_NAME), others = list.count { it.alerts && it.key != c.id },
-                    text = still.text.take(MAX_TEXT), app = still.app.take(MAX_NAME))
+                else c.copy(name = oneLine(still.name, MAX_NAME), others = list.count { it.alerts && it.key != c.id },
+                    text = oneLine(still.text, MAX_TEXT), app = still.app.take(MAX_NAME))
         }
         if (current != before) changed()
     }
@@ -84,5 +84,12 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
         /** Another app's text, bounded (D-068). */
         const val MAX_NAME = 200
         const val MAX_TEXT = 500
+
+        /**
+         * [s] as one line of at most [max] characters: every run of white space, line breaks included, one space (an
+         * island's line drew several messages' breaks as nothing, the words run together: owner, 2026-11-14).
+         */
+        fun oneLine(s: String, max: Int): String = s.take(max * 2).replace(SPACES, " ").trim().take(max)
+        private val SPACES = Regex("\\s+")
     }
 }

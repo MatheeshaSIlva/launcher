@@ -55,7 +55,8 @@ class KdlArrivals(private val ctx: Context, private val handler: Handler) {
             val app = AppInfo.labelIfRead(i.pkg) ?: ""
             val name = if (locked) app else (i.title ?: i.text)?.toString().orEmpty()
             // While locked the banner says only which app (owner: "hide the name when locked"; its text too).
-            val text = if (locked || i.title == null) "" else i.text?.toString().orEmpty()
+            // A conversation: its newest message alone (the shade keeps the last few, one a line).
+            val text = if (locked || i.title == null) "" else (i.latest ?: i.text)?.toString().orEmpty()
             ArrivalTracker.Candidate(i.key, i.postTime, alerts(i), i.onlyAlertOnce, name, text, app)
         })
     }

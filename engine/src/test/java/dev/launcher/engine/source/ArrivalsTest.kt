@@ -44,6 +44,15 @@ class ArrivalsTest {
         assertEquals(0, cancelled)
     }
 
+    /** Owner, 2026-11-14: several messages' text ran together on the banner's one line. */
+    @Test fun itsTextIsOneLine() {
+        t.update(emptyList())
+        t.update(listOf(Candidate("b", 2, true, false, "Kasun\nHome", "On my way\nBe there at 7 \r\n\n  Bring the charger", "Messages")))
+        assertEquals("On my way Be there at 7 Bring the charger", t.arrival()!!.text)
+        assertEquals("Kasun Home", t.arrival()!!.name)
+        assertEquals(ArrivalTracker.MAX_TEXT, ArrivalTracker.oneLine("a\n".repeat(600), ArrivalTracker.MAX_TEXT).length)
+    }
+
     @Test fun silentOnesAndUnchangedOnesDoNotArrive() {
         t.update(emptyList())
         t.update(listOf(c("quiet", 1, alerts = false)))

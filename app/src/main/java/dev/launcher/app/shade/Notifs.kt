@@ -67,6 +67,11 @@ object Notifs {
         val publicText: CharSequence? = null,
         /** A media notification's session (whether it still plays: [mediaLive]). */
         val mediaToken: MediaSession.Token? = null,
+        /**
+         * A conversation's newest message alone (MessagingStyle; [text] holds the last few, one a line), its sender in
+         * front in a group ("Nimal: on my way"): what a one-line banner shows (T-015; owner, 2026-11-14).
+         */
+        val latest: CharSequence? = null,
     ) {
         /**
          * As the lock screen shows it when its content is hidden: the app's name (or its public version), "Notification",
@@ -154,6 +159,7 @@ object Notifs {
         var text: CharSequence? = x.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: x.getCharSequence(Notification.EXTRA_TEXT)
         var sub: CharSequence? = x.getCharSequence(Notification.EXTRA_SUB_TEXT)
         var avatar: Icon? = n.getLargeIcon()
+        var latest: CharSequence? = null
         // A conversation (MessagingStyle): as iOS shows a message: the sender as the title (the conversation's name above it
         // in a group), their last message as the text, their photo as the picture.
         val messages = messagesOf(x)
@@ -164,6 +170,7 @@ object Notifs {
             if (convo != null && sender != null && convo.toString() != sender.toString()) { title = convo; sub = sender }
             else if (sender != null) title = sender
             text = if (messages.size > 1) messages.takeLast(4).joinToString("\n") { it.first.toString() } else last.first
+            latest = if (sub != null && sub == sender) "$sender: ${last.first}" else last.first
             last.third?.let { avatar = it }
         }
         Item(
@@ -199,6 +206,7 @@ object Notifs {
             publicTitle = n.publicVersion?.extras?.getCharSequence(Notification.EXTRA_TITLE),
             publicText = n.publicVersion?.extras?.getCharSequence(Notification.EXTRA_TEXT),
             mediaToken = mediaToken(x),
+            latest = latest,
         )
     } catch (t: Throwable) {
         AppLog.log("[notifs] unreadable notification from ${sbn.packageName}: ${t.javaClass.simpleName}: ${t.message}")

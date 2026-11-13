@@ -313,3 +313,25 @@ claude: AGREE — the full gate passed on 9913837; the island proof passes on th
 banner joined 18 frames, then parted, 998 px centred, nothing left after the close); Codex agreed. Open: the S24's look
 and frame cost (the owner), and the Figma prototype's revision (the Figma connector needs the owner's sign-in).
 
+### owner — S24, 2026-11-14
+
+"looks and feels good. one thing I want you to check. same conversation can send multiple messages. check how it's
+handled in the notification banner. earlier I saw all the messages concatenated together without breaking lines."
+
+### claude — conversations on the banner, 2026-11-14
+
+- **Found:** `Notifs.read` gives a conversation (MessagingStyle) its last four messages as the text, one a line (for the
+  shade). The banner draws one line, where a line break is nothing, so the messages ran together.
+- **Fixed:**
+  - `Notifs.Item.latest` holds the newest message alone, its sender in front in a group ("Dilini: ..."), and
+    `KdlArrivals` gives the banner that. Each new message arrives on its own anyway: the conversation's notification is
+    posted again.
+  - `ArrivalTracker.oneLine`: an arrival's name and text are always one line (every run of white space, line breaks
+    included, one space), still bounded.
+  - Test: `ArrivalsTest.itsTextIsOneLine` (failed before: the text kept its breaks).
+  - `TEST_NOTIFY` takes `--es messages 'A|B|C'` and `--es group NAME`, a conversation as a messaging app posts it.
+- **Measured on the emulator (the launcher, detailed mode):**
+  - three messages from Kasun: the banner shows "Kasun" and "Bring the charger, mine died";
+  - a group "Trip planning" with two of Dilini's messages: "Trip planning" and "Dilini: Leaving at 6 am sharp".
+- **Not on the S24:** the phone locked before the check; the captures from then were deleted unviewed.
+
