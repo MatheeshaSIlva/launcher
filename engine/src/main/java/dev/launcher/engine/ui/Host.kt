@@ -141,6 +141,9 @@ class HostNode internal constructor(
     /** Where its parent last placed it, in whole px (overlay parents realign exits). */
     internal var placedX = 0
     internal var placedY = 0
+    /** The root only: where its Compose layout put it in the view, in whole px (the fraction is on its translation). */
+    internal var viewX = 0
+    internal var viewY = 0
     private var lastPlaceX = 0f
     private var lastPlaceY = 0f
     internal fun release() {
@@ -551,7 +554,11 @@ class ComponentHost(
             if (!n.hasElastic || n.hidden.value) continue
             var ox = 0f; var oy = 0f
             var p: HostNode? = n
-            while (p != null) { ox += p.placedX + p.motion.drawX; oy += p.placedY + p.motion.drawY; p = p.parent }
+            while (p != null) {
+                ox += p.motion.drawX + if (p.parent == null) p.viewX else p.placedX
+                oy += p.motion.drawY + if (p.parent == null) p.viewY else p.placedY
+                p = p.parent
+            }
             for (s in BlobPainter.drawn(n, BlobPainter.shapes(n))) {
                 val amount = BlobPainter.glassOf(s.color)
                 if (amount > 0f && s.right > s.left && s.bottom > s.top)

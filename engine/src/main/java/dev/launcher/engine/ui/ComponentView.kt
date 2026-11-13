@@ -198,6 +198,7 @@ class ComponentView(
                     // change moves it on its place transition if it declares one (Codex, 13a-1 review and sign-off).
                     host.root.placed(left, top, 0.5f, 0.5f)
                     p.place(wholeX.toInt(), whole.toInt())
+                    host.root.viewX = wholeX.toInt(); host.root.viewY = whole.toInt()
                 }
             }
         }

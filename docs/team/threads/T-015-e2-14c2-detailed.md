@@ -201,6 +201,11 @@ do; the notification banner could be a bit closer to the pill. it seems just a b
     place, moved by translation. It asks One UI's view blur (`SamsungBlur`) for the design language's glass, a 24 dp
     blur with 1.2 x saturation and the shape's radius, its strength following the glass amount.
   - *Elsewhere:* where a phone has no view blur, nothing changes (the other phones' live blur is E3's glass work).
-- **Not verified:** the blur itself. It shows only on the S24 (check with `dumpsys SurfaceFlinger`, "Blur Regions"),
-  and the phone was locked.
+- **Found on the S24 and fixed:** the first build reported the glass without the island's own place in the view (the
+  root is placed by Compose): the blur region read x -324..673. With the root's place (`HostNode.viewX/Y`), it reads:
+- **Measured on the S24:**
+  - `dumpsys SurfaceFlinger`'s blur region is x 41..1039, y 147..347 (998 x 200 px, centred on the camera, 20 dp under
+    the pill), blur 283, corners 68, on `LauncherStatusBar`;
+  - a screenshot over the wallpaper shows the grain smoothed under the glass, edges aligned, no shadow.
+- **Not measured yet:** the frame cost on the S24.
 
