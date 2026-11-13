@@ -81,4 +81,17 @@ class ArrivalsTest {
         assertEquals(Value.Num(3.0), v.fields["others"])
         assertEquals(Value.Null, NotifIcons(emptyList()).member("arrival"))
     }
+
+    /** T-015: the detailed banner's text, app and mark; the text bounded. */
+    @Test fun theBannerGetsItsTextAppAndMark() {
+        t.update(emptyList())
+        t.update(listOf(Candidate("a", 1, true, false, "kasun", "x".repeat(900), "Messages")))
+        val a = t.arrival()!!
+        assertEquals(ArrivalTracker.MAX_TEXT, a.text.length)
+        assertEquals("Messages", a.app)
+        assertEquals("K", a.mark)
+        val v = a.value as Value.Record
+        assertEquals(Value.Str("K"), v.fields["mark"])
+        assertEquals("", NotifArrival("b", "  ", 0).mark)
+    }
 }

@@ -2,11 +2,17 @@ package dev.launcher.engine.source
 
 import dev.launcher.engine.expr.Value
 
-/** What `notifications.arrival` holds (T-014): the notification that just arrived, the name to show and how many others. */
-data class NotifArrival(val id: String, val name: String, val others: Int) {
+/**
+ * What `notifications.arrival` holds (T-014): the notification that just arrived, the name to show and how many others;
+ * for the detailed banner (T-015) its text and its app's name (the text empty while locked).
+ */
+data class NotifArrival(val id: String, val name: String, val others: Int, val text: String = "", val app: String = "") {
     val value: Value by lazy {
-        Value.Record(mapOf("id" to Value.Str(id), "name" to Value.Str(name), "others" to Value.Num(others.toDouble())))
+        Value.Record(mapOf("id" to Value.Str(id), "name" to Value.Str(name), "others" to Value.Num(others.toDouble()),
+            "text" to Value.Str(text), "app" to Value.Str(app), "mark" to Value.Str(mark)))
     }
+    /** One letter that stands for it on the banner: the name's first letter or digit, upper case. */
+    val mark: String get() = name.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: ""
 }
 
 /** Where `notifications.arrival` comes from. */
@@ -25,7 +31,8 @@ interface ArrivalFeed {
  */
 class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : ArrivalFeed {
     /** A notification as the tracker sees it: [name] is what the island may show (the sender, or the app while locked). */
-    class Candidate(val key: String, val postTime: Long, val alerts: Boolean, val onlyAlertOnce: Boolean, val name: String)
+    class Candidate(val key: String, val postTime: Long, val alerts: Boolean, val onlyAlertOnce: Boolean, val name: String,
+                    val text: String = "", val app: String = "")
 
     private var seen: Map<String, Long>? = null
     private var current: NotifArrival? = null
@@ -48,7 +55,8 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
         }
         val newest = fresh.maxByOrNull { it.postTime }
         if (newest != null) {
-            current = NotifArrival(newest.key, newest.name.take(MAX_NAME), list.count { it.alerts && it.key != newest.key })
+            current = NotifArrival(newest.key, newest.name.take(MAX_NAME), list.count { it.alerts && it.key != newest.key },
+                newest.text.take(MAX_TEXT), newest.app.take(MAX_NAME))
             clear?.invoke()
             clear = after(HOLD_MS) { clear = null; current = null; changed() }
         } else current?.let { c ->
@@ -72,5 +80,6 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
         const val HOLD_MS = 4000L
         /** Another app's text, bounded (D-068). */
         const val MAX_NAME = 200
+        const val MAX_TEXT = 500
     }
 }

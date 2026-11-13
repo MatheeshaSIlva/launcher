@@ -90,6 +90,8 @@ object Primitives {
             arg = AttrDef("symbol", AttrType.STRING)),
         PrimitiveDef("spacer", lengths("size") + AttrDef("flex", AttrType.NUMBER, 0.0), parents = setOf("row", "column")),
         // T-015: the smooth union of its `box` children's shapes in one `fill`, joined within `smooth`.
-        PrimitiveDef("blob", lengths("smooth") + AttrDef("fill", AttrType.COLOR), container = true),
+        // `align` "top": its shapes centred across it at its top (the island's pill and banner, T-015).
+        PrimitiveDef("blob", lengths("smooth") + AttrDef("fill", AttrType.COLOR) +
+            AttrDef("align", AttrType.oneOf("top-start", "top"), "top-start"), container = true),
     ).associateBy { it.name }
 }

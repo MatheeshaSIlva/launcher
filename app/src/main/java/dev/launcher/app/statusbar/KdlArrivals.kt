@@ -34,8 +34,11 @@ class KdlArrivals(private val ctx: Context, private val handler: Handler) {
     private fun read() {
         val locked = try { keyguard.isKeyguardLocked } catch (_: Throwable) { true }
         tracker.update(Notifs.items.map { i ->
-            val name = if (locked) AppInfo.labelIfRead(i.pkg) ?: "" else (i.title ?: i.text)?.toString().orEmpty()
-            ArrivalTracker.Candidate(i.key, i.postTime, alerts(i), i.onlyAlertOnce, name)
+            val app = AppInfo.labelIfRead(i.pkg) ?: ""
+            val name = if (locked) app else (i.title ?: i.text)?.toString().orEmpty()
+            // While locked the banner says only which app (owner: "hide the name when locked"; its text too).
+            val text = if (locked || i.title == null) "" else i.text?.toString().orEmpty()
+            ArrivalTracker.Candidate(i.key, i.postTime, alerts(i), i.onlyAlertOnce, name, text, app)
         })
     }
 

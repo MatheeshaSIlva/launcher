@@ -25,6 +25,16 @@ object KdlBar {
     private const val PREFS = "dev"
     private const val KEY = "kdl-bar"
     private const val COMPONENT = "kdl-component"
+    private const val MODE = "island-mode"
+    /** The island's notification modes (T-015): the user's choice once settings come from packages; adb until then. */
+    val MODES = setOf("minimal", "detailed")
+    fun mode(ctx: Context): String = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(MODE, null)?.takeIf { it in MODES } ?: "minimal"
+    /** False (nothing changed) for a mode that is not one of [MODES]. */
+    fun setMode(ctx: Context, mode: String): Boolean {
+        if (mode !in MODES) return false
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(MODE, mode).apply()
+        return true
+    }
     const val STATUS_BAR = "status-bar"
     const val ISLAND = "island"
     /** The components the switch may show, by name, and their files. */
@@ -93,6 +103,7 @@ object KdlBar {
         }
         // E2.14e: the island comes and goes with the bar (an app full screen hides it; a swipe from the top shows it).
         if (island) {
+            view.setProp("mode", Value.Str(mode(ctx)))
             view.setProp("shown", Value.Bool.of(bar.shownForApps))
             bar.onShown = { s -> if (!view.isDisposed) view.setProp("shown", Value.Bool.of(s)) }
             view.addOnDispose { bar.onShown = null }

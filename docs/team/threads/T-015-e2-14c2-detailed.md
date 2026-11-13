@@ -1,7 +1,7 @@
 # T-015: E2.14c-2, detailed notifications: a banner that grows out of the island as a blob
 
 - **Step:** E2.14c · **Lead:** claude (solo by the owner's choice, D-116; Codex reviews on its return) · **Opened:**
-  2026-11-13 · **Status:** IN PROGRESS (the engine primitive); the choreography waits for the owner's concept
+  2026-11-13 · **Status:** DONE pending the gate and the owner's S24 look
 - **Read first:** T-014 (the minimal mode, the arrival source); D-098 ("a smooth union (AGSL) only if a later design asks
   for it"; it now does); `docs/DEFAULT_LAYOUT_PLAN.md` §2 Shapes; `engine/src/main/java/dev/launcher/engine/ui/BoxPainter.kt`,
   `NodeShape.kt`, `ComposeHost.kt` (shapes, clips).
@@ -76,3 +76,36 @@ built after that.
 - **JVM:** `BlobSchemaTest`.
 - **Not done:** the island's detailed state (it waits for the concept), the S24's cost per frame, and below Android 13
   on a device.
+
+### owner — 2026-11-13
+
+"B, don't wait till it's fully grown. grow, and then start detaching when it gets \"heavy\"".
+
+### claude — the detailed state, 2026-11-13
+
+- **The island is a `blob`** of two shapes (`island.kdl` 0.5.0):
+  - *The pill:* the island as it was, with all its states.
+  - *The banner's shape:* rests at no size inside the pill, 12 dp down (an empty shape takes no part in the union; two
+    shapes in one place swell it by a quarter of `smooth`, measured: 367 x 105 px for 346.5 x 84).
+- **On a detailed arrival:**
+  - the banner grows to 380 x 76 dp on `spring(0.38, 0.85)`: the island swells out of its underside;
+  - meanwhile it sinks to 44 dp on `cubic-bezier(0.7, 0, 0.3, 1) 650ms`, slow at first (heavy), then letting go;
+  - the blob (`smooth` 16 dp) keeps them joined by a neck until they are 8 dp apart;
+  - the mark, sender, text and "now" come at 380 to 470 ms.
+  - Going back plays it the other way, the content first.
+  The pill keeps its own state (the time, music, charging) throughout.
+- **Engine:** `blob align="top"` centres its shapes across it, and each keeps its own size. The arrival carries `text`,
+  `app` and `mark`. Mode switch for tests: `TEST_STATUS --es do kdl --ez on true --es component island --es mode
+  detailed|minimal` (settings come from packages later).
+- **Measured:**
+  - *The island proof's `detailed` stage (120 frames at 120 Hz):* joined for 45 frames, then apart; the banner 996 px
+    (380 dp), centred on the camera; content ink 3570; after it goes, nothing under the pill; the pill 132 dp again.
+    Every other stage still passes.
+  - *The launcher on the emulator with `TEST_NOTIFY`:* the banner under the island, then back after 4 s.
+  - *JVM:* `IslandKdlTest` and `ArrivalsTest`.
+- **Assumptions (to review):**
+  1. The default mode stays minimal.
+  2. The banner is 12 dp under the pill, 380 x 76 dp, radius 26.
+  3. The mark is the sender's first letter, not the app's icon (an app icon needs a picture provider of its own).
+  4. A tap or a swipe on the banner does nothing yet (actions come with input dispatch, E3).
+- **Not verified:** the S24 (the look, and the shader's cost per frame).

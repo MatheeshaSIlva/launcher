@@ -30,10 +30,13 @@ class IslandKdlTest {
 
     private fun host(hour24: Boolean = true, hour: Int = 13, minute: Int = 5, level: Int = 64,
         units: Units = Units(1f, 1f), playing: Boolean = false, art: Boolean = false, plugged: Boolean = false,
-        arriving: Boolean = false, others: Int = 3): ComponentHost {
+        arriving: Boolean = false, others: Int = 3, mode: String = "minimal"): ComponentHost {
         val env = object : Env {
             override fun state(name: String) = Value.Null
-            override fun prop(name: String) = when (name) { "hour24" -> Value.Bool.of(hour24); "title-scroll" -> Value.Bool.TRUE; else -> Value.Null }
+            override fun prop(name: String) = when (name) {
+                "hour24" -> Value.Bool.of(hour24); "title-scroll" -> Value.Bool.TRUE; "mode" -> Value.Str(mode); "shown" -> Value.Bool.TRUE
+                else -> Value.Null
+            }
             override fun token(key: String) = Value.Null
             override fun source(path: String) = when (path) {
                 "battery.level" -> Value.Num(level.toDouble())
@@ -54,6 +57,9 @@ class IslandKdlTest {
         return ComponentHost(component(), env, units, { painter })
     }
 
+    /** The pill: the island's states (the root is the blob holding it and the banner, T-015). */
+    private val ComponentHost.pill get() = root.children.single { it.value("label") == Value.Str("Pill") }
+
     private fun HostNode.labelled(l: String) = children.single { it.value("label") == Value.Str(l) }
     private fun idle(root: HostNode) = root.labelled("Idle")
 
@@ -62,16 +68,20 @@ class IslandKdlTest {
         assertEquals("island", c.name)
         assertEquals(listOf("device", "time", "battery", "media", "notifications"), c.uses.sources.map { it.name })
         assertEquals(listOf("hour24", "title-scroll", "mode", "shown"), c.props.map { it.name })
-        val root = host().root
+        // The island is a blob (T-015): the pill and the banner's shape, filled as one, the pill on the camera.
+        val island = host().root
+        assertEquals("blob", island.view.primitive)
+        assertEquals(Value.Str("cutout"), island.value("place"))
+        assertEquals(Value.Str("#000000"), island.value("fill"))
+        assertEquals(listOf("Pill", "Banner"), island.children.map { (it.value("label") as Value.Str).value })
+        val root = island.labelled("Pill")
         assertEquals("box", root.view.primitive)
-        assertEquals(Value.Str("cutout"), root.value("place"))
         assertEquals(Value.Str("full"), root.value("radius"))
-        assertEquals(Value.Str("#000000"), root.value("fill"))
         assertEquals(Value.Str("centre"), root.value("align"))
         assertEquals(Value.Bool.TRUE, root.value("clip"))
         // The idle row is there only while nothing plays; the media row always holds its slots (its pieces come and go).
         assertEquals(listOf("Idle", "Media", "Charging", "Notification"), root.children.map { (it.value("label") as Value.Str).value })
-        assertEquals(listOf("Media", "Charging", "Notification"), host(playing = true).root.children.map { (it.value("label") as Value.Str).value })
+        assertEquals(listOf("Media", "Charging", "Notification"), host(playing = true).pill.children.map { (it.value("label") as Value.Str).value })
         val row = idle(root)
         assertEquals("row", row.view.primitive)
         assertEquals(Value.Str("centre-line"), row.value("align"))
@@ -82,19 +92,19 @@ class IslandKdlTest {
     @Test fun clockAndBatteryBindingsCoverWidthChangingValues() {
         for ((hour, minute, formatted) in listOf(Triple(9, 59, "9:59"), Triple(10, 0, "10:00"),
             Triple(23, 59, "23:59"), Triple(0, 0, "0:00"))) {
-            assertEquals(Value.Str(formatted), host(hour = hour, minute = minute).root.let { idle(it) }.children.first().value("content"))
+            assertEquals(Value.Str(formatted), host(hour = hour, minute = minute).pill.let { idle(it) }.children.first().value("content"))
         }
-        assertEquals(Value.Str("13:05"), host().root.let { idle(it) }.children.first().value("content"))
-        assertEquals(Value.Str("1:05"), host(hour24 = false).root.let { idle(it) }.children.first().value("content"))
-        assertEquals(Value.Str("12:00"), host(hour24 = false, hour = 0, minute = 0).root.let { idle(it) }.children.first().value("content"))
+        assertEquals(Value.Str("13:05"), host().pill.let { idle(it) }.children.first().value("content"))
+        assertEquals(Value.Str("1:05"), host(hour24 = false).pill.let { idle(it) }.children.first().value("content"))
+        assertEquals(Value.Str("12:00"), host(hour24 = false, hour = 0, minute = 0).pill.let { idle(it) }.children.first().value("content"))
         for (level in listOf(9, 10, 64, 99, 100))
-            assertEquals(Value.Num(level.toDouble()), host(level = level).root.let { idle(it) }.children.last().value("content"))
+            assertEquals(Value.Num(level.toDouble()), host(level = level).pill.let { idle(it) }.children.last().value("content"))
     }
 
     @Test fun geometryAndTypographyStayInDpAcrossDensitiesAndLauncherScales() {
         for (density in listOf(1f, 2.625f)) {
             val units = Units(3f, density)
-            val root = host(units = units).root
+            val root = host(units = units).pill
             for (scale in listOf(3f, 4.5f)) {
                 units.unitPx = scale
                 assertEquals(132f * density, root.length("width"))
@@ -119,7 +129,7 @@ class IslandKdlTest {
     /** T-013: draft 4's media state (Figma 41:276) in dp, with fixed slots 14 | 90 | 28 | 92 | 12 around the camera. */
     @Test fun theMediaStateIsDraft4sInFixedSlots() {
         for (density in listOf(1f, 2.625f)) {
-            val root = host(units = Units(3f, density), playing = true).root
+            val root = host(units = Units(3f, density), playing = true).pill
             assertEquals(236f * density, root.length("width"))
             assertEquals(32f * density, root.length("height"))
             val media = root.labelled("Media")
@@ -134,7 +144,7 @@ class IslandKdlTest {
             assertEquals(236f, 14f + 90f + 28f + 92f + 12f)
             assertEquals(20f * density, left.labelled("Cover slot").length("width"))
             assertEquals(listOf<HostNode>(), left.labelled("Cover slot").children)   // no art yet: the slot stays, empty
-            val cover = host(units = Units(3f, density), playing = true, art = true).root.labelled("Media").labelled("Left").labelled("Cover slot").labelled("Cover")
+            val cover = host(units = Units(3f, density), playing = true, art = true).pill.labelled("Media").labelled("Left").labelled("Cover slot").labelled("Cover")
             assertEquals("image", cover.view.primitive)
             assertEquals(20f * density, cover.length("size"))
             assertEquals(4f * density, cover.length("radius"))
@@ -156,7 +166,7 @@ class IslandKdlTest {
                 assertEquals(Value.Bool.TRUE, b.value("loop-run"))
             }
         }
-        val paused = host(playing = false).root
+        val paused = host(playing = false).pill
         assertEquals(132f, paused.length("width"))
         assertEquals(listOf("Idle", "Media", "Charging", "Notification"), paused.children.map { (it.value("label") as Value.Str).value })
         val still = paused.labelled("Media")
@@ -170,7 +180,7 @@ class IslandKdlTest {
     /** T-014: one state at a time by rank (a notification, charging, media, idle), each at draft 4's width. */
     @Test fun theRankingPicksOneStateAtATime() {
         fun state(playing: Boolean = false, plugged: Boolean = false, arriving: Boolean = false): Pair<Float?, List<String>> {
-            val root = host(playing = playing, plugged = plugged, arriving = arriving).root
+            val root = host(playing = playing, plugged = plugged, arriving = arriving).pill
             return root.length("width") to root.shown()
         }
         val idle = state()
@@ -186,13 +196,13 @@ class IslandKdlTest {
         assertEquals("a notification over everything", 200f, notif.first)
         assertTrue("Sender" in notif.second && "Dot" in notif.second && "Others" in notif.second)
         assertTrue("Charging time" !in notif.second && "Title" !in notif.second && "Time" !in notif.second)
-        assertTrue("no count without others", "Others" !in host(arriving = true, others = 0).root.shown())
+        assertTrue("no count without others", "Others" !in host(arriving = true, others = 0).pill.shown())
     }
 
     /** T-014: the charging and notification states in draft 4's dp, the camera slot on the pill's centre. */
     @Test fun chargingAndNotificationAreDraft4sInFixedSlots() {
         val density = 2.625f
-        val c = host(units = Units(3f, density), plugged = true).root.labelled("Charging")
+        val c = host(units = Units(3f, density), plugged = true).pill.labelled("Charging")
         assertEquals(164f * density, c.length("width"))
         assertEquals(14f + 54f + 28f + 56f + 12f, 164f)
         assertEquals(54f * density, c.labelled("Charging left").length("width"))
@@ -201,7 +211,7 @@ class IslandKdlTest {
         assertEquals(6f * density, level.length("gap"))
         assertEquals(Value.Str("#7DBE93"), level.labelled("Charging level").value("color"))
         assertEquals(Value.Str("64%"), level.labelled("Charging level").value("content"))
-        val n = host(units = Units(3f, density), arriving = true).root.labelled("Notification")
+        val n = host(units = Units(3f, density), arriving = true).pill.labelled("Notification")
         assertEquals(200f * density, n.length("width"))
         assertEquals(14f + 72f + 28f + 74f + 12f, 200f)
         val left = n.labelled("Notification left")
@@ -215,5 +225,24 @@ class IslandKdlTest {
         val others = n.labelled("Notification right").labelled("Others")
         assertEquals(Value.Str("+3"), others.value("content"))
         assertEquals(Value.Str("#8A8A8A"), others.value("color"))
+    }
+
+    /** T-015: detailed mode: the pill keeps its own state; the banner's shape grows below it and its content shows. */
+    @Test fun detailedModeGrowsTheBannerBelowAndLeavesThePillAlone() {
+        val density = 2.625f
+        val h = host(units = Units(3f, density), arriving = true, mode = "detailed")
+        assertEquals("the pill stays idle", 132f * density, h.pill.length("width"))
+        assertTrue("Time" in h.pill.shown() && "Sender" !in h.pill.shown())
+        val banner = h.root.labelled("Banner")
+        assertEquals(380f * density, banner.length("width"))
+        assertEquals(76f * density, banner.length("height"))
+        assertEquals(44f * density, banner.length("translate-y"))
+        assertEquals(listOf("Mark", "Banner sender", "Banner text", "Banner time"), banner.children.map { (it.value("label") as Value.Str).value })
+        // Minimal mode: the banner's shape rests at no size at the pill's top (no part in the union), empty.
+        val m = host(units = Units(3f, density), arriving = true).root.labelled("Banner")
+        assertEquals(0f, m.length("width"))
+        assertEquals(0f, m.length("height"))
+        assertEquals(12f * density, m.length("translate-y"))
+        assertEquals(listOf<HostNode>(), m.children)
     }
 }

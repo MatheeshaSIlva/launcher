@@ -579,12 +579,16 @@ object GestureNav : NavHost {
                         "kdl" -> {
                             // --es component status-bar|island (T-012); none named is the status bar.
                             val c = i.getStringExtra("component")
+                            // --es mode minimal|detailed: the island's notifications (T-015).
+                            i.getStringExtra("mode")?.let { m ->
+                                if (!dev.launcher.app.statusbar.KdlBar.setMode(app, m)) AppLog.log("[statusbar] test: no island mode '$m'")
+                            }
                             if (!dev.launcher.app.statusbar.KdlBar.setComponent(app, c)) {
                                 AppLog.log("[statusbar] test: no KDL component '$c' (${dev.launcher.app.statusbar.KdlBar.COMPONENTS.keys.joinToString()}); unchanged")
                                 return@post
                             }
                             dev.launcher.app.statusbar.KdlBar.set(app, on)
-                            AppLog.log("[statusbar] test: KDL ${dev.launcher.app.statusbar.KdlBar.component(app)} ${if (on) "on" else "off"}")
+                            AppLog.log("[statusbar] test: KDL ${dev.launcher.app.statusbar.KdlBar.component(app)} ${if (on) "on" else "off"}, island mode ${dev.launcher.app.statusbar.KdlBar.mode(app)}")
                             removeStatusBar()
                             addStatusBar()
                         }
