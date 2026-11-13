@@ -82,6 +82,20 @@ class PresenceTest {
         assertEquals(0, h.retainedCount)
     }
 
+    /** Codex, T-015: what is leaving can be ended at once (a lock: a leaving message must not keep showing its text). */
+    @Test fun endExitsReleasesEveryLeavingNodeAtOnce() {
+        val h = host(row); h.place()
+        val b = h.root.children[1]
+        items = listOf("a", "c"); h.refresh(); h.place()
+        h.at(30_000_000)
+        assertTrue(b.isLeaving)
+        h.endExits()
+        assertEquals(listOf(b), released)
+        assertEquals(listOf("a", "c"), h.root.drawn.map { it.key.last() })
+        assertEquals(0, h.retainedCount)
+        assertFalse("nothing still runs for it", h.at(40_000_000) && b in h.root.drawn)
+    }
+
     @Test fun aNodeThatComesBackBeforeItsExitEndsIsTheSameNodeTurningBack() {
         val h = host(row); h.place()
         val b = h.root.children[1]

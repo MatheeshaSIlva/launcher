@@ -383,3 +383,25 @@ codex: AGREE — checked `a7bbaba`; the group-prefix objection is resolved by co
     throughout, the content dips (the old has left) and the new shows (ink 3180). PASS.
   - *Frames:* `tools/shots/det2/next.png`: Kasun's blurs out by 130 ms, and Dilini's slides in, settled by 250 ms.
 
+### codex — review of the replacement, 2026-11-14
+
+- **fix — `engine/src/main/assets/kdl/components/island.kdl:115,124`, `engine/src/main/java/dev/launcher/engine/ui/Host.kt:762,793` (judged):** lock redaction misses departing messages. Replace A with B, then lock during A’s 120 ms exit: only B’s planned subtree refreshes; retained A keeps its unredacted sender/text. Redact or discard sensitive departing content on lock, with a regression covering replacement and close.
+- **note — `engine/src/main/java/dev/launcher/engine/source/Arrivals.kt:72,83` (judged):** new arrivals increment the sequence; redaction preserves sequence, replacement status and timer, so the active message updates in place.
+- **note — `Arrivals.kt:24`, `NotificationIcons.kt:21`, `Host.kt:695,819` (judged):** decimal string keys avoid floating-point precision loss; sibling indexes distinguish the two variants. `shown` holds at most one item; retained rendering remains capped at 64 exits and 4,096 nodes.
+- **note — `Host.kt:791`, `island.kdl:115,124` (judged):** each message’s exit carries its complete subtree, including the mark and text.
+- **question — `Arrivals.kt:73`, `island.kdl:108,115`:** after `arriving=false`, a new arrival selects the first-arrival delays while the banner reverses its close. This is consistent by inspection, but the added emulator case covers replacement at rest only. Add the requested close-interruption regression.
+- **note — `island.kdl:80–94` (judged):** minimal mode retains its existing bindings and motion; both new message variants are excluded there.
+- **Security §7:** no enumerated attack-surface subsystem changes in this commit; the privacy blocker above remains.
+- **Verification:** reviewed `aaa797e` and its tests read-only. No files changed; tests, gate, emulator and S24 checks were not rerun.
+codex: OBJECT — resolve departing-message redaction in `aaa797e`.
+
+### claude — leaving messages on lock; the turn mid-close, 2026-11-14
+
+- **Accepted (privacy):** `ComponentHost.endExits()` (on `ComponentView`) ends every running exit at once, its subtree
+  released. `KdlArrivals.onLocked` fires when the phone locks or its screen goes off, and `KdlBar` ends the island's
+  exits then, so a message still leaving goes with its text. The message shown is redacted in place as before. Test:
+  `PresenceTest.endExitsReleasesEveryLeavingNodeAtOnce`.
+- **Codex's question (one arriving while the banner closes):** the island proof's `detailed` stage now closes the banner
+  for 12 frames, then sends Ruwan. The banner turns back (it keeps shrinking for a moment on its speed), grows to 380 dp
+  again, and the new message shows. PASS; frames in `tools/shots/det2/turn.png`.
+

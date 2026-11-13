@@ -252,6 +252,9 @@ class ComponentView(
         set(v) { if (!disposed && v != centre.floatValue) { centre.floatValue = v; applied() } }
 
     /** A prop's value from the window (the clock's 12/24 h, the bar's tone), bindings reading it evaluated again; nothing once disposed (a delivery queued before can still come). */
+    /** Every exit still running ends now ([ComponentHost.endExits]); on the view's thread. */
+    fun endExits() { if (!disposed) host.endExits() }
+
     fun setProp(name: String, value: Value) {
         if (disposed || props[name] == value) return
         props[name] = value

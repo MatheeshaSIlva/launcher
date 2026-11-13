@@ -26,6 +26,9 @@ class KdlArrivals(private val ctx: Context, private val handler: Handler) {
      * screen going off counts as locked (the lock itself may come later); the screen coming on asks the keyguard.
      */
     private var screenOff = false
+    private var wasLocked = false
+    /** Called when the phone locks (or its screen goes off): what is still leaving the banner must go at once (Codex). */
+    var onLocked: (() -> Unit)? = null
     private val lockWatch = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: Context, i: android.content.Intent) {
             screenOff = i.action == android.content.Intent.ACTION_SCREEN_OFF
@@ -51,6 +54,8 @@ class KdlArrivals(private val ctx: Context, private val handler: Handler) {
 
     private fun read() {
         val locked = screenOff || try { keyguard.isKeyguardLocked } catch (_: Throwable) { true }
+        if (locked && !wasLocked) onLocked?.invoke()
+        wasLocked = locked
         tracker.update(Notifs.items.map { i ->
             val app = AppInfo.labelIfRead(i.pkg) ?: ""
             val name = if (locked) app else (i.title ?: i.text)?.toString().orEmpty()

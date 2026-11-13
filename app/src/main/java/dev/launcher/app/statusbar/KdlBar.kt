@@ -94,6 +94,8 @@ object KdlBar {
             imagePictures = media?.let { mapOf("media" to it.pictures) } ?: emptyMap())
         display.bind(view.view)
         view.addOnDispose { icons?.dispose(); arrivals?.dispose(); media?.dispose(); display.unbind() }
+        // Locked: a message still leaving the banner goes at once, its text with it (the one shown is redacted in place).
+        arrivals?.onLocked = { if (!view.isDisposed) view.endExits() }
         // The island takes nothing of StatusBarView's (its colours are its own, it has no notification icons).
         if (!island) view.derive = {
             view.textWidth("Time")?.let { w ->

@@ -610,6 +610,16 @@ class ComponentHost(
         n.parent?.let { p -> p.drawn(p.drawn.filter { it !== n }) }
     }
 
+    /**
+     * Every exit still running ends now, its node and subtree released (Codex, T-015: when the phone locks, a message
+     * still leaving must not keep its text on screen). The root's own exit is left to run.
+     */
+    fun endExits() {
+        if (disposed) return
+        for (n in exits.toList()) if (n !== root) { moving.remove(n); finishExit(n) }
+        requestFrame()
+    }
+
     /** Whether any node still moves (its frame clock runs while so). */
     val isMoving get() = moving.isNotEmpty()
 

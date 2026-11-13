@@ -853,6 +853,24 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             if (!dipped) errors += "the old message never left (no frame with little content)"
             if (ink2 < 200) errors += "the new message does not show ($ink2)"
             lines += "replaced: the old left, the new shows (ink $ink2)"
+            // One arrives while the banner closes (Codex): the banner turns back and grows again, and the new one shows.
+            s.arrive(null)
+            repeat(12) { s.step() }
+            s.arrive(dev.launcher.engine.source.NotifArrival("k3", "Ruwan", 3, "Running ten minutes late", "Messages", seq = 3))
+            for (k in 1..150) {
+                s.step()
+                if (k in 3..60 step 3) { val f = s.capture(); save("detailed-turn-$k.png", Bitmap.createBitmap(f, (ex - 200 * density).toInt().coerceAtLeast(0), (pillTop - 4 * density).toInt(), minOf((400 * density).toInt(), f.width), (145 * density).toInt())) }
+            }
+            val turned = s.capture()
+            var tl = -1; var tr = -1
+            for (x in 0 until turned.width) if ((turned.getPixel(x, bannerRow) and 255) < 100) { if (tl < 0) tl = x; tr = x }
+            if (abs(tr - tl + 1 - 380 * density) > 2f) errors += "after turning back the banner is ${tr - tl + 1} px wide"
+            var ink3 = 0
+            for (y in (pillTop + 50 * density).toInt() until (pillTop + 115 * density).toInt()) for (x in (ex - 120 * density).toInt() until (ex + 100 * density).toInt()) {
+                val px = turned.getPixel(x, y); if ((px shr 16 and 255) > 140) ink3++
+            }
+            if (ink3 < 200) errors += "after turning back the new message does not show ($ink3)"
+            lines += "turned back mid-close: banner ${tr - tl + 1} px, ink $ink3"
             // Back: it merges into the pill again, nothing left under it.
             s.arrive(null)
             for (k in 1..120) {
