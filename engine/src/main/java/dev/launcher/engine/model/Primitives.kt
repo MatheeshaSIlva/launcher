@@ -92,6 +92,8 @@ object Primitives {
         // T-015: the smooth union of its `box` children's shapes in one `fill`, joined within `smooth`.
         // `align` "top": its shapes centred across it at its top (the island's pill and banner, T-015).
         PrimitiveDef("blob", lengths("smooth") + AttrDef("fill", AttrType.COLOR) +
-            AttrDef("align", AttrType.oneOf("top-start", "top"), "top-start"), container = true),
+            AttrDef("align", AttrType.oneOf("top-start", "top"), "top-start") +
+            // T-015: its first two shapes stretch, snap and squash as they part (the island's mitosis).
+            AttrDef("elastic", AttrType.BOOL, false, bindable = false), container = true),
     ).associateBy { it.name }
 }

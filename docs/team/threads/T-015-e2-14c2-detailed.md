@@ -109,3 +109,44 @@ built after that.
   3. The mark is the sender's first letter, not the app's icon (an app icon needs a picture provider of its own).
   4. A tap or a swipe on the banner does nothing yet (actions come with input dispatch, E3).
 - **Not verified:** the S24 (the look, and the shader's cost per frame).
+
+### owner — S24, 2026-11-13
+
+"it should feel like mitosis from the status pill. that means the status pill should also react to the notification.
+have the island stretch and squash when the notification is breaking apart from it. there should be a bit of tension
+before breaking off and squash and stretch when it does. right now the notification just grows behind the island and
+moves down. fix it. Also, the notifications should have transparency too, just like the panels. read the design
+language for guidance. there should be a gradient of opacity between the status pill and the notification during the
+mitosis transition."
+
+### claude — mitosis, 2026-11-13
+
+- **The design language (the owner's artifact, re-read):**
+  - glass is a backdrop blur of 24 dp with saturation 1.2, and the `glass` tint over it (`rgba(18,18,18,0.76)` in dark);
+  - `shadow-float` under it (0 12 32 at 55 % black, and a 1 px hairline at 6 % white);
+  - text on it in `ink` and `ink-2` only;
+  - opaque `surface` as the fallback.
+- **`blob elastic` (`BlobElastic`):** the first shape is the parent (the pill), the second the bud (the banner).
+  - *Joined:* while the two are joined across a gap they are one body. The pill stretches down by 36 % of the gap, its
+    bottom edge pulled and its width narrowed (half of what keeps its area, so it reads as jelly). The banner is held
+    back by 30 % of it as one piece. A third shape, the neck, bridges them and thins from half the pill's width to a
+    thread as the neck that shows nears the union's reach. That is the tension.
+  - *The break:* it comes past about 24 dp. Then the spring (3 Hz, damping 0.26) takes both back past their rest: the
+    pill squashes short and wide, the banner drops and squashes. Both settle.
+  - *Found and fixed:* a spring lagging behind the pull let the neck break before anything had stretched (measured on
+    the emulator: under 1 px). While joined, the stretch now follows the pull at once, and the spring takes over at the
+    break from that speed.
+- **Colours and glass (`BlobPainter`):**
+  - every shape is filled with its own box's fill, and the shader blends colours by the same weights that join the
+    shapes: the solid pill and the glass banner meet in a gradient across the neck, and the neck itself is halfway;
+  - a translucent shape gets `shadow-float` and the hairline in the shader;
+  - the banner is `#C2121212` (the glass tint), its text `#F2F2F2` and `#C4C4C4` (`ink`, `ink-2`), "now" in `ink-2`, the
+    mark a 12 % white fill (no glass on glass).
+- **Measured on the emulator:**
+  - the island proof's `detailed` stage at 120 Hz: joined for 52 frames, then apart; the pill back at 132 dp and the
+    banner at 380 dp (998 px), centred; the content shows; nothing left under the pill after it goes;
+  - frames 34 to 60 (`tools/shots/det/break.png`): the pill elongates and the neck thins, then the pill squashes after
+    the break and settles;
+  - JVM `BlobElasticTest`: stretch, a late break, squash, rest, colours kept, the neck.
+- **Not yet:** the backdrop blur behind the banner (Samsung's view blur under it, E3's glass work). The glass is the
+  tint without blur for now; the frost comes next.

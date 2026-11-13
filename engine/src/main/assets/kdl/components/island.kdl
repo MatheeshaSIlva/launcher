@@ -16,7 +16,7 @@
 // while locked). `mode` "detailed" (a banner that grows out of the island) comes with E2.14c-2 and shows as minimal now.
 // The island comes and goes with the bar (E2.14e): an app that goes full screen hides it (a quick fade and shrink), a
 // swipe from the top shows it for a moment (a soft spring back), as the stock bar does.
-component "island" version="0.5.0" {
+component "island" version="0.6.0" {
   props {
     hour24 type=bool default=#true
     title-scroll type=bool default=#true
@@ -35,8 +35,8 @@ component "island" version="0.5.0" {
     // the cover, the title, then the bars. Closing, the pieces go together and the time comes back once they have gone
     // (owner, 2026-11-12: "springy and staged").
     // Every piece has a fixed slot that stays, so nothing shifts while the others come and go.
-    blob place="cutout" place-gap=(dp)4 width=(dp)132 height=(dp)32 fill="#000000" smooth=(dp)16 align="top" visible="{@shown}" enter="fade scale spring(0.4, 0.8)" exit="fade scale 160ms" label="Island" {
-      box width="{(notifications.arriving && @mode != 'detailed') ? 200dp : (battery.plugged ? 164dp : (media.playing ? 236dp : 132dp))}" height=(dp)32 radius="full" align="centre" clip=#true transition="size spring(0.45, 0.75)" label="Pill" {
+    blob place="cutout" place-gap=(dp)4 width=(dp)132 height=(dp)32 fill="#000000" smooth=(dp)16 align="top" elastic=#true visible="{@shown}" enter="fade scale spring(0.4, 0.8)" exit="fade scale 160ms" label="Island" {
+      box width="{(notifications.arriving && @mode != 'detailed') ? 200dp : (battery.plugged ? 164dp : (media.playing ? 236dp : 132dp))}" height=(dp)32 radius="full" fill="#000000" align="centre" clip=#true transition="size spring(0.45, 0.75)" label="Pill" {
         row width=(dp)132 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{!(notifications.arriving && @mode != 'detailed') && !battery.plugged && !media.playing}" enter="fade spring(0.45, 1) delay(110ms)" exit="fade 90ms" label="Idle" {
           text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true label="Time"
           spacer flex=1
@@ -94,19 +94,23 @@ component "island" version="0.5.0" {
           }
         }
       }
+      // Mitosis (owner, 2026-11-13): the blob is elastic, so while the banner is drawn away the pill stretches toward it
+      // and the neck holds (tension), it breaks late (about 22 dp apart), and both snap back past their rest (squash) and
+      // settle. The banner is the design language's glass tint (#121212 at 76 %), with shadow-float and a hairline from
+      // the blob; the solid pill and the glass banner blend across the neck. Text on it: ink and ink-2 only.
       // The detailed notification (T-015; owner, 2026-11-13: concept B, "grow, and then start detaching when it gets
       // heavy"): a second shape that rests at no size inside the pill, 12 dp down (so it grows out of the pill's underside, never above it; an empty shape takes no part in the union: two
       // shapes on one place would swell it by a quarter of `smooth`). On an arrival it grows to 380 x 76 dp on a quick spring (the
       // island swells) and, while still growing, sinks on a curve that starts slowly (heavy) and then lets go; the blob
       // joins the two with a liquid neck that thins and breaks 8 dp apart. Its content comes once it has parted; it goes
       // back the same way, the content first.
-      box width="{(notifications.arriving && @mode == 'detailed') ? 380dp : 0dp}" height="{(notifications.arriving && @mode == 'detailed') ? 76dp : 0dp}" radius="{(notifications.arriving && @mode == 'detailed') ? 26dp : 0dp}" translate-y="{(notifications.arriving && @mode == 'detailed') ? 44dp : 12dp}" transition="size spring(0.38, 0.85), radius spring(0.38, 0.85), place cubic-bezier(0.7, 0, 0.3, 1) 650ms" label="Banner" {
-        box width=(dp)36 height=(dp)36 radius="full" fill="#2F3A46" translate-x=(dp)16 translate-y=(dp)20 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade scale spring(0.45, 0.8) delay(380ms)" exit="fade 80ms" label="Mark" {
+      box width="{(notifications.arriving && @mode == 'detailed') ? 380dp : 0dp}" height="{(notifications.arriving && @mode == 'detailed') ? 76dp : 0dp}" radius="{(notifications.arriving && @mode == 'detailed') ? 26dp : 0dp}" translate-y="{(notifications.arriving && @mode == 'detailed') ? 60dp : 12dp}" fill="#C2121212" transition="size spring(0.38, 0.85), radius spring(0.38, 0.85), place cubic-bezier(0.7, 0, 0.3, 1) 700ms" label="Banner" {
+        box width=(dp)36 height=(dp)36 radius="full" fill="#1FFFFFFF" translate-x=(dp)16 translate-y=(dp)20 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade scale spring(0.45, 0.8) delay(520ms)" exit="fade 80ms" label="Mark" {
           text "{notifications.arrival.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" translate-x=(dp)13 translate-y=(dp)8 label="Mark letter"
         }
-        text "{notifications.arrival.name}" font="plex-sans" size=(dp)14 weight=500 color="#F2F2F2" width=(dp)250 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)16 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade rise spring(0.5, 0.85) delay(420ms)" exit="fade 80ms" label="Banner sender"
-        text "{notifications.arrival.text}" font="plex-sans" size=(dp)13 weight=400 color="#B5B5B5" width=(dp)280 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)38 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade rise spring(0.5, 0.85) delay(470ms)" exit="fade 80ms" label="Banner text"
-        text "now" font="jetbrains-mono" size=(dp)11 weight=400 color="#8A8A8A" translate-x=(dp)336 translate-y=(dp)18 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade spring(0.5, 0.9) delay(470ms)" exit="fade 80ms" label="Banner time"
+        text "{notifications.arrival.name}" font="plex-sans" size=(dp)14 weight=500 color="#F2F2F2" width=(dp)250 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)16 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade rise spring(0.5, 0.85) delay(560ms)" exit="fade 80ms" label="Banner sender"
+        text "{notifications.arrival.text}" font="plex-sans" size=(dp)13 weight=400 color="#C4C4C4" width=(dp)280 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)38 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade rise spring(0.5, 0.85) delay(600ms)" exit="fade 80ms" label="Banner text"
+        text "now" font="jetbrains-mono" size=(dp)11 weight=400 color="#C4C4C4" translate-x=(dp)336 translate-y=(dp)18 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade spring(0.5, 0.9) delay(600ms)" exit="fade 80ms" label="Banner time"
       }
     }
   }

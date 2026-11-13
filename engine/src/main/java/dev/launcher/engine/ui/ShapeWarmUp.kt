@@ -59,7 +59,10 @@ object ShapeWarmUp {
                     rs.setFloatUniform("radii", floatArrayOf(8f, 10f, 0f, 0f))
                     rs.setFloatUniform("count", 2f)
                     rs.setFloatUniform("k", 12f)
-                    rs.setColorUniform("color", 0xFF000000.toInt())
+                    rs.setFloatUniform("colors", floatArrayOf(0f, 0f, 0f, 1f, 0.07f, 0.07f, 0.07f, 0.76f) + FloatArray(8))
+                    rs.setFloatUniform("shadowY", 12f)
+                    rs.setFloatUniform("shadowBlur", 32f)
+                    rs.setFloatUniform("hair", 2f)
                     c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), Paint().apply { shader = rs })
                 }
                 node.endRecording()

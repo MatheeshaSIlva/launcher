@@ -166,6 +166,20 @@ class HostNode internal constructor(
     /** E2.14d: a text that decodes its changes. */
     internal val hasDecode = view.primitive == "text" && ((view.attrs["decode"]?.value as? dev.launcher.engine.model.AttrValue.Literal)?.value as? dev.launcher.engine.kdl.KdlValue.Num)?.double?.let { it > 0.0 } == true
     internal val decode by lazy { DecodeText() }
+    /** T-015: a blob whose shapes stretch, snap and squash as they part. */
+    internal val hasElastic = view.primitive == "blob" && ((view.attrs["elastic"]?.value as? dev.launcher.engine.model.AttrValue.Literal)?.value as? dev.launcher.engine.kdl.KdlValue.Bool)?.value == true
+    internal val elastic by lazy { BlobElastic() }
+    private var elasticShapes: List<BlobPainter.Shape>? = null
+    /** Its painter saw [raw] (its shapes as they are): a change starts its clock if it is not running. */
+    internal fun elasticSaw(raw: List<BlobPainter.Shape>) {
+        if (raw == elasticShapes) return
+        elasticShapes = raw
+        recurringChanged()
+    }
+    private fun stepElastic(now: Long): Boolean {
+        val raw = elasticShapes ?: BlobPainter.shapes(this).also { elasticShapes = it }
+        return elastic.step(raw.getOrNull(0), raw.getOrNull(1), BlobPainter.smooth(this), now)
+    }
     internal var drawingAttached = false
     internal var recurringChanged: () -> Unit = {}
     /** Called by the Compose draw node on attach/detach; recurring work never runs off screen. */
@@ -199,7 +213,8 @@ class HostNode internal constructor(
             motionContext.resolver.curve("motion.move"), now)
         // A decode leaving or out of sight lands on its text (nothing scrambles unseen).
         if (hasDecode && (frozen || !eligible) && decode.busy) decode.step(Long.MAX_VALUE)
-        return (hasLoop && loop.busy) || (hasScroll && scroll.busy) || (hasDecode && decode.busy)
+        val jelly = hasElastic && eligible && !frozen && !motionContext.reduced() && stepElastic(now)
+        return (hasLoop && loop.busy) || (hasScroll && scroll.busy) || (hasDecode && decode.busy) || jelly
     }
     /** The size its surface draws at now. */
     /** The radius declaration its shown radius last followed: a new one starts a handover (T-011). */
@@ -315,8 +330,10 @@ class HostNode internal constructor(
         if (hasLoop) loop.step(now)
         if (hasScroll) scroll.step(now)
         if (hasDecode) decode.step(now)
+        val jelly = hasElastic && stepElastic(now)
         shown()
-        return busy || (hasLoop && loop.busy) || (hasScroll && scroll.busy) || (hasDecode && decode.busy)
+        if (jelly) redraw()
+        return busy || (hasLoop && loop.busy) || (hasScroll && scroll.busy) || (hasDecode && decode.busy) || jelly
     }
 
     internal fun snapMotion() { nodeMotion?.let { it.snap(); shown() } }
@@ -721,7 +738,7 @@ class ComponentHost(
                 node.onMoving = startMoving
                 node.motionContext = motionContext
                 node.recurringChanged = { refreshMotion(); node.redraw() }
-                if ("loop-from" in bindings || "scroll" in bindings || node.hasDecode) recurringNodes += node
+                if ("loop-from" in bindings || "scroll" in bindings || node.hasDecode || node.hasElastic) recurringNodes += node
                 node.key = p.key
                 node.arriving = !building
                 Instance(node, p.scope)

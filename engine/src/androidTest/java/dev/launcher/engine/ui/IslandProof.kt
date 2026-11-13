@@ -784,8 +784,8 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
 
     /**
      * A detailed notification, frame by frame on the real preset: the pill stays 132 dp on the camera; the banner's shape
-     * grows out of it, hangs joined by a neck (the row between them black at some frame) and parts (that row clear at the
-     * end); the banner ends 380 dp wide, centred under the pill, 12 dp below it; its content shows once parted. Then it
+     * grows out of it, hangs joined by a neck (the row between them dark at some frame) and parts (that row clear at the
+     * end); the banner ends 380 dp wide, centred under the pill, 28 dp below it; its content shows once parted. Then it
      * goes back: the banner merges into the pill again and nothing is left under it.
      */
     private fun detailed(d: ComponentDef, result: Bundle, errors: MutableList<String>) {
@@ -797,13 +797,14 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             instrumentation.runOnMainSync { s.view.setProp("mode", Value.Str("detailed")) }
             s.drawn()
             val pillTop = ey - 16 * density
-            val gapRow = (pillTop + 32 * density + 6 * density).toInt()       // between the pill and the banner at rest
-            val bannerRow = (pillTop + 44 * density + 38 * density).toInt()    // the banner's middle at rest
-            fun dark(b: Bitmap, x: Int, y: Int) = (b.getPixel(x, y) and 255) < 60 && (b.getPixel(x, y) shr 16 and 255) < 60
+            val gapRow = (pillTop + 32 * density + 14 * density).toInt()      // between the pill and the banner at rest
+            val bannerRow = (pillTop + 60 * density + 38 * density).toInt()    // the banner's middle at rest
+            // Not the proof's blue background: the solid pill, the glass banner (76 % dark over blue) or the neck between.
+            fun dark(b: Bitmap, x: Int, y: Int) = (b.getPixel(x, y) and 255) < 140 && (b.getPixel(x, y) shr 16 and 255) < 60
             var joined = 0
             val gapSeen = ArrayList<Int>()
             s.arrive(dev.launcher.engine.source.NotifArrival("k", "Kasun", 3, "See you at 7. Bring the charger, mine died", "Messages"))
-            for (k in 1..120) {
+            for (k in 1..180) {
                 s.step()
                 val b = s.capture()
                 val e = s.edges(b, cy)
@@ -811,7 +812,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
                 val g = dark(b, ex.toInt(), gapRow)
                 if (g) joined++
                 gapSeen += if (g) 1 else 0
-                if (k in listOf(2, 5, 9, 14, 20, 28, 40, 60, 120)) save("detailed-$k.png", Bitmap.createBitmap(b, (ex - 200 * density).toInt().coerceAtLeast(0), (pillTop - 4 * density).toInt(), minOf((400 * density).toInt(), b.width), (130 * density).toInt()))
+                if (k in listOf(4, 10, 16, 24, 32, 40, 48, 56, 64, 72, 90, 120) || k in 34..60 step 2) save("detailed-$k.png", Bitmap.createBitmap(b, (ex - 200 * density).toInt().coerceAtLeast(0), (pillTop - 4 * density).toInt(), minOf((400 * density).toInt(), b.width), (130 * density).toInt()))
             }
             val b = s.capture()
             // While the banner grows from the pill's top the island swells; at rest the pill is 132 dp again.
@@ -819,7 +820,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             if (joined == 0) errors += "no frame joined the banner to the pill (the neck)"
             if (dark(b, ex.toInt(), gapRow)) errors += "at rest the banner is still joined to the pill"
             var l = -1; var r = -1
-            for (x in 0 until b.width) if (dark(b, x, bannerRow)) { if (l < 0) l = x; r = x }
+            for (x in 0 until b.width) if ((b.getPixel(x, bannerRow) and 255) < 100) { if (l < 0) l = x; r = x }
             val bw = r - l + 1
             if (abs(bw - 380 * density) > 2f) errors += "the banner is $bw px wide, expected ${380 * density}"
             if (abs((l + r) / 2f - ex) > 1.5f) errors += "the banner's centre ${(l + r) / 2f}, the camera's $ex"
@@ -828,7 +829,7 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
                 val px = b.getPixel(x, y); if ((px shr 16 and 255) > 140) ink++
             }
             if (ink < 200) errors += "the banner's content does not show ($ink)"
-            lines += "joined for $joined of 120 frames (${gapSeen.joinToString("")}); banner $bw px, centred; content ink $ink"
+            lines += "joined for $joined of 180 frames (${gapSeen.joinToString("")}); banner $bw px, centred; content ink $ink"
             // Back: it merges into the pill again, nothing left under it.
             s.arrive(null)
             repeat(120) { s.step() }

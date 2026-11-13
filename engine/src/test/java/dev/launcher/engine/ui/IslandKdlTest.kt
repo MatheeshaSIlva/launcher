@@ -236,7 +236,9 @@ class IslandKdlTest {
         val banner = h.root.labelled("Banner")
         assertEquals(380f * density, banner.length("width"))
         assertEquals(76f * density, banner.length("height"))
-        assertEquals(44f * density, banner.length("translate-y"))
+        assertEquals(60f * density, banner.length("translate-y"))
+        assertEquals(Value.Str("#C2121212"), banner.value("fill"))
+        assertEquals(Value.Bool.TRUE, h.root.value("elastic"))
         assertEquals(listOf("Mark", "Banner sender", "Banner text", "Banner time"), banner.children.map { (it.value("label") as Value.Str).value })
         // Minimal mode: the banner's shape rests at no size at the pill's top (no part in the union), empty.
         val m = host(units = Units(3f, density), arriving = true).root.labelled("Banner")
