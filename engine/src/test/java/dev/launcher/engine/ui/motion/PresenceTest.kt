@@ -96,6 +96,24 @@ class PresenceTest {
         assertFalse("nothing still runs for it", h.at(40_000_000) && b in h.root.drawn)
     }
 
+    /** Codex, T-015: a lock before the pending refresh: what that refresh removes goes at once, with no exit. */
+    @Test fun cutExitsAlsoCoversRemovalsThatComeAfter() {
+        val h = host(row); h.place()
+        val b = h.root.children[1]
+        h.cutExits(1000)
+        // The source's change reaches the host after the lock.
+        items = listOf("a", "c"); h.refresh(); h.place()
+        assertFalse("no exit", b.isLeaving)
+        assertEquals(listOf(b), released)
+        assertEquals(listOf("a", "c"), h.root.drawn.map { it.key.last() })
+        assertEquals(0, h.retainedCount)
+        // A second later exits run again.
+        clock += 1_001_000_000L
+        val c = h.root.children[1]
+        items = listOf("a"); h.refresh(); h.place()
+        assertTrue("an exit again after the cut", c.isLeaving)
+    }
+
     @Test fun aNodeThatComesBackBeforeItsExitEndsIsTheSameNodeTurningBack() {
         val h = host(row); h.place()
         val b = h.root.children[1]

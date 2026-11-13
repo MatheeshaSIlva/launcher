@@ -620,6 +620,19 @@ class ComponentHost(
         requestFrame()
     }
 
+    /**
+     * [endExits], and for the next [ms] nothing removed leaves on an exit: it goes at once (Codex, T-015: a lock before a
+     * pending refresh would otherwise start a message's exit, its text on screen, a frame later). The root's own exit
+     * is not cut.
+     */
+    fun cutExits(ms: Long) {
+        if (disposed) return
+        exitsCutUntil = motionContext.now() + ms * 1_000_000L
+        endExits()
+    }
+    private var exitsCutUntil = Long.MIN_VALUE
+    private fun exitsCut() = motionContext.now() < exitsCutUntil
+
     /** Whether any node still moves (its frame clock runs while so). */
     val isMoving get() = moving.isNotEmpty()
 
@@ -800,7 +813,7 @@ class ComponentHost(
             if (parentGone) continue
             // The top of a removed subtree: it leaves on its exit carrying the subtree, or the subtree goes at once.
             val sub = removed.filterKeys { it.size >= key.size && it.subList(0, key.size) == key }
-            if (!disposed && !rootNode.hiddenOrNull() && startExit(inst.node)) sub.forEach { (k, i) -> retained[k] = i }
+            if (!disposed && !rootNode.hiddenOrNull() && !exitsCut() && startExit(inst.node)) sub.forEach { (k, i) -> retained[k] = i }
             else sub.values.forEach { release(it.node) }
         }
         // The root's own exit: hidden once it ends; shown again before then, it turns back.

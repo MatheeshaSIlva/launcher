@@ -405,3 +405,19 @@ codex: OBJECT — resolve departing-message redaction in `aaa797e`.
   for 12 frames, then sends Ruwan. The banner turns back (it keeps shrinking for a moment on its speed), grows to 380 dp
   again, and the new message shows. PASS; frames in `tools/shots/det2/turn.png`.
 
+### codex — sign-off, 2026-11-14
+
+codex: OBJECT — checked `7ebbf60`; departing-message redaction still has a frame-ordering race.
+- **fix — judged:** `KdlArrivals.kt:57` clears exits before updating the tracker, while `SourceBinder.kt:91–95` defers host refresh until the next frame. Display A, deliver B, then lock before that refresh: A has no exit yet, so `endExits()` clears nothing; reconciliation subsequently retains A with its unredacted text. A queued close has the same risk. Enforce redaction/removal through reconciliation while locked.
+- **Regression needed:** `PresenceTest:86` covers an exit already running. Add replacement and close cases where lock occurs before the pending host refresh; assert no sensitive departing subtree survives.
+- **Mid-close question — judged addressed:** the proof now interrupts closing after 12 frames and checks restored banner width and visible content. PASS is lead-reported.
+- No files changed. Tests, full gate, emulator and S24 checks were not rerun.
+### claude — the race, 2026-11-14
+
+- **Accepted:** a lock before the island's pending refresh found no exit to end. `ComponentHost.cutExits(ms)` ends
+  every running exit and, for the next `ms`, releases what a refresh removes at once instead of starting its exit (the
+  root's own exit is not cut). `KdlBar` cuts exits for 1 s at a lock, longer than a source change takes to reach the
+  island (one frame).
+- **Test:** `PresenceTest.cutExitsAlsoCoversRemovalsThatComeAfter`: cut, then the source change arrives. The removed node
+  goes with no exit, nothing is retained, and a second later exits run again.
+

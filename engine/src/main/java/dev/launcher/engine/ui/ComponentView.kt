@@ -255,6 +255,9 @@ class ComponentView(
     /** Every exit still running ends now ([ComponentHost.endExits]); on the view's thread. */
     fun endExits() { if (!disposed) host.endExits() }
 
+    /** [ComponentHost.cutExits]; on the view's thread. */
+    fun cutExits(ms: Long) { if (!disposed) host.cutExits(ms) }
+
     fun setProp(name: String, value: Value) {
         if (disposed || props[name] == value) return
         props[name] = value
