@@ -255,8 +255,12 @@ class ComponentView(
     /** Every exit still running ends now ([ComponentHost.endExits]); on the view's thread. */
     fun endExits() { if (!disposed) host.endExits() }
 
-    /** [ComponentHost.cutExits]; on the view's thread. */
-    fun cutExits(ms: Long) { if (!disposed) host.cutExits(ms) }
+    /** [ComponentHost.cutExits] under every node labelled [label]; on the view's thread. */
+    fun cutExits(label: String) {
+        if (disposed) return
+        fun find(n: HostNode) { if (n.value("label") == Value.Str(label)) host.cutExits(n) else n.children.forEach(::find) }
+        find(host.root)
+    }
 
     fun setProp(name: String, value: Value) {
         if (disposed || props[name] == value) return

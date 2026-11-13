@@ -96,22 +96,23 @@ class PresenceTest {
         assertFalse("nothing still runs for it", h.at(40_000_000) && b in h.root.drawn)
     }
 
-    /** Codex, T-015: a lock before the pending refresh: what that refresh removes goes at once, with no exit. */
-    @Test fun cutExitsAlsoCoversRemovalsThatComeAfter() {
+    /** Codex, T-015: at a lock, what is shown never plays an exit, however late its removal comes; what comes later does. */
+    @Test fun cutExitsMarksWhatIsThereNotWhatComesLater() {
         val h = host(row); h.place()
         val b = h.root.children[1]
-        h.cutExits(1000)
-        // The source's change reaches the host after the lock.
+        h.cutExits(h.root)
+        // The removal reaches the host long after the lock.
+        clock += 5_000_000_000L
         items = listOf("a", "c"); h.refresh(); h.place()
         assertFalse("no exit", b.isLeaving)
         assertEquals(listOf(b), released)
         assertEquals(listOf("a", "c"), h.root.drawn.map { it.key.last() })
         assertEquals(0, h.retainedCount)
-        // A second later exits run again.
-        clock += 1_001_000_000L
-        val c = h.root.children[1]
-        items = listOf("a"); h.refresh(); h.place()
-        assertTrue("an exit again after the cut", c.isLeaving)
+        // One that arrived after the lock leaves on its exit as usual.
+        items = listOf("a", "c", "d"); h.refresh(); h.place()
+        val d = h.root.children.first { it.key.last() == "d" }
+        items = listOf("a", "c"); h.refresh(); h.place()
+        assertTrue("a later one exits", d.isLeaving)
     }
 
     @Test fun aNodeThatComesBackBeforeItsExitEndsIsTheSameNodeTurningBack() {
