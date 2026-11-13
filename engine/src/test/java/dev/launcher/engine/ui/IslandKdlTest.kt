@@ -47,6 +47,7 @@ class IslandKdlTest {
                 "notifications.arriving" -> Value.Bool.of(arriving)
                 "notifications.arrival.name" -> if (arriving) Value.Str("Kasun") else Value.Null
                 "notifications.arrival.others" -> if (arriving) Value.Num(others.toDouble()) else Value.Null
+                "notifications.shown" -> Value.List(if (arriving) listOf(dev.launcher.engine.source.NotifArrival("k", "Kasun", others, seq = 1).item) else emptyList())
                 "media.art" -> if (art) dev.launcher.engine.source.MediaState.of(true, "t", null, "p", dev.launcher.engine.source.MediaArt("s1", "1")).member("art") else Value.Null
                 else -> Value.Null
             }
@@ -251,7 +252,11 @@ class IslandKdlTest {
         assertEquals(Value.Bool.TRUE, h.root.value("elastic"))
         val content = banner.labelled("Banner content")
         assertEquals("the content at the banner's left edge", 0f, content.length("translate-x"))
-        assertEquals(listOf("Mark", "Banner sender", "Banner text", "Banner time"), content.children.map { (it.value("label") as Value.Str).value })
+        // One message per arrival; the first comes after the drop (not a replacement).
+        assertEquals(listOf("Message"), content.children.map { (it.value("label") as Value.Str).value })
+        val message = content.labelled("Message")
+        assertEquals(listOf("Mark", "Banner sender", "Banner text", "Banner time"), message.children.map { (it.value("label") as Value.Str).value })
+        assertEquals(Value.Str("Kasun"), message.labelled("Banner sender").value("content"))
         // Minimal mode: the banner's shape rests at no size at the pill's top (no part in the union), empty.
         val m = host(units = Units(3f, density), arriving = true).root.labelled("Banner")
         assertEquals(0f, m.length("width"))

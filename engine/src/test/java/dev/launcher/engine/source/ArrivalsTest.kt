@@ -25,7 +25,7 @@ class ArrivalsTest {
     @Test fun aNewAlertingOneArrivesForFourSeconds() {
         t.update(listOf(c("a", 1)))
         t.update(listOf(c("a", 1), c("b", 2, name = "Kasun")))
-        assertEquals(NotifArrival("b", "Kasun", 1), t.arrival())
+        assertEquals(NotifArrival("b", "Kasun", 1, seq = 1), t.arrival())
         assertEquals(ArrivalTracker.HOLD_MS, timers.single().first)
         timers.single().second()
         assertNull(t.arrival())
@@ -39,9 +39,30 @@ class ArrivalsTest {
         assertEquals("See you at 7", t.arrival()!!.text)
         // The same notification, read again while locked: the app's name, no text.
         t.update(listOf(Candidate("b", 2, true, false, "Messages", "", "Messages")))
-        assertEquals(NotifArrival("b", "Messages", 0, "", "Messages"), t.arrival())
+        assertEquals(NotifArrival("b", "Messages", 0, "", "Messages", seq = 1), t.arrival())
         assertEquals("the arrival's time kept", 1, timers.size)
         assertEquals(0, cancelled)
+    }
+
+    /** Owner, 2026-11-14: rapid ones "just popped": each arrival is its own, and one that replaces another says so. */
+    @Test fun eachArrivalIsItsOwnAndAReplacementSaysSo() {
+        t.update(emptyList())
+        t.update(listOf(c("a", 1, name = "Nimal")))
+        val first = t.arrival()!!
+        assertEquals(1L, first.seq); assertEquals(false, first.replaced)
+        // The same conversation posted again while it shows: another arrival.
+        t.update(listOf(c("a", 2, name = "Nimal")))
+        val second = t.arrival()!!
+        assertEquals(2L, second.seq); assertEquals(true, second.replaced)
+        assertEquals(dev.launcher.engine.expr.Value.Str("2"), second.item.member("id"))
+        assertEquals(dev.launcher.engine.expr.Value.Bool.TRUE, second.item.member("replaced"))
+        // `notifications.shown`: it alone, or nothing.
+        assertEquals(listOf(second.item), (NotifIcons(emptyList(), second).member("shown") as dev.launcher.engine.expr.Value.List).items)
+        assertEquals(emptyList<Any>(), (NotifIcons(emptyList()).member("shown") as dev.launcher.engine.expr.Value.List).items)
+        // Gone, then a new one: no longer a replacement.
+        timers.last().second()
+        t.update(listOf(c("a", 2, name = "Nimal"), c("b", 3)))
+        assertEquals(false, t.arrival()!!.replaced)
     }
 
     /** Owner, 2026-11-14: several messages' text ran together on the banner's one line. */
@@ -85,7 +106,7 @@ class ArrivalsTest {
     @Test fun theOneShownGoingAwayClearsAtOnceAndOthersFollow() {
         t.update(emptyList())
         t.update(listOf(c("a", 1), c("b", 2)))
-        assertEquals(NotifArrival("b", "b", 1), t.arrival())
+        assertEquals(NotifArrival("b", "b", 1, seq = 1), t.arrival())
         t.update(listOf(c("b", 2)))
         assertEquals("others follow the list", 0, t.arrival()?.others)
         t.update(emptyList())

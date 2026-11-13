@@ -6,10 +6,23 @@ import dev.launcher.engine.expr.Value
  * What `notifications.arrival` holds (T-014): the notification that just arrived, the name to show and how many others;
  * for the detailed banner (T-015) its text and its app's name (the text empty while locked).
  */
-data class NotifArrival(val id: String, val name: String, val others: Int, val text: String = "", val app: String = "") {
+data class NotifArrival(val id: String, val name: String, val others: Int, val text: String = "", val app: String = "",
+    /** Which arrival this is (1, 2, ... since the start): a new one, even of the same notification, is another. */
+    val seq: Long = 0,
+    /** It came while another was showing (it replaces it on the banner). */
+    val replaced: Boolean = false) {
     val value: Value by lazy {
         Value.Record(mapOf("id" to Value.Str(id), "name" to Value.Str(name), "others" to Value.Num(others.toDouble()),
             "text" to Value.Str(text), "app" to Value.Str(app), "mark" to Value.Str(mark)))
+    }
+    /**
+     * `notifications.shown`'s item: as [value], its `id` this arrival's own ([seq]), so a component repeating it (`each`)
+     * plays one arrival leaving and the next arriving (T-015; owner, 2026-11-14: rapid ones "just popped"), and
+     * `replaced`.
+     */
+    val item: Value by lazy {
+        Value.Record(mapOf("id" to Value.Str(seq.toString()), "name" to Value.Str(name), "others" to Value.Num(others.toDouble()),
+            "text" to Value.Str(text), "app" to Value.Str(app), "mark" to Value.Str(mark), "replaced" to Value.Bool.of(replaced)))
     }
     /** One letter that stands for it on the banner: the name's first letter or digit, upper case. */
     val mark: String get() = name.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: ""
@@ -38,6 +51,7 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
     private var current: NotifArrival? = null
     private var clear: (() -> Unit)? = null
     private val listeners = ArrayList<() -> Unit>()
+    private var seq = 0L
 
     override fun arrival() = current
 
@@ -55,8 +69,10 @@ class ArrivalTracker(private val after: (Long, () -> Unit) -> () -> Unit) : Arri
         }
         val newest = fresh.maxByOrNull { it.postTime }
         if (newest != null) {
+            seq++
+            val replacing = current != null
             current = NotifArrival(newest.key, oneLine(newest.name, MAX_NAME), list.count { it.alerts && it.key != newest.key },
-                oneLine(newest.text, MAX_TEXT), newest.app.take(MAX_NAME))
+                oneLine(newest.text, MAX_TEXT), newest.app.take(MAX_NAME), seq, replacing)
             clear?.invoke()
             clear = after(HOLD_MS) { clear = null; current = null; changed() }
         } else current?.let { c ->

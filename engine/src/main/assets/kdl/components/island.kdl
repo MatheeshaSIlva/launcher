@@ -16,7 +16,7 @@
 // while locked). `mode` "detailed" (a banner that grows out of the island) comes with E2.14c-2 and shows as minimal now.
 // The island comes and goes with the bar (E2.14e): an app that goes full screen hides it (a quick fade and shrink), a
 // swipe from the top shows it for a moment (a soft spring back), as the stock bar does.
-component "island" version="0.8.0" {
+component "island" version="0.9.0" {
   props {
     hour24 type=bool default=#true
     title-scroll type=bool default=#true
@@ -109,12 +109,26 @@ component "island" version="0.8.0" {
         // The content keeps its place while the banner closes: closed, the banner is laid out at no size on the camera, so
         // its left edge moves to the middle at once; the content is held back by half the banner (it went right otherwise).
         box width=(dp)380 height=(dp)76 translate-x="{(notifications.arriving && @mode == 'detailed') ? 0dp : -190dp}" label="Banner content" {
-        box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" translate-x=(dp)16 translate-y=(dp)20 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(300ms)" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Mark" {
-          text "{notifications.arrival.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" translate-x=(dp)13 translate-y=(dp)8 label="Mark letter"
+        // One message per arrival (`notifications.shown`, keyed by the arrival): a new one while another shows plays the old
+        // leaving (`dur-state`, `ease-in`) and the new arriving (owner, 2026-11-14: rapid ones "just popped"). The first comes once
+        // the drop has parted;
+        box each="{notifications.shown}" as="a" width=(dp)380 height=(dp)76 visible="{@mode == 'detailed' && !a.replaced}" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Message" {
+          box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" translate-x=(dp)16 translate-y=(dp)20 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(300ms)" label="Mark" {
+            text "{a.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" translate-x=(dp)13 translate-y=(dp)8 label="Mark letter"
+          }
+          text "{a.name}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" width=(dp)250 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)15 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(324ms)" label="Banner sender"
+          text "{a.text}" font="plex-sans" size=(dp)13 weight=400 color="#C4C4C4" width=(dp)284 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)40 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(348ms)" label="Banner text"
+          text "now" font="plex-sans" size=(dp)12 weight=400 color="#8A8A8A" translate-x=(dp)340 translate-y=(dp)18 enter="fade blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(348ms)" label="Banner time"
         }
-        text "{notifications.arrival.name}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" width=(dp)250 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)15 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(324ms)" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Banner sender"
-        text "{notifications.arrival.text}" font="plex-sans" size=(dp)13 weight=400 color="#C4C4C4" width=(dp)284 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)40 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(348ms)" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Banner text"
-        text "now" font="plex-sans" size=(dp)12 weight=400 color="#8A8A8A" translate-x=(dp)340 translate-y=(dp)18 visible="{(notifications.arriving && @mode == 'detailed')}" enter="fade blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(348ms)" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Banner time"
+        // one that replaces another comes as the old has gone (its 120 ms), sliding in over the banner already there.
+        box each="{notifications.shown}" as="a" width=(dp)380 height=(dp)76 visible="{@mode == 'detailed' && a.replaced}" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Next message" {
+          box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" translate-x=(dp)16 translate-y=(dp)20 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(110ms)" label="Mark" {
+            text "{a.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" translate-x=(dp)13 translate-y=(dp)8 label="Mark letter"
+          }
+          text "{a.name}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" width=(dp)250 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)15 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(134ms)" label="Banner sender"
+          text "{a.text}" font="plex-sans" size=(dp)13 weight=400 color="#C4C4C4" width=(dp)284 overflow="fade" fade=(dp)12 translate-x=(dp)64 translate-y=(dp)40 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(158ms)" label="Banner text"
+          text "now" font="plex-sans" size=(dp)12 weight=400 color="#8A8A8A" translate-x=(dp)340 translate-y=(dp)18 enter="fade blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(158ms)" label="Banner time"
+        }
         }
       }
     }

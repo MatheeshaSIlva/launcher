@@ -830,6 +830,29 @@ class IslandProof(private val instrumentation: Instrumentation, private val cuto
             }
             if (ink < 200) errors += "the banner's content does not show ($ink)"
             lines += "joined for $joined of 180 frames (${gapSeen.joinToString("")}); banner $bw px, centred; content ink $ink"
+            // Another arrives while it shows (owner, 2026-11-14: rapid ones "just popped"): the old message leaves and the new
+            // one comes; the banner stays as it is, and the new content shows at the end.
+            s.arrive(dev.launcher.engine.source.NotifArrival("k2", "Dilini", 3, "Sent you the photos from the trip", "Messages", seq = 2, replaced = true))
+            var dipped = false
+            for (k in 1..60) {
+                s.step()
+                val f = s.capture()
+                if (k in 1..45 step 3) save("detailed-next-$k.png", Bitmap.createBitmap(f, (ex - 200 * density).toInt().coerceAtLeast(0), (pillTop - 4 * density).toInt(), minOf((400 * density).toInt(), f.width), (145 * density).toInt()))
+                var inkNow = 0
+                for (y in (pillTop + 50 * density).toInt() until (pillTop + 115 * density).toInt()) for (x in (ex - 120 * density).toInt() until (ex + 100 * density).toInt()) {
+                    val px = f.getPixel(x, y); if ((px shr 16 and 255) > 140) inkNow++
+                }
+                if (inkNow < ink / 4) dipped = true
+                if ((f.getPixel(ex.toInt(), bannerRow) and 255) >= 100) { errors += "frame $k of the replacement: the banner went away"; break }
+            }
+            val after2 = s.capture()
+            var ink2 = 0
+            for (y in (pillTop + 50 * density).toInt() until (pillTop + 115 * density).toInt()) for (x in (ex - 120 * density).toInt() until (ex + 100 * density).toInt()) {
+                val px = after2.getPixel(x, y); if ((px shr 16 and 255) > 140) ink2++
+            }
+            if (!dipped) errors += "the old message never left (no frame with little content)"
+            if (ink2 < 200) errors += "the new message does not show ($ink2)"
+            lines += "replaced: the old left, the new shows (ink $ink2)"
             // Back: it merges into the pill again, nothing left under it.
             s.arrive(null)
             for (k in 1..120) {

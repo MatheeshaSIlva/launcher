@@ -362,3 +362,24 @@ codex: AGREE — checked `a7bbaba`; the group-prefix objection is resolved by co
 - **Tests inspected:** `ConversationTest` covers direct chat, group prefix, and matching-subtitle false positives with both absent and sender-matching conversation titles.
 - No files changed. Tests, full gate, emulator and S24 checks were not rerun.
 
+### owner — S24, 2026-11-14
+
+"yeah, rapid notifications just popped with no transition" (notifications sent a second apart and during the close).
+
+### claude — one message per arrival, 2026-11-14
+
+- **Found:** while one shows, a new arrival only changed `notifications.arrival`'s values. The banner stayed and its
+  texts were bound to those values, so they changed in one frame.
+- **Fixed:**
+  - *Engine:* each arrival has its own number (`NotifArrival.seq`) and says whether it replaced one (`replaced`).
+    `notifications.shown` is a list of the current arrival alone, keyed by that number, so an `each` over it plays the
+    old message's exit and the new one's enter. A lock's redaction keeps the number (it changes the texts in place).
+  - *`island.kdl` 0.9.0:* the banner's content is one `Message` per arrival, leaving on `fade blur` 120 ms `ease-in`.
+    A first arrival's content comes once the drop has parted (300 ms on); a replacement's at 110 to 158 ms, as the old
+    has gone, over the banner already there.
+- **Tests:**
+  - *JVM:* `ArrivalsTest.eachArrivalIsItsOwnAndAReplacementSaysSo` and `IslandKdlTest` (the message under the content).
+  - *Emulator:* the island proof's `detailed` stage now replaces Kasun's message with Dilini's at rest. The banner stays
+    throughout, the content dips (the old has left) and the new shows (ink 3180). PASS.
+  - *Frames:* `tools/shots/det2/next.png`: Kasun's blurs out by 130 ms, and Dilini's slides in, settled by 250 ms.
+

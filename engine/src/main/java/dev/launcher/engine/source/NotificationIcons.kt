@@ -9,7 +9,8 @@ data class NotifIcon(val id: String, val rev: String)
 
 /**
  * `notifications`: `icons`, a list of records `{id, rev}`, most important first, every one with its picture ready; and
- * `arrival`, the notification that just arrived (`{id, name, others}`, T-014) or null, and `arriving` for a condition.
+ * `arrival`, the notification that just arrived (`{id, name, others}`, T-014) or null, and `arriving` for a condition;
+ * `shown`, a list of it alone or none, keyed by the arrival (`each` plays one replacing another: T-015).
  */
 data class NotifIcons(val list: List<NotifIcon>, val arrival: NotifArrival? = null) : SourceValue {
     private val icons by lazy { Value.List(list.map { Value.Record(mapOf("id" to Value.Str(it.id), "rev" to Value.Str(it.rev))) }) }
@@ -17,8 +18,10 @@ data class NotifIcons(val list: List<NotifIcon>, val arrival: NotifArrival? = nu
         "icons" -> icons
         "arrival" -> arrival?.value ?: Value.Null
         "arriving" -> Value.Bool.of(arrival != null)
+        "shown" -> arrival?.let { Value.List(listOf(it.item)) } ?: EMPTY
         else -> Value.Null
     }
+    private companion object { val EMPTY = Value.List(emptyList()) }
 }
 
 /** Where the source's list comes from: [PreparedPictures] in the app. */
