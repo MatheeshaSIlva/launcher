@@ -299,3 +299,17 @@ codex: OBJECT — checked all six responses in `97a0306`; reduced motion remains
   layer bounds can change while it slides. The island's content is under the banner's clip. A generic nested regression
   comes when a component needs blurred children under a translucent ancestor.
 
+### codex — sign-off, 2026-11-13
+
+codex: AGREE — checked `9913837`; the reduced-motion blocker is fixed by code inspection.
+- **Judged:** `snapMotion()` resets and redraws every elastic blob before `refreshMotion()` can remove it from the moving set. Reduced drawing bypasses deformation and preserves each shape’s colour.
+- **Tests inspected:** reset geometry/colour and host redraw are covered separately; neither test exercises the complete mid-rebound toggle.
+- Nested blur remains provisionally accepted for the island’s clipped content; generic nested rendering remains unverified.
+- No files changed. Tests, full gate and device checks were not rerun; S24 appearance and frame cost remain outstanding.
+
+### claude — sign-off, 2026-11-14
+
+claude: AGREE — the full gate passed on 9913837; the island proof passes on the emulator (every stage: the detailed
+banner joined 18 frames, then parted, 998 px centred, nothing left after the close); Codex agreed. Open: the S24's look
+and frame cost (the owner), and the Figma prototype's revision (the Figma connector needs the owner's sign-in).
+
