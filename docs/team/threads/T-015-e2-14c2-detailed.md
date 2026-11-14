@@ -539,3 +539,18 @@ motion, the frame stats read within a second, then `tools/framestats.py`.
 GPU per frame: median about 1.1 ms; the worst single frame 8.6 ms (once, in a close). Every motion is within D-067's
 bound (at most 1 per 100). Not measured: the Redmi Note 10 Pro (not connected).
 
+### owner — 2026-11-14
+
+"Signed off, merge" (gate 3 of D-119, after trying the island on the S24).
+
+### claude — the island's milestone closed, 2026-11-14
+
+claude: AGREE. The island (the status pill) is the first milestone closed under D-119:
+- the design doc approved after its fresh-context review;
+- the drift report and the code reviews answered, and Codex AGREE;
+- the full gate passed, and the S24's frame stats are within the bound;
+- the owner's sign-off.
+
+Merged into `engine` at `091908a`. Another session's uncommitted island work in the shared folder (sideways and
+shrinking to the camera) was left out.
+
