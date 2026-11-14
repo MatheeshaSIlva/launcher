@@ -170,12 +170,16 @@ Timings are the component's own values; "at once" means in the next frame.
     *   a message already on the banner when the phone locks disappears without playing its exit, whenever its removal
         reaches the island.
 
-### CUJ 9: Full screen, and Remove animations
+### CUJ 9: Full screen, sideways, and Remove animations
 
-*   **Given**: an app goes full screen; or the phone's Remove animations is on.
+*   **Given**: an app goes full screen; or the phone turns sideways; or the phone's Remove animations is on.
 *   **When**: the status bar hides or shows; or any state changes.
 *   **Then**:
-    *   *Full screen:* the island fades and shrinks away; a swipe from the top shows it for a moment on a soft spring.
+    *   *Full screen:* the pill shrinks into a black dot on the camera, the hole and 3 dp round it, so it reads as the
+        camera itself (owner, 2026-11-14: "shrink to the camera", D-122); its content and any banner leave first. A swipe
+        from the top grows it back for a moment on a soft spring. Without a camera at the top the dot is no size.
+    *   *Sideways:* the camera is on a side edge and the island has no sideways form yet, so it shrinks to nothing; it
+        grows back when the phone is upright again.
     *   *Remove animations:* every change happens at once; the pill and banner are still joined by the union (nothing
         moves in that), but nothing stretches, no neck forms, and each keeps its own colour.
 

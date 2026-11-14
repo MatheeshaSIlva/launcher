@@ -44,6 +44,18 @@ object KdlBar {
     /** The detailed banner's width (dp) on a screen [widthDp] wide: 380, or the screen less 16 dp each side. */
     fun bannerWidth(widthDp: Float): Float = minOf(BANNER_DP, widthDp - 2 * GUTTER_DP).coerceAtLeast(0f)
     private const val BANNER_DP = 380f
+
+    /**
+     * Whether the island shows: the bar shows and the phone is upright. Sideways the camera is on a side edge, and the
+     * island has no sideways form yet (it floated at the top centre with no camera behind it: owner, 2026-11-14).
+     */
+    fun islandShown(barShown: Boolean, upright: Boolean): Boolean = barShown && upright
+
+    /**
+     * The black dot the hidden island shrinks into (dp): the camera's hole ([holeDp] wide) and 3 dp round it, so it reads as
+     * the camera itself; no hole, no dot (owner, 2026-11-14: "shrink to the camera").
+     */
+    fun cameraSize(holeDp: Float?): Float = if (holeDp == null || !(holeDp > 0f)) 0f else (holeDp + 6f).coerceIn(16f, 48f)
     private const val GUTTER_DP = 16f
     /** False (nothing changed) for a mode that is not one of [MODES]. */
     fun setMode(ctx: Context, mode: String): Boolean {
@@ -126,8 +138,9 @@ object KdlBar {
         // E2.14e: the island comes and goes with the bar (an app full screen hides it; a swipe from the top shows it).
         if (island) {
             view.setProp("mode", Value.Str(shownMode(mode(ctx))))
-            view.setProp("shown", Value.Bool.of(bar.shownForApps))
-            bar.onShown = { s -> if (!view.isDisposed) view.setProp("shown", Value.Bool.of(s)) }
+            fun upright() = (bar.display?.rotation ?: android.view.Surface.ROTATION_0) == android.view.Surface.ROTATION_0
+            view.setProp("shown", Value.Bool.of(islandShown(bar.shownForApps, upright())))
+            bar.onShown = { s -> if (!view.isDisposed) view.setProp("shown", Value.Bool.of(islandShown(s, upright()))) }
             view.addOnDispose { bar.onShown = null }
         }
         fun hour24() { if (!view.isDisposed) view.setProp("hour24", Value.Bool.of(DateFormat.is24HourFormat(ctx))) }
@@ -144,6 +157,10 @@ object KdlBar {
             view.centreY = bar.timeBaseline - TextPainter.CAP * bar.timeSize / 2f
             if (island && bar.width > 0) view.setProp("banner-width",
                 Value.Num(bannerWidth(bar.width / ctx.resources.displayMetrics.density).toDouble(), "dp"))
+            if (island) view.setProp("shown", Value.Bool.of(islandShown(bar.shownForApps,
+                (bar.display?.rotation ?: android.view.Surface.ROTATION_0) == android.view.Surface.ROTATION_0)))
+            if (island) view.setProp("camera-size", Value.Num(cameraSize(bar.rootWindowInsets?.displayCutout?.boundingRectTop
+                ?.takeIf { !it.isEmpty }?.width()?.let { it / ctx.resources.displayMetrics.density }).toDouble(), "dp"))
             view.deriveAgain()
         }
         val layout = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }

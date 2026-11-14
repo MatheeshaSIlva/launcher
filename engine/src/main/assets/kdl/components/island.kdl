@@ -17,13 +17,16 @@
 // Android 13, D-120). The design document: docs/designs/status-pill.md.
 // The island comes and goes with the bar (E2.14e): an app that goes full screen hides it (a quick fade and shrink), a
 // swipe from the top shows it for a moment (a soft spring back), as the stock bar does.
-component "island" version="0.10.0" {
+component "island" version="0.11.0" {
   props {
     hour24 type=bool default=#true
     title-scroll type=bool default=#true
     mode type=string default="minimal"
     // The detailed banner's width: 380 dp, less on a screen narrower than 380 dp and 16 dp each side (set by the host).
     banner-width type=dp default=(dp)380
+    // Hidden (an app full screen), the pill shrinks into a black dot this wide around the camera (set by the host
+    // from the cutout; owner, 2026-11-14: "shrink to the camera").
+    camera-size type=dp default=(dp)28
     shown type=bool default=#true
   }
   uses {
@@ -38,9 +41,9 @@ component "island" version="0.10.0" {
     // the cover, the title, then the bars. Closing, the pieces go together and the time comes back once they have gone
     // (owner, 2026-11-12: "springy and staged").
     // Every piece has a fixed slot that stays, so nothing shifts while the others come and go.
-    blob place="cutout" place-gap=(dp)4 width=(dp)132 height=(dp)32 fill="#000000" smooth=(dp)16 align="top" elastic=#true visible="{@shown}" enter="fade scale spring(0.4, 0.8)" exit="fade scale 160ms" label="Island" {
-      box width="{(notifications.arriving && @mode != 'detailed') ? 200dp : (battery.plugged ? 164dp : (media.playing ? 236dp : 132dp))}" height=(dp)32 radius="full" fill="#000000" align="centre" clip=#true transition="size spring(0.45, 0.75)" label="Pill" {
-        row width=(dp)132 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{!(notifications.arriving && @mode != 'detailed') && !battery.plugged && !media.playing}" enter="fade spring(0.45, 1) delay(110ms)" exit="fade 90ms" label="Idle" {
+    blob place="cutout" place-gap=(dp)4 width=(dp)132 height=(dp)32 fill="#000000" smooth=(dp)16 align="top" elastic=#true label="Island" {
+      box width="{!@shown ? @camera-size : ((notifications.arriving && @mode != 'detailed') ? 200dp : (battery.plugged ? 164dp : (media.playing ? 236dp : 132dp)))}" height="{!@shown ? @camera-size : 32dp}" translate-y="{!@shown ? (32dp - @camera-size) / 2 : 0dp}" radius="full" fill="#000000" align="centre" clip=#true transition="size spring(0.45, 0.75), place spring(0.45, 0.75)" label="Pill" {
+        row width=(dp)132 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" visible="{@shown && (!(notifications.arriving && @mode != 'detailed') && !battery.plugged && !media.playing)}" enter="fade spring(0.45, 1) delay(110ms)" exit="fade 90ms" label="Idle" {
           text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true label="Time"
           spacer flex=1
           text "{battery.level}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true label="Battery"
@@ -48,16 +51,16 @@ component "island" version="0.10.0" {
         row width=(dp)236 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" label="Media" {
           row width=(dp)90 gap=(dp)6 align="centre-line" label="Left" {
             box width=(dp)20 height=(dp)20 align="centre" label="Cover slot" {
-              image picture="{media.art}" size=(dp)20 radius=(dp)4 visible="{media.playing && !(notifications.arriving && @mode != 'detailed') && !battery.plugged && media.has-art}" enter="fade scale spring(0.38, 0.72) delay(70ms)" exit="fade scale 100ms" label="Cover"
+              image picture="{media.art}" size=(dp)20 radius=(dp)4 visible="{@shown && (media.playing && !(notifications.arriving && @mode != 'detailed') && !battery.plugged && media.has-art)}" enter="fade scale spring(0.38, 0.72) delay(70ms)" exit="fade scale 100ms" label="Cover"
             }
             box width=(dp)64 height=(dp)20 align="centre-line" label="Title slot" {
-              text "{media.title}" font="plex-sans" size=(dp)13 weight=400 color="#F2F2F2" width=(dp)64 overflow="fade" fade=(dp)12 scroll="{@title-scroll && media.playing}" visible="{media.playing && !(notifications.arriving && @mode != 'detailed') && !battery.plugged}" enter="fade rise spring(0.5, 0.85) delay(120ms)" exit="fade 100ms" label="Title"
+              text "{media.title}" font="plex-sans" size=(dp)13 weight=400 color="#F2F2F2" width=(dp)64 overflow="fade" fade=(dp)12 scroll="{@title-scroll && media.playing}" visible="{@shown && (media.playing && !(notifications.arriving && @mode != 'detailed') && !battery.plugged)}" enter="fade rise spring(0.5, 0.85) delay(120ms)" exit="fade 100ms" label="Title"
             }
           }
           spacer size=(dp)28
           row width=(dp)92 align="centre-line" label="Right" {
             spacer flex=1
-            row gap=(dp)2 align="centre-line" visible="{media.playing && !(notifications.arriving && @mode != 'detailed') && !battery.plugged}" enter="fade scale spring(0.55, 0.8) delay(170ms)" exit="fade 100ms" label="Bars" {
+            row gap=(dp)2 align="centre-line" visible="{@shown && (media.playing && !(notifications.arriving && @mode != 'detailed') && !battery.plugged)}" enter="fade scale spring(0.55, 0.8) delay(170ms)" exit="fade 100ms" label="Bars" {
               box width=(dp)2 height=(dp)6 radius=(dp)1 fill="#D9865F" loop-from=(dp)4 loop-to=(dp)10 loop-period=760 loop-phase=0.10 loop-run="{media.playing}"
               box width=(dp)2 height=(dp)12 radius=(dp)1 fill="#D9865F" loop-from=(dp)6 loop-to=(dp)14 loop-period=980 loop-phase=0.55 loop-run="{media.playing}"
               box width=(dp)2 height=(dp)8 radius=(dp)1 fill="#D9865F" loop-from=(dp)4 loop-to=(dp)12 loop-period=640 loop-phase=0.30 loop-run="{media.playing}"
@@ -69,12 +72,12 @@ component "island" version="0.10.0" {
         // Charging: 14 | 54 | 28 | 56 | 12 (164 dp), the camera slot on the pill's centre.
         row width=(dp)164 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" label="Charging" {
           box width=(dp)54 height=(dp)20 align="centre-line" label="Charging left" {
-            text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true visible="{battery.plugged && !(notifications.arriving && @mode != 'detailed')}" enter="fade spring(0.45, 0.9) delay(70ms)" exit="fade 90ms" label="Charging time"
+            text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" font="jetbrains-mono" size=(dp)13 weight=400 color="#F2F2F2" roll=#true visible="{@shown && (battery.plugged && !(notifications.arriving && @mode != 'detailed'))}" enter="fade spring(0.45, 0.9) delay(70ms)" exit="fade 90ms" label="Charging time"
           }
           spacer size=(dp)28
           row width=(dp)56 align="centre-line" label="Charging right" {
             spacer flex=1
-            row gap=(dp)6 align="centre-line" visible="{battery.plugged && !(notifications.arriving && @mode != 'detailed')}" enter="fade scale spring(0.5, 0.75) delay(120ms)" exit="fade 90ms" label="Level" {
+            row gap=(dp)6 align="centre-line" visible="{@shown && (battery.plugged && !(notifications.arriving && @mode != 'detailed'))}" enter="fade scale spring(0.5, 0.75) delay(120ms)" exit="fade 90ms" label="Level" {
               text "{battery.level}%" font="jetbrains-mono" size=(dp)13 weight=400 color="#7DBE93" roll=#true label="Charging level"
               text "↯" font="jetbrains-mono" size=(dp)13 weight=400 color="#7DBE93" label="Bolt"
             }
@@ -84,16 +87,16 @@ component "island" version="0.10.0" {
         row width=(dp)200 padding-start=(dp)14 padding-end=(dp)12 align="centre-line" label="Notification" {
           row width=(dp)72 gap=(dp)6 align="centre-line" label="Notification left" {
             box width=(dp)6 height=(dp)6 align="centre" label="Dot slot" {
-              box width=(dp)6 height=(dp)6 radius="full" fill="#D9865F" visible="{(notifications.arriving && @mode != 'detailed')}" enter="fade scale spring(0.4, 0.7) delay(70ms)" exit="fade 90ms" label="Dot"
+              box width=(dp)6 height=(dp)6 radius="full" fill="#D9865F" visible="{@shown && ((notifications.arriving && @mode != 'detailed'))}" enter="fade scale spring(0.4, 0.7) delay(70ms)" exit="fade 90ms" label="Dot"
             }
             box width=(dp)60 height=(dp)20 align="centre-line" label="Sender slot" {
-              text "{notifications.arrival.name}" font="plex-sans" size=(dp)13 weight=400 color="#F2F2F2" width=(dp)60 overflow="fade" fade=(dp)10 visible="{(notifications.arriving && @mode != 'detailed')}" enter="fade rise spring(0.5, 0.85) delay(110ms)" exit="fade 90ms" label="Sender"
+              text "{notifications.arrival.name}" font="plex-sans" size=(dp)13 weight=400 color="#F2F2F2" width=(dp)60 overflow="fade" fade=(dp)10 visible="{@shown && ((notifications.arriving && @mode != 'detailed'))}" enter="fade rise spring(0.5, 0.85) delay(110ms)" exit="fade 90ms" label="Sender"
             }
           }
           spacer size=(dp)28
           row width=(dp)74 align="centre-line" label="Notification right" {
             spacer flex=1
-            text "+{notifications.arrival.others}" font="jetbrains-mono" size=(dp)13 weight=400 color="#8A8A8A" visible="{(notifications.arriving && @mode != 'detailed') && notifications.arrival.others > 0}" enter="fade spring(0.5, 0.9) delay(150ms)" exit="fade 90ms" label="Others"
+            text "+{notifications.arrival.others}" font="jetbrains-mono" size=(dp)13 weight=400 color="#8A8A8A" visible="{@shown && ((notifications.arriving && @mode != 'detailed') && notifications.arrival.others > 0)}" enter="fade spring(0.5, 0.9) delay(150ms)" exit="fade 90ms" label="Others"
           }
         }
       }
@@ -108,14 +111,14 @@ component "island" version="0.10.0" {
       // glass, no shadow in the default theme): `surface`, its corners `radius-lg`, held while it shrinks (a radius that
       // left first squared the card). Text: `body-strong` in `ink`, `small` in `ink-2`, the time `caption` in `muted`;
       // the mark a `surface-2` tile at `radius-sm`.
-      box width="{(notifications.arriving && @mode == 'detailed') ? @banner-width : 0dp}" height="{(notifications.arriving && @mode == 'detailed') ? 76dp : 0dp}" radius=(dp)16 translate-y="{(notifications.arriving && @mode == 'detailed') ? 52dp : 12dp}" fill="#121212" clip=#true transition="size cubic-bezier(0.35, 0.3, 0.45, 1) 480ms, place cubic-bezier(0.8, 0, 0.25, 1) 380ms" label="Banner" {
+      box width="{(notifications.arriving && @mode == 'detailed' && @shown) ? @banner-width : 0dp}" height="{(notifications.arriving && @mode == 'detailed' && @shown) ? 76dp : 0dp}" radius=(dp)16 translate-y="{(notifications.arriving && @mode == 'detailed' && @shown) ? 52dp : 12dp}" fill="#121212" clip=#true transition="size cubic-bezier(0.35, 0.3, 0.45, 1) 480ms, place cubic-bezier(0.8, 0, 0.25, 1) 380ms" label="Banner" {
         // The content keeps its place while the banner closes: closed, the banner is laid out at no size on the camera, so
         // its left edge moves to the middle at once; the content is held back by half the banner (it went right otherwise).
-        box width="{@banner-width}" height=(dp)76 translate-x="{(notifications.arriving && @mode == 'detailed') ? 0dp : 0dp - @banner-width / 2}" label="Banner content" {
+        box width="{@banner-width}" height=(dp)76 translate-x="{(notifications.arriving && @mode == 'detailed' && @shown) ? 0dp : 0dp - @banner-width / 2}" label="Banner content" {
         // One message per arrival (`notifications.shown`, keyed by the arrival): a new one while another shows plays the old
         // leaving (`dur-state`, `ease-in`) and the new arriving (owner, 2026-11-14: rapid ones "just popped"). The first comes once
         // the drop has parted;
-        box each="{notifications.shown}" as="a" width="{@banner-width}" height=(dp)76 visible="{@mode == 'detailed' && !a.replaced}" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Message" {
+        box each="{notifications.shown}" as="a" width="{@banner-width}" height=(dp)76 visible="{@shown && @mode == 'detailed' && !a.replaced}" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Message" {
           box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" align="centre" translate-x=(dp)16 translate-y=(dp)20 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(300ms)" label="Mark" {
             text "{a.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" label="Mark letter"
           }
@@ -124,7 +127,7 @@ component "island" version="0.10.0" {
           text "now" font="plex-sans" size=(dp)12 weight=400 color="#8A8A8A" translate-x="{@banner-width - 40dp}" translate-y=(dp)18 enter="fade blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(348ms)" label="Banner time"
         }
         // one that replaces another comes as the old has gone (its 120 ms), sliding in over the banner already there.
-        box each="{notifications.shown}" as="a" width="{@banner-width}" height=(dp)76 visible="{@mode == 'detailed' && a.replaced}" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Next message" {
+        box each="{notifications.shown}" as="a" width="{@banner-width}" height=(dp)76 visible="{@shown && @mode == 'detailed' && a.replaced}" exit="fade blur cubic-bezier(0.55, 0, 1, 0.45) 120ms" label="Next message" {
           box width=(dp)36 height=(dp)36 radius=(dp)8 fill="#1F1F1F" align="centre" translate-x=(dp)16 translate-y=(dp)20 enter="fade slide blur cubic-bezier(0.23, 1, 0.32, 1) 220ms delay(110ms)" label="Mark" {
             text "{a.mark}" font="plex-sans" size=(dp)15 weight=500 color="#F2F2F2" label="Mark letter"
           }

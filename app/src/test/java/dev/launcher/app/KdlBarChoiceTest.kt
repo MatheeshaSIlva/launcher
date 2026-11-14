@@ -33,6 +33,20 @@ class KdlBarChoiceTest {
         assertEquals(false, arrivals.lockedShows(android.app.Notification.VISIBILITY_PRIVATE, false))
     }
 
+    /** The hidden island's dot: the camera's hole and 3 dp round it; none without a hole. */
+    @Test fun theDotIsTheCameraAndAMargin() {
+        assertEquals(30f, KdlBar.cameraSize(24f), 0f)
+        assertEquals(0f, KdlBar.cameraSize(null), 0f)
+        assertEquals(48f, KdlBar.cameraSize(200f), 0f)
+    }
+
+    /** Sideways the island stays away (no camera at the top), upright it follows the bar. */
+    @Test fun theIslandShowsOnlyUpright() {
+        assertTrue(KdlBar.islandShown(true, true))
+        assertEquals(false, KdlBar.islandShown(true, false))
+        assertEquals(false, KdlBar.islandShown(false, true))
+    }
+
     @Test fun noNameIsTheStatusBar() {
         assertEquals(KdlBar.STATUS_BAR, KdlBar.choose(null))
         assertEquals(KdlBar.STATUS_BAR, KdlBar.choose(""))

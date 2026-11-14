@@ -1336,3 +1336,17 @@ From the status pill's design review (`docs/designs/reviews/status-pill/goldfish
   - The elastic's numbers stay constants in `BlobElastic.kt`, a deviation from the spec's Precision rule until they are
     exposed as attributes (no later than E5, when the pill morphs into recents).
   - Accessibility comes with input dispatch (E3); its announcements will follow the lock rule.
+
+## D-122: The hidden island shrinks into the camera; sideways it goes (2026-11-14, owner) [owner]
+
+The owner, after a full-screen game on the S24 ("the island stayed away") and asking for it to "shrink to the camera":
+- **Full screen:** the island no longer fades out. Its pill shrinks into a black dot on the camera, the hole's width and
+  3 dp round it (`camera-size`, set by the app from the cutout: `KdlBar.cameraSize`, 16 to 48 dp). Its content and any
+  banner leave first. The root no longer hides itself, so it cannot be left hidden.
+- **Sideways:** the island shrinks to nothing (`KdlBar.islandShown`: shown only upright), since the camera is on a side
+  edge and the island has no sideways form yet.
+- **Found with it:** a node whose recording Android discarded while it was away drew its text with no background
+  until its shape next changed. The host now records it again when its recording is gone
+  (`ComposeHost`, `HostNode.release`).
+- Tests: `IslandShownTest` (hidden then shown: a camera-sized dot, then full size), `KdlBarChoiceTest` (the dot's size;
+  upright only).

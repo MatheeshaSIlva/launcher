@@ -68,7 +68,7 @@ class IslandKdlTest {
         val c = component()
         assertEquals("island", c.name)
         assertEquals(listOf("device", "time", "battery", "media", "notifications"), c.uses.sources.map { it.name })
-        assertEquals(listOf("hour24", "title-scroll", "mode", "banner-width", "shown"), c.props.map { it.name })
+        assertEquals(listOf("hour24", "title-scroll", "mode", "banner-width", "camera-size", "shown"), c.props.map { it.name })
         // The island is a blob (T-015): the pill and the banner's shape, filled as one, the pill on the camera.
         val island = host().root
         assertEquals("blob", island.view.primitive)

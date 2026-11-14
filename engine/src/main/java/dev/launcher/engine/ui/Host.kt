@@ -150,6 +150,7 @@ class HostNode internal constructor(
     internal fun release() {
         painter.release(this)
         if (ownLazy.isInitialized()) own.discardDisplayList()
+        ownKey = Unrecorded
         if (frameLazy.isInitialized()) frame.discardDisplayList()
     }
     internal var ownKey: Any? = Unrecorded

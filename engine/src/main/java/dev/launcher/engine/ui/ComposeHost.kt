@@ -167,7 +167,9 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
         val ow = if (sized) ceil(n.drawnWidth).toInt() else w
         val oh = if (sized) ceil(n.drawnHeight).toInt() else h
         val ownKey = listOf(key, n.drawnWidth, n.drawnHeight, n.residualX, n.residualY)
-        if (ownKey != n.ownKey || own.width != ow || own.height != oh) {
+        // Also when its recording is gone (discarded while away: the island's text showed with no background until
+        // its shape next changed; owner, 2026-11-14).
+        if (ownKey != n.ownKey || own.width != ow || own.height != oh || !own.hasDisplayList()) {
             own.setPosition(0, 0, ow, oh)
             n.painter.paint(own.beginRecording(), n, n.drawnWidth, n.drawnHeight)
             own.endRecording()
